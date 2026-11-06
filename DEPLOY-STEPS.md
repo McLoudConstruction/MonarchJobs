@@ -23,8 +23,8 @@ Project Settings > Environment Variables (Production, Preview, Development):
 | Name | Where to get it |
 | --- | --- |
 | NEXT_PUBLIC_SUPABASE_URL | Supabase > Project Settings > API |
-| NEXT_PUBLIC_SUPABASE_ANON_KEY | same page (anon / publishable key) |
-| SUPABASE_SERVICE_ROLE_KEY | same page (service role key; keep private) |
+| NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY) | same page (publishable / anon key) |
+| SUPABASE_SECRET_KEY (or SUPABASE_SERVICE_ROLE_KEY) | same page (secret / service role key; keep private) |
 | INTEGRATION_ENCRYPTION_KEY | run `openssl rand -hex 32` and paste the output |
 | NEXT_PUBLIC_SITE_URL | the production URL, no trailing slash |
 | CRON_SECRET | any long random string (used from Phase 1) |
