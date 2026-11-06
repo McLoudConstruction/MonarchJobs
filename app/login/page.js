@@ -15,10 +15,17 @@ export default function LoginPage() {
     e.preventDefault();
     setBusy(true);
     setError('');
-    const { error } = await getSupabase().auth.signInWithPassword({ email, password });
+    let result;
+    try {
+      result = await getSupabase().auth.signInWithPassword({ email, password });
+    } catch (err) {
+      setBusy(false);
+      setError(err.message);
+      return;
+    }
     setBusy(false);
-    if (error) {
-      setError(error.message);
+    if (result.error) {
+      setError(result.error.message);
       return;
     }
     router.replace('/dashboard');

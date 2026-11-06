@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/lib/useAuth';
 import AppShell from '@/components/AppShell';
+import SetupNotice from '@/components/SetupNotice';
 
 const OWNER_ONLY = ['owner'];
 
@@ -11,6 +12,8 @@ export default function AuthGate({ ownerOnly = false, children }) {
   const auth = useAuth({ requireRole: ownerOnly ? OWNER_ONLY : undefined });
 
   if (auth.loading) return <div className="center-wrap"><p>Loading...</p></div>;
+
+  if (auth.error === 'config') return <SetupNotice />;
 
   if (auth.error === 'pending') {
     return (
