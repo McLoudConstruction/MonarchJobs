@@ -5,13 +5,15 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import AuthGate from '@/components/AuthGate';
 import VisitForm from '@/components/VisitForm';
+import VisitActions from '@/components/VisitActions';
+import EstimateCard from '@/components/EstimateCard';
 import { getSupabase } from '@/lib/supabaseClient';
 import { doubleBookedIds } from '@/lib/schedule';
 import { fmtDateTime, fmtTime, JOB_STATUS, JOB_TYPES, addressLine } from '@/lib/format';
 
 const VISIT_STATUS = { scheduled: 'Scheduled', on_the_way: 'On the way', started: 'Started', finished: 'Finished', cancelled: 'Cancelled' };
 
-function JobInner({ id, staff }) {
+function JobInner({ id, staff, token }) {
   const isOffice = staff.role !== 'tech';
   const [job, setJob] = useState(null);
   const [visits, setVisits] = useState([]);
@@ -58,6 +60,12 @@ function JobInner({ id, staff }) {
   }, [id, isOffice]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Refresh only the history, so edits being typed in the job details form are not wiped.
+  const loadEvents = useCallback(async () => {
+    const { data } = await getSupabase().from('job_events').select('*').eq('job_id', id).order('at', { ascending: false }).limit(50);
+    setEvents(data || []);
+  }, [id]);
 
   if (!job || !form) return <p className="muted">Loading job...</p>;
 
@@ -145,6 +153,7 @@ function JobInner({ id, staff }) {
               {flagged.has(v.id) && v.status !== 'cancelled' && <> <span className="badge warn">Double-booked</span></>}
             </div>
             <div className="meta">{name(v.tech_id)}{v.minutes_out ? ` · ${v.minutes_out} min out` : ''}</div>
+            {(isOffice || v.tech_id === staff.id) && <VisitActions visit={v} token={token} onDone={load} />}
             {isOffice && v.status === 'scheduled' && (
               <div className="row" style={{ marginTop: 6 }}>
                 <button className="secondary small" onClick={() => setVisitEdit(v)}>Reschedule / reassign</button>
@@ -217,9 +226,11 @@ function JobInner({ id, staff }) {
         </div>
       )}
 
+      <EstimateCard jobId={id} jobStatus={job.status} staff={staff} onChanged={loadEvents} />
+
       <div className="card">
-        <h2>Estimate and invoice</h2>
-        <p className="muted">The quote builder, invoice and payments arrive in the next updates.</p>
+        <h2>Invoice</h2>
+        <p className="muted">Invoicing and payments arrive in the next update.</p>
       </div>
 
       <div className="card">
@@ -238,5 +249,5 @@ function JobInner({ id, staff }) {
 
 export default function JobPage() {
   const { id } = useParams();
-  return <AuthGate>{({ staff }) => <JobInner id={id} staff={staff} />}</AuthGate>;
+  return <AuthGate>{({ staff, token }) => <JobInner id={id} staff={staff} token={token} />}</AuthGate>;
 }

@@ -71,3 +71,26 @@ encryption and webhook signature tests.
 Who sees what: Owner and Office see everything (Settings is owner only). A Tech sees only the jobs
 they are scheduled on, with the customer and address for those jobs, and cannot change anything yet
 (status buttons arrive in push 4).
+
+---
+
+# Push 4 (Phase 1b): estimates and tech status buttons
+
+This zip contains only the files that changed since push 3. Unzip over the repo root and push.
+
+1. Run `supabase/migrations/004_estimates.sql` in the Supabase SQL Editor once. No new environment variables.
+2. `lib/supabaseAdmin.js` changed: server-side database reads are no longer cached by Next.js. Before
+   this fix a saved Stripe/Square key, or an estimate's status, could keep showing its old value.
+3. Try it:
+   - Open a job and press Start estimate. Add services from the price list and a custom line
+     (a negative price is a discount). The minimum charge applies once to the whole job.
+   - Mark the estimate as sent, then use "Preview customer view" or copy the customer link.
+     The estimate shows when the customer last viewed it. Preview does not count as a view.
+   - As a tech (assigned to the job), open it on a phone: the On the way buttons (10 to 60 minutes),
+     Start job and Finish job. Finishing the last visit completes the job. If another visit is still
+     scheduled, the job goes back to Booked.
+   - Change a line as a tech, then look at the job History: every add, change and removal shows who
+     did it and when. Only office and owner can change the minimum or the estimate status.
+
+Not yet: texting or emailing the customer (the link is copied by hand until notifications arrive),
+customer signature or approval online, invoices and payments.
