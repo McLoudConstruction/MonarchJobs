@@ -3,6 +3,7 @@
 import AuthGate from '@/components/AuthGate';
 import BusinessSection from '@/components/settings/BusinessSection';
 import UsersSection from '@/components/settings/UsersSection';
+import PriceListSection from '@/components/settings/PriceListSection';
 import IntegrationsSection from '@/components/settings/IntegrationsSection';
 
 export default function SettingsPage() {
@@ -14,6 +15,7 @@ export default function SettingsPage() {
           <p className="sub">Business details, staff, and payment connections.</p>
           <BusinessSection />
           <UsersSection currentUserId={staff.id} />
+          <PriceListSection />
           <h2 style={{ margin: '28px 0 12px' }}>Integrations</h2>
           <IntegrationsSection token={token} />
         </>

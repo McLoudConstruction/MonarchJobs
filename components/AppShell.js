@@ -3,8 +3,15 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+const ALL = ['owner', 'office', 'tech'];
+const OFFICE = ['owner', 'office'];
+
 const NAV = [
-  { href: '/dashboard', label: 'Dashboard', roles: ['owner', 'office', 'tech'] },
+  { href: '/dashboard', label: 'Dashboard', roles: ALL },
+  { href: '/leads', label: 'Leads', roles: OFFICE },
+  { href: '/schedule', label: 'Schedule', roles: ALL },
+  { href: '/jobs', label: 'Jobs', roles: ALL },
+  { href: '/customers', label: 'Customers', roles: OFFICE },
   { href: '/settings', label: 'Settings', roles: ['owner'] },
 ];
 

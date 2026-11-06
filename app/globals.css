@@ -97,3 +97,39 @@ table.table th, table.table td { text-align: left; padding: 8px 6px; border-bott
 
 ul.phases { padding-left: 20px; }
 ul.phases li { margin-bottom: 6px; }
+
+/* ---- Phase 1 additions ---- */
+.page.wide { max-width: 1200px; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.tabs button { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--border); background: #fff; cursor: pointer; font-size: 14px; }
+.tabs button.on { background: var(--navy); color: #fff; border-color: var(--navy); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+.banner { background: #fff3cd; border: 2px solid #e0a800; color: #5c4400; border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; font-weight: 600; }
+.banner.flag { background: #fde7e5; border-color: var(--danger); color: var(--danger); }
+.field textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; font-family: inherit; min-height: 80px; }
+.badge.s-booked { background: #e1ecf9; color: #1f4f8f; }
+.badge.s-on_the_way, .badge.s-in_progress { background: #fff3cd; color: #7a5b00; }
+.badge.s-completed, .badge.s-closed { background: #d9f2e3; color: var(--ok); }
+.badge.s-cancelled, .badge.s-lost { background: #eceff3; color: var(--muted); }
+.badge.s-new { background: #e1ecf9; color: #1f4f8f; }
+.badge.s-quoted { background: #fff3cd; color: #7a5b00; }
+.badge.warn { background: #fde7e5; color: var(--danger); }
+.list-item { display: block; padding: 12px 0; border-bottom: 1px solid var(--border); text-decoration: none; color: inherit; }
+.list-item:last-child { border-bottom: 0; }
+.list-item .title { font-weight: 600; }
+.list-item .meta { color: var(--muted); font-size: 14px; }
+.toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+.toolbar input[type=search], .toolbar input[type=text] { flex: 1; min-width: 200px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; }
+button.small { padding: 5px 10px; font-size: 13px; }
+.sched { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px; }
+.sched th, .sched td { border: 1px solid var(--border); vertical-align: top; padding: 6px; }
+.sched th { background: #eef1f5; }
+.sched td.today { background: #f7fbff; }
+.visit { display: block; background: #e8f1fb; border-left: 4px solid var(--navy); border-radius: 6px; padding: 5px 7px; margin-bottom: 6px; text-decoration: none; color: inherit; }
+.visit.flag { background: #fde7e5; border-left-color: var(--danger); }
+.visit.done { opacity: 0.6; }
+.visit .t { font-weight: 600; }
+.sched-wrap { overflow-x: auto; }
+.sched.min { min-width: 900px; }
+.muted { color: var(--muted); }

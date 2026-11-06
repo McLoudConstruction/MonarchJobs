@@ -4,12 +4,14 @@ import { useAuth } from '@/lib/useAuth';
 import AppShell from '@/components/AppShell';
 import SetupNotice from '@/components/SetupNotice';
 
+// Constants so the hook's dependency does not change on every render.
 const OWNER_ONLY = ['owner'];
+const OFFICE_ONLY = ['owner', 'office'];
 
 // Wraps a page: handles loading, pending-approval and role checks, then renders children
 // with the shell. children is a function receiving { staff, token }.
-export default function AuthGate({ ownerOnly = false, children }) {
-  const auth = useAuth({ requireRole: ownerOnly ? OWNER_ONLY : undefined });
+export default function AuthGate({ ownerOnly = false, officeOnly = false, children }) {
+  const auth = useAuth({ requireRole: ownerOnly ? OWNER_ONLY : officeOnly ? OFFICE_ONLY : undefined });
 
   if (auth.loading) return <div className="center-wrap"><p>Loading...</p></div>;
 
@@ -30,7 +32,7 @@ export default function AuthGate({ ownerOnly = false, children }) {
   if (auth.error === 'forbidden') {
     return (
       <AppShell staff={auth.staff} signOut={auth.signOut}>
-        <div className="card"><h2>Not allowed</h2><p className="hint">Only the owner can open this page.</p></div>
+        <div className="card"><h2>Not allowed</h2><p className="hint">Your role does not have access to this page.</p></div>
       </AppShell>
     );
   }

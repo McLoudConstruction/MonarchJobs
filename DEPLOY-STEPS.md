@@ -54,3 +54,20 @@ characters), and leaving a field blank when saving keeps the stored value.
 ## Local development
 `cp env.local.example .env.local`, fill it in, `npm install`, `npm run dev`. `npm test` runs the
 encryption and webhook signature tests.
+
+---
+
+# Push 3 (Phase 1a): customers, leads, booking, jobs, schedule
+
+1. Unzip over the repo root and push. (This zip is the full project, so it is safe to overwrite everything.)
+2. In the Supabase SQL Editor run `supabase/migrations/003_customers_leads_jobs.sql` once.
+   No new environment variables.
+3. Set up people: Settings > Users. Add each tech in Supabase (Authentication > Users > Add user),
+   then activate them in Settings > Users and set their role to Tech. Office staff get the Office role.
+4. Settings > Price list: set the minimum charge per job and enter the service prices.
+5. Try it: Leads > New lead > Book job, or Jobs > Book a job. Book two jobs for the same tech at
+   overlapping times to see the double-booking warning. Both jobs stay flagged until one is moved.
+
+Who sees what: Owner and Office see everything (Settings is owner only). A Tech sees only the jobs
+they are scheduled on, with the customer and address for those jobs, and cannot change anything yet
+(status buttons arrive in push 4).
