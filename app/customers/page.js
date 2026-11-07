@@ -107,7 +107,7 @@ function CustomersInner() {
         </form>
       )}
 
-      <div className="card">
+      <div className="list-stack">
         {rows.length === 0 && <p className="muted">No customers found.</p>}
         {rows.map((c) => (
           <Link key={c.id} href={`/customers/${c.id}`} className="list-item">

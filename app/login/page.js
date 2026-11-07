@@ -34,7 +34,7 @@ export default function LoginPage() {
   return (
     <div className="center-wrap">
       <form className="card" onSubmit={onSubmit}>
-        <h2>MonarchJobs</h2>
+        <span className="brand">Monarch <span>Jobs</span></span>
         <p className="hint">Sign in with your staff account.</p>
         <div className="field">
           <label htmlFor="email">Email</label>

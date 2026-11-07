@@ -83,7 +83,7 @@ function EstimateView() {
   const total = money(t.totalCents / 100);
   const contact = [displayPhone(data.business.phone), data.business.email].filter(Boolean).join(' · ');
   return (
-    <div className="page" style={{ maxWidth: 720 }}>
+    <div className="page customer-page" style={{ maxWidth: 720 }}>
       <h1>{data.business.business_name || 'Estimate'}</h1>
       <p className="sub">{contact}</p>
       <div className="card">

@@ -1,25 +1,46 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { getSupabase } from '@/lib/supabaseClient';
+import { useTheme } from '@/lib/useTheme';
+import { initialsFor, displayNameFor } from '@/lib/userDisplay';
+import { DashboardIcon, SalesIcon, ScheduleIcon, JobDashboardIcon, SettingsIcon, SunIcon, MoonIcon, UserIcon, SignOutIcon, MoreIcon } from '@/components/icons';
+import BottomSheet from '@/components/BottomSheet';
+import JobJumpSearch from '@/components/JobJumpSearch';
 
 const ALL = ['owner', 'office', 'tech'];
 const OFFICE = ['owner', 'office'];
+const ROLE_LABELS = { owner: 'Owner', office: 'Office', tech: 'Technician' };
 
+// Main navigation, same layout as McLoud Jobs: a row of links in the dark top bar.
+// primary = also shown on the phone's bottom bar (the rest go under More).
 const NAV = [
-  { href: '/dashboard', label: 'Dashboard', roles: ALL },
-  { href: '/leads', label: 'Leads', roles: OFFICE },
-  { href: '/schedule', label: 'Schedule', roles: ALL },
-  { href: '/jobs', label: 'Jobs', roles: ALL },
-  { href: '/customers', label: 'Customers', roles: OFFICE },
-  { href: '/settings', label: 'Settings', roles: ['owner'] },
+  { href: '/dashboard', label: 'Dashboard', icon: DashboardIcon, roles: ALL, primary: true },
+  { href: '/leads', label: 'Leads', icon: SalesIcon, roles: OFFICE, primary: true },
+  { href: '/schedule', label: 'Schedule', icon: ScheduleIcon, roles: ALL, primary: true },
+  { href: '/jobs', label: 'Jobs', icon: JobDashboardIcon, roles: ALL, primary: true },
+  { href: '/customers', label: 'Customers', icon: UserIcon, roles: OFFICE },
 ];
 
+const isActive = (item, pathname) => pathname === item.href || pathname.startsWith(`${item.href}/`);
+
 export default function AppShell({ staff, signOut, children }) {
-  const pathname = usePathname();
+  const pathname = usePathname() || '';
+  const { theme, setTheme } = useTheme();
   const [ready, setReady] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef(null);
+
+  const nav = NAV.filter((n) => n.roles.includes(staff.role));
+  const canSettings = staff.role === 'owner';
+  const initials = initialsFor(staff.full_name, staff.email);
+  const name = displayNameFor(staff.full_name, staff.email);
+  const roleLabel = ROLE_LABELS[staff.role] || staff.role;
 
   // customers who approved their estimate and are waiting to be scheduled
   useEffect(() => {
@@ -27,21 +48,126 @@ export default function AppShell({ staff, signOut, children }) {
     getSupabase().from('leads').select('id', { count: 'exact', head: true }).eq('status', 'accepted')
       .then(({ count }) => setReady(count || 0));
   }, [staff.role, pathname]);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 900);
+    check();
+    setMounted(true);
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  useEffect(() => {
+    if (!accountOpen) return undefined;
+    const onDown = (e) => { if (accountRef.current && !accountRef.current.contains(e.target)) setAccountOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setAccountOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [accountOpen]);
+
+  const desktop = mounted && !isMobile;
+  const moreItems = [
+    ...nav.filter((n) => !n.primary),
+    ...(canSettings ? [{ href: '/settings', label: 'Settings', icon: SettingsIcon }] : []),
+  ];
+  const moreActive = moreItems.some((n) => isActive(n, pathname));
+
   return (
-    <>
-      <header className="shell-header">
-        <span className="brand">MonarchJobs</span>
-        {NAV.filter((n) => n.roles.includes(staff.role)).map((n) => (
-          <Link key={n.href} href={n.href} className={pathname.startsWith(n.href) ? 'active' : ''}>
-            {n.label}
-            {n.href === '/leads' && ready > 0 && <span className="nav-count" title="Approved estimates waiting to be scheduled">{ready}</span>}
-          </Link>
-        ))}
-        <span className="spacer" />
-        <span>{staff.full_name || staff.email} ({staff.role})</span>
-        <button onClick={signOut}>Sign out</button>
-      </header>
-      <main className="page">{children}</main>
-    </>
+    <div className="shell">
+      <div className="shell-topbar">
+        <div className="shell-logo"><span className="brand">Monarch <span>Jobs</span></span></div>
+        {desktop && (
+          <nav className="shell-topnav" aria-label="Main">
+            {nav.map((n) => (
+              <Link key={n.href} href={n.href} className={`shell-topnav-link ${isActive(n, pathname) ? 'active' : ''}`} aria-current={isActive(n, pathname) ? 'page' : undefined}>
+                {n.label}
+                {n.href === '/leads' && ready > 0 && <span className="nav-count" title="Approved estimates waiting to be scheduled">{ready}</span>}
+              </Link>
+            ))}
+          </nav>
+        )}
+        <div className="shell-topbar-actions">
+          {desktop && <JobJumpSearch role={staff.role} />}
+          {desktop && (
+            <div ref={accountRef} className="shell-account">
+              <button type="button" className="shell-account-btn" aria-haspopup="menu" aria-expanded={accountOpen} aria-label={`Account menu for ${name}`} title={name} onClick={() => setAccountOpen((o) => !o)}>
+                {initials}
+              </button>
+              {accountOpen && (
+                <div className="shell-account-menu" role="menu">
+                  <div className="shell-account-head">
+                    <div className="shell-account-name">{name || 'Signed in'}</div>
+                    <div className="shell-account-sub">{roleLabel}{staff.email && staff.email !== name ? ` · ${staff.email}` : ''}</div>
+                  </div>
+                  <div className="shell-account-divider" />
+                  <button type="button" role="menuitem" className="shell-account-item" onClick={() => { setTheme(theme === 'dark' ? 'light' : 'dark'); setAccountOpen(false); }}>
+                    {theme === 'dark' ? <MoonIcon className="shell-account-icon" /> : <SunIcon className="shell-account-icon" />}
+                    {theme === 'dark' ? 'Dark mode' : 'Light mode'}
+                  </button>
+                  {canSettings && (
+                    <Link href="/settings" role="menuitem" className="shell-account-item" onClick={() => setAccountOpen(false)}>
+                      <SettingsIcon className="shell-account-icon" />
+                      Settings
+                    </Link>
+                  )}
+                  <div className="shell-account-divider" />
+                  <button type="button" role="menuitem" className="shell-account-item" onClick={signOut}>
+                    <SignOutIcon className="shell-account-icon" />
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="shell-body">
+        {isMobile && (
+          <nav className="shell-bottomnav">
+            {nav.filter((n) => n.primary).map((n) => (
+              <Link key={n.href} href={n.href} className={`shell-bottomnav-link ${isActive(n, pathname) ? 'active' : ''}`} aria-label={n.label}>
+                <span style={{ position: 'relative', display: 'inline-flex' }}>
+                  <n.icon className="shell-bottomnav-icon" />
+                  {n.href === '/leads' && ready > 0 && <span className="shell-bottomnav-dot" />}
+                </span>
+                <span className="shell-bottomnav-label">{n.label}</span>
+              </Link>
+            ))}
+            <button type="button" className={`shell-bottomnav-link ${moreActive ? 'active' : ''}`} aria-label="More" onClick={() => setMoreOpen(true)}>
+              <span style={{ position: 'relative', display: 'inline-flex' }}><MoreIcon className="shell-bottomnav-icon" /></span>
+              <span className="shell-bottomnav-label">More</span>
+            </button>
+          </nav>
+        )}
+
+        <BottomSheet open={moreOpen} onClose={() => setMoreOpen(false)} title="More">
+          <div className="more-sheet-who">
+            <UserIcon className="more-sheet-icon" />
+            <span>{name}<small>{roleLabel}</small></span>
+          </div>
+          {moreItems.map((n) => (
+            <Link key={n.href} href={n.href} className={`more-sheet-link ${isActive(n, pathname) ? 'active' : ''}`} onClick={() => setMoreOpen(false)}>
+              <n.icon className="more-sheet-icon" />
+              {n.label}
+            </Link>
+          ))}
+          <div className="more-sheet-divider" />
+          <button type="button" className="more-sheet-link" onClick={() => { setTheme(theme === 'dark' ? 'light' : 'dark'); setMoreOpen(false); }}>
+            {theme === 'dark' ? <MoonIcon className="more-sheet-icon" /> : <SunIcon className="more-sheet-icon" />}
+            {theme === 'dark' ? 'Dark mode' : 'Light mode'}
+          </button>
+          <button type="button" className="more-sheet-link" onClick={signOut}>
+            <SignOutIcon className="more-sheet-icon" />
+            Sign out
+          </button>
+        </BottomSheet>
+
+        <div className="shell-content">
+          <div className="page">{children}</div>
+        </div>
+      </div>
+    </div>
   );
 }

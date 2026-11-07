@@ -1,150 +1,1008 @@
-:root {
-  --navy: #1f3a5f;
-  --accent: #2f7d6d;
-  --bg: #f5f6f8;
-  --card: #ffffff;
-  --text: #1c2430;
-  --muted: #6b7686;
-  --border: #dde1e7;
-  --danger: #b3261e;
-  --ok: #1e7b46;
-}
+/* MonarchJobs design system — copied from McLoud Jobs (tokens, shell, buttons, forms, cards, tabs, badges, tables). */
 
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+:root{
+  --bg: #fafaf8;
+  --card-bg: #ffffff;
+  --panel: #f5f4f2;
+  --panel-line: #e4e2dc;
+  --heading: #2a2722;
+  --gold: #9b773d;
+  --rust: #8a3d14;
+  --rust-dim: #6e3010;
+  --money: #3a6b45;
+  --ink: #2a2722;
+  --ink-soft: #6b6560;
+  --line: #e6e4de;
+  --paper: #ffffff;
+  --sidebar-inactive-text: #4a453f;
+  --sidebar-active-bg: #2a2722;
+  --sidebar-active-text: #f2ede1;
+  --signout-hover-bg: #3a352f;
+
+  /* Header stays fixed dark chrome in both modes, by design. */
+  --header-bg: #19181a;
+  --header-text: #f0ede8;
+  --header-line: #2c2a2a;
+
+  /* Accent — overridden per-mode by inline vars from the brand color
+     system in Settings; these are the fallback before any brand color
+     is configured. */
+  --accent: var(--rust);
+  --accent-hover: var(--rust-dim);
+
+  /* Mobile FAB menu — the top (primary) item is always this fixed blue
+     regardless of the configured brand accent color, so "the primary
+     action" reads the same way on every FAB across the app; non-primary
+     items are plain white pills (see .mobile-fab-menu-item below). */
+  --fab-primary: #2f4858;
+  --fab-primary-hover: #24363f;
+
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+
+  /* Schedule page — one fixed color per trade/phase type, from Stachys'
+     color sheet (9 hues x bright/dark/pastel). Same literal hex in both
+     light and dark mode — these are assigned brand colors, not a
+     derived/generated ramp, so there's no light/dark variant to compute.
+     Covers every SERVICES_OFFERED trade plus schedule-only phase types
+     that aren't billable trades (Delay, Inspection, Punchlist,
+     Walkthrough, Administrative). */
+  --trade-delay: #ff0000;
+  --trade-inspection: #b44141;
+  --trade-demo-site-prep: #ff7575;
+
+  --trade-framing: #ff7a00;
+  --trade-landscaping: #c25d09;
+
+  --trade-electrical: #ffde59;
+  --trade-hvac: #d8ad00;
+  --trade-plumbing: #f1e59a;
+
+  --trade-roofing: #14ff00;
+  --trade-siding: #4e9e2d;
+  --trade-windows-doors: #b0eb96;
+
+  --trade-flooring: #00daff;
+  --trade-finish-carpentry: #2029ff;
+  --trade-cabinetry: #9bf0ff;
+
+  --trade-masonry: #bd00ff;
+  --trade-concrete-foundation: #6d0093;
+  --trade-tile: #d27dff;
+
+  --trade-insulation: #c6994f;
+  --trade-general-labor: #6f563d;
+  --trade-other: #d8c9ae;
+
+  --trade-punchlist: #a6a6a6;
+  --trade-walkthrough: #545454;
+  --trade-project-coordination: #d9d9d9;
+
+  --trade-drywall: #ff5edc;
+  --trade-painting: #bd1ba8;
+  --trade-countertops: #ffb2ee;
+
+  --trade-neutral: #b4b2a9;
+}
+
+[data-theme="dark"]{
+  --bg: #1a1a1d;
+  --card-bg: #222226;
+  --panel: #242427;
+  --panel-line: #333336;
+  --heading: #f0ede8;
+  --gold: #c9a065;
+  --rust: #c9713f;
+  --rust-dim: #e08a5c;
+  --money: #6fbf7c;
+  --ink: #e8e5e0;
+  --ink-soft: #9a968f;
+  --line: #333336;
+  --paper: #29292d;
+  --sidebar-inactive-text: #b8b4ad;
+  --sidebar-active-bg: #333336;
+  --sidebar-active-text: #f2ede1;
+  --signout-hover-bg: #3a3a3e;
+
+  --header-bg: #141416;
+  --header-text: #f0ede8;
+  --header-line: #2a2a2d;
+
+  --accent: var(--rust);
+  --accent-hover: var(--rust-dim);
+
+  --fab-primary: #3f6579;
+  --fab-primary-hover: #4d7890;
+
+  /* Same fixed trade palette as light mode — see the :root block above
+     for why these aren't a derived/computed ramp. */
+  --trade-delay: #ff0000;
+  --trade-inspection: #b44141;
+  --trade-demo-site-prep: #ff7575;
+
+  --trade-framing: #ff7a00;
+  --trade-landscaping: #c25d09;
+
+  --trade-electrical: #ffde59;
+  --trade-hvac: #d8ad00;
+  --trade-plumbing: #f1e59a;
+
+  --trade-roofing: #14ff00;
+  --trade-siding: #4e9e2d;
+  --trade-windows-doors: #b0eb96;
+
+  --trade-flooring: #00daff;
+  --trade-finish-carpentry: #2029ff;
+  --trade-cabinetry: #9bf0ff;
+
+  --trade-masonry: #bd00ff;
+  --trade-concrete-foundation: #6d0093;
+  --trade-tile: #d27dff;
+
+  --trade-insulation: #c6994f;
+  --trade-general-labor: #6f563d;
+  --trade-other: #d8c9ae;
+
+  --trade-punchlist: #a6a6a6;
+  --trade-walkthrough: #545454;
+  --trade-project-coordination: #d9d9d9;
+
+  --trade-drywall: #ff5edc;
+  --trade-painting: #bd1ba8;
+  --trade-countertops: #ffb2ee;
+
+  --trade-neutral: #5f5e5a;
+}
+
+html, body{
+  margin: 0;
+  padding: 0;
   background: var(--bg);
-  color: var(--text);
-  font-size: 16px;
-  line-height: 1.45;
+  color: var(--ink);
+  font-family: var(--font-family);
 }
 
-a { color: var(--navy); }
+/* The textured background lives on .shell, not body — document/PDF pages
+   (proposals, contracts, invoices) never render inside AppShell, so they
+   never pick up dark mode or the texture no matter what. That's a
+   structural guarantee, not a CSS specificity fight. */
+.shell, .portal-textured{
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-color: var(--bg);
+  transition: background-color 0.15s ease;
+}
+[data-theme="dark"] .shell, [data-theme="dark"] .portal-textured{
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");
+}
 
-.shell-header {
-  background: var(--navy);
-  color: #fff;
-  display: flex;
+a { color: inherit; text-decoration: none; }
+
+.container{
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 32px 24px 80px;
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+.container-wide{
+  max-width: 1400px;
+}
+
+/* The dashboard as a flowing page, not a grid of boxed cards — each
+   .dash-section is a plain content block separated by a hairline rather
+   than its own bordered/padded box, so scanning down the page reads as
+   one continuous flow instead of hopping between distinct tiles. */
+.dash-section{
+  padding: 20px 0;
+  border-bottom: 1px solid var(--line);
+}
+.dash-section:first-child{
+  padding-top: 0;
+}
+.dash-section:last-child{
+  border-bottom: none;
+}
+.dash-section h3{
+  margin: 0 0 14px;
+  color: var(--gold); font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase;
+  border-left: 3px solid var(--accent); padding-left: 10px;
+}
+/* A section that genuinely needs action (e.g. Documents' "Needs Your
+   Attention") gets its heading accent in rust instead of the default
+   gold — no boxed/colored card needed to signal urgency. */
+.dash-section h3.dash-section-heading-rust{
+  color: var(--rust); border-left-color: var(--rust);
+}
+.weather-ribbon{
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+
+.topbar-actions{ display:flex; gap: 10px; align-items:center; }
+.topbar .btn{ color: var(--header-text); border-color: var(--header-line); }
+.topbar .btn:hover{ border-color: var(--header-accent, var(--accent)); color: var(--header-accent, var(--accent)); }
+
+.btn{
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 13.5px;
+  padding: 10px 16px;
+  border-radius: 5px;
+  border: 1px solid var(--panel-line);
+  background: transparent;
+  color: var(--heading);
+  cursor: pointer;
+  display: inline-flex;
   align-items: center;
-  gap: 20px;
-  padding: 0 20px;
-  min-height: 56px;
-  flex-wrap: wrap;
+  gap: 6px;
+  transition: background-color 0.12s, border-color 0.12s, color 0.12s;
 }
-.shell-header .brand { font-weight: 700; font-size: 18px; margin-right: 8px; }
-.shell-header a { color: #dbe5f1; text-decoration: none; padding: 16px 4px; }
-.shell-header a.active { color: #fff; border-bottom: 3px solid #fff; }
-.shell-header .spacer { flex: 1; }
-.shell-header button { background: transparent; color: #dbe5f1; border: 1px solid #5a7399; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+.btn:hover{ border-color: var(--accent); color: var(--accent); }
+.btn-primary{
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+}
+.btn-primary:hover{ background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }
+.btn-danger{
+  background: #a13f3f;
+  color: #ffffff;
+  border-color: #a13f3f;
+}
+.btn-danger:hover{ background: #8a3535; border-color: #8a3535; color: #fff; }
+.btn-sm{ padding: 6px 10px; font-size: 12px; }
 
-.page { max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; }
-.page h1 { margin: 0 0 4px; font-size: 24px; }
-.page .sub { color: var(--muted); margin: 0 0 24px; }
+label{ display:block; font-size: 12px; color: var(--ink-soft); margin: 12px 0 5px; }
+input, textarea, select{
+  width: 100%;
+  background: var(--paper);
+  border: 1px solid var(--panel-line);
+  color: var(--ink);
+  border-radius: 4px;
+  padding: 9px 10px;
+  font-size: 13.5px;
+  font-family: inherit;
+}
+textarea{ min-height: 70px; line-height: 1.4; resize: vertical; }
+input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--rust); }
 
-.card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 20px;
+.card{
+  background: var(--card-bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 22px 24px;
   margin-bottom: 20px;
 }
-.card h2 { margin: 0 0 4px; font-size: 18px; }
-.card .hint { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
+.card h2, .card h3{ color: var(--gold); margin-top: 0; }
+.card h2{ font-size: 16px; letter-spacing: 0.03em; }
+.card h3{ font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; border-left: 3px solid var(--accent); padding-left: 10px; }
 
-.field { margin-bottom: 14px; }
-.field label { display: block; font-weight: 600; font-size: 14px; margin-bottom: 4px; }
-.field input, .field select {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 16px;
-  background: #fff;
-}
-.field .note { color: var(--muted); font-size: 13px; margin-top: 4px; }
+.two-col{ display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.two-col > div{ min-width: 0; } /* a grid item's default min-width is its content's, which a native date/time input can exceed — without this it overflows its cell instead of shrinking to fit (e.g. the New Event popup's Date/Time row on mobile) */
+@media (max-width: 700px){ .two-col{ grid-template-columns: 1fr; } }
 
-.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.two-col-3{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+.two-col-3 > div{ min-width: 0; }
+@media (max-width: 700px){ .two-col-3{ grid-template-columns: 1fr; } }
 
-button.primary, button.secondary, button.danger {
-  padding: 10px 16px;
-  border-radius: 8px;
-  font-size: 15px;
+/* Mobile Safari/Chrome render date/time inputs with generous internal
+   padding around the native picker segments — combined with this app's
+   normal 9px/10px input padding, that's routinely wider than a popup's
+   available width. Tightening just these two types' padding/font avoids
+   the field overflowing or getting clipped, without touching every other
+   input on the page. */
+
+/* Underline tabs — replaces the old filled-pill nav pattern everywhere
+   it's used (job stage tabs, section sub-nav, portal mode switch, sub
+   portal tabs all share this same class). */
+.stage-tabs{ display: flex; gap: 22px; margin-bottom: 22px; flex-wrap: nowrap; border-bottom: 1px solid var(--line); overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+.stage-tab{ flex-shrink: 0;
+  padding: 10px 2px;
+  border-radius: 0;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--ink-soft);
   cursor: pointer;
-  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: color 0.12s, border-color 0.12s;
 }
-button.primary { background: var(--navy); color: #fff; }
-button.secondary { background: #fff; color: var(--navy); border-color: var(--navy); }
-button.danger { background: #fff; color: var(--danger); border-color: var(--danger); }
-button:disabled { opacity: 0.5; cursor: not-allowed; }
+.stage-tab:hover{ color: var(--ink); }
+.stage-tab.active{ background: transparent; color: var(--accent); border-color: var(--accent); font-weight: 700; }
+/* The tab for the stage this job is currently in gets a small dot, so
+   "where is this project right now" is visible even while browsing another
+   stage. The thin divider separates tab groups: home | project stages | always-on. */
+.stage-tab.is-current::after{ content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+.stage-tabs-divider{ flex-shrink: 0; width: 1px; align-self: stretch; margin: 8px 0; background: var(--line); }
 
-.badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
-.badge.off { background: #eceff3; color: var(--muted); }
-.badge.test { background: #fff3cd; color: #7a5b00; }
-.badge.live { background: #d9f2e3; color: var(--ok); }
+.section-subnav{
+  display: flex; gap: 22px; flex-wrap: nowrap;
+  padding: 14px 24px 0;
+  max-width: 1400px;
+  margin: 0 auto;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.section-subnav .stage-tab{ flex-shrink: 0; }
+.section-subnav .stage-tab{ text-decoration: none; }
 
-.msg { padding: 10px 12px; border-radius: 8px; margin: 12px 0; font-size: 14px; }
-.msg.ok { background: #d9f2e3; color: var(--ok); }
-.msg.err { background: #fde7e5; color: var(--danger); }
+/* Peeking-chip scroll affordance for any horizontally-scrollable tab/chip
+   row (see ScrollFadeRow.js) — a soft edge fade that appears only on the
+   side that still has more to reveal, so a scrollable row never reads as
+   simply clipped. Sits directly on the page background, not a card, so it
+   fades to --bg rather than --card-bg. */
+.scroll-fade-wrap{ position: relative; min-width: 0; }
+.scroll-fade-edge{ position: absolute; top: 0; bottom: 0; width: 28px; pointer-events: none; z-index: 1; }
+.scroll-fade-left{ left: 0; background: linear-gradient(to right, var(--bg), transparent); }
+.scroll-fade-right{ right: 0; background: linear-gradient(to left, var(--bg), transparent); }
 
-.copybox { background: #f0f2f5; border: 1px dashed var(--border); border-radius: 8px; padding: 8px 10px; font-family: ui-monospace, Menlo, monospace; font-size: 13px; word-break: break-all; }
+/* Sub-sections within a job-detail tab (e.g. Estimate: Scope / Pricing;
+   Financials: Overview / Change Orders / Work Orders / Invoicing /
+   Receipts). A bordered segmented control rather than floating pills —
+   reads as "a mode within this tab" without the chip/tag look, and
+   still can't be mistaken for the underlined top-level tab row above. */
+.tab-sections{ display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: -10px 0 18px; }
+.tab-sections-pills{
+  display: flex; flex-wrap: wrap;
+  border: 1px solid var(--panel-line);
+  border-radius: 7px;
+  overflow: hidden;
+  width: fit-content;
+}
+.tab-sections-actions{ display: flex; gap: 8px; flex-wrap: wrap; }
+.tab-section-btn{
+  flex-shrink: 0;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  border-right: 1px solid var(--panel-line);
+  background: var(--panel);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: color 0.12s, background-color 0.12s;
+}
+.tab-section-btn:last-child{ border-right: none; }
+.tab-section-btn:hover{ color: var(--ink); background: var(--card-bg); }
+.tab-section-btn.active{ background: var(--accent); color: #fff; }
 
-table.table { width: 100%; border-collapse: collapse; font-size: 15px; }
-table.table th, table.table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+.badge{
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 20px;
+  color: #fff;
+}
+.badge-new{ background: #a3a077; }
+.badge-inspected{ background: #9a8f5f; }
+.badge-proposal_delivered{ background: #a17c3f; }
+.badge-approved{ background: #7d5a2e; }
+.badge-scheduled{ background: #8a5a3f; }
+.badge-active{ background: #8a3d14; }
+.badge-completed{ background: #6e3010; }
+.badge-invoiced{ background: #49402a; }
+.badge-paid{ background: #3a6b45; }
+.badge-draft{ background: #9a9488; }
+.badge-accepted{ background: #7d5a2e; }
+.badge-declined{ background: #a13f3f; }
+.badge-lost{ background: #6b6560; }
+.badge-open{ background: #6d5a2e; }
+.badge-awarded{ background: #3a6b45; }
+.badge-not_awarded{ background: #6b6560; }
+.badge-sent{ background: #9a9488; }
+.badge-viewed{ background: #8a7c4f; }
+.badge-responded{ background: #7d5a2e; }
+.badge-pending{ background: #9a9488; }
 
-.center-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
-.center-wrap .card { width: 100%; max-width: 380px; }
+[data-theme="dark"] .badge-new{ background: #8a8563; }
+[data-theme="dark"] .badge-inspected{ background: #8f8360; }
+[data-theme="dark"] .badge-proposal_delivered{ background: #b58a4a; }
+[data-theme="dark"] .badge-approved{ background: #a3763f; }
+[data-theme="dark"] .badge-scheduled{ background: #b06f4a; }
+[data-theme="dark"] .badge-active{ background: #c9713f; }
+[data-theme="dark"] .badge-completed{ background: #a15229; }
+[data-theme="dark"] .badge-invoiced{ background: #7a7568; }
+[data-theme="dark"] .badge-paid{ background: #4f9160; }
+[data-theme="dark"] .badge-draft{ background: #7a7670; }
+[data-theme="dark"] .badge-accepted{ background: #a3763f; }
+[data-theme="dark"] .badge-declined{ background: #c0524f; }
+[data-theme="dark"] .badge-lost{ background: #8a8580; }
+[data-theme="dark"] .badge-open{ background: #a3763f; }
+[data-theme="dark"] .badge-awarded{ background: #4f9160; }
+[data-theme="dark"] .badge-not_awarded{ background: #8a8580; }
+[data-theme="dark"] .badge-sent{ background: #7a7670; }
+[data-theme="dark"] .badge-viewed{ background: #a3936a; }
+[data-theme="dark"] .badge-responded{ background: #a3763f; }
+[data-theme="dark"] .badge-pending{ background: #7a7670; }
 
-ul.phases { padding-left: 20px; }
-ul.phases li { margin-bottom: 6px; }
 
-/* ---- Phase 1 additions ---- */
-.page.wide { max-width: 1200px; }
-.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
-.tabs button { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--border); background: #fff; cursor: pointer; font-size: 14px; }
-.tabs button.on { background: var(--navy); color: #fff; border-color: var(--navy); }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-@media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
-.banner { background: #fff3cd; border: 2px solid #e0a800; color: #5c4400; border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; font-weight: 600; }
-.banner.flag { background: #fde7e5; border-color: var(--danger); color: var(--danger); }
-.field textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; font-family: inherit; min-height: 80px; }
-.badge.s-booked { background: #e1ecf9; color: #1f4f8f; }
-.badge.s-on_the_way, .badge.s-in_progress { background: #fff3cd; color: #7a5b00; }
-.badge.s-completed, .badge.s-closed { background: #d9f2e3; color: var(--ok); }
-.badge.s-cancelled, .badge.s-lost { background: #eceff3; color: var(--muted); }
-.badge.s-new { background: #e1ecf9; color: #1f4f8f; }
-.badge.s-quoted { background: #fff3cd; color: #7a5b00; }
-.badge.warn { background: #fde7e5; color: var(--danger); }
-.list-item { display: block; padding: 12px 0; border-bottom: 1px solid var(--border); text-decoration: none; color: inherit; }
-.list-item:last-child { border-bottom: 0; }
-.list-item .title { font-weight: 600; }
-.list-item .meta { color: var(--muted); font-size: 14px; }
-.toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
-.toolbar input[type=search], .toolbar input[type=text] { flex: 1; min-width: 200px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; }
-button.small { padding: 5px 10px; font-size: 13px; }
-.sched { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px; }
-.sched th, .sched td { border: 1px solid var(--border); vertical-align: top; padding: 6px; }
-.sched th { background: #eef1f5; }
-.sched td.today { background: #f7fbff; }
-.visit { display: block; background: #e8f1fb; border-left: 4px solid var(--navy); border-radius: 6px; padding: 5px 7px; margin-bottom: 6px; text-decoration: none; color: inherit; }
-.visit.flag { background: #fde7e5; border-left-color: var(--danger); }
-.visit.done { opacity: 0.6; }
-.visit .t { font-weight: 600; }
-.sched-wrap { overflow-x: auto; }
-.sched.min { min-width: 900px; }
-.muted { color: var(--muted); }
+.job-row{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--panel-line);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.job-row:hover{ border-color: var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+[data-theme="dark"] .job-row{ border-color: #3d3d40; box-shadow: 0 1px 0 rgba(255,255,255,0.03), 0 4px 10px rgba(0,0,0,0.35); }
+/* min-width: 0 lets this flex item shrink to fit a narrow screen instead
+   of refusing to go below its text's natural width — without it, a long
+   customer name or address forces the whole row (and the page) wider
+   than the viewport rather than wrapping/truncating in place. */
+.job-row .job-main{ display:flex; flex-direction: column; gap: 3px; min-width: 0; }
+.job-row .job-number{ font-size: 11px; color: var(--ink-soft); }
+.job-row .job-customer{ font-weight: 600; font-size: 14.5px; overflow-wrap: break-word; }
+.job-row .job-address{ font-size: 12.5px; color: var(--ink-soft); overflow-wrap: break-word; }
 
-/* ---- Push 4 additions ---- */
-button.big { padding: 14px 18px; font-size: 17px; border-radius: 10px; }
-.minute-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.field-actions { margin-top: 10px; padding: 12px; background: #f4f7fb; border: 1px solid var(--border); border-radius: 10px; }
-.field-actions button.primary.big { width: 100%; }
+/* Generic tappable mobile row list — the same flat, hairline-divided
+   pattern as .sub-mobile-row / .overdue-mobile-row, promoted to a shared
+   class since People, Properties, and Companies (and any future simple
+   list) all need the identical two-line "name + subtitle" row rather than
+   a desktop table squeezed into a phone width. An optional leading dot
+   (.entity-mobile-row-dot) and trailing tag (.entity-mobile-row-tag) cover
+   the COI-style status marker and the "(inactive)" style annotation
+   without each page inventing its own variant. */
+.entity-mobile-list{ display: flex; flex-direction: column; }
+.entity-mobile-row{
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 16px 4px; border: none; border-bottom: 1px solid var(--line);
+  background: transparent; text-align: left; cursor: pointer; font-family: inherit;
+}
+.entity-mobile-row:last-child{ border-bottom: none; }
+.entity-mobile-row:active{ background: var(--panel); }
+.entity-mobile-row-dot{ flex-shrink: 0; width: 10px; height: 10px; border-radius: 50%; }
+.entity-mobile-row-dot.ok{ background: #3a6b45; }
+.entity-mobile-row-dot.warn{ background: #a13f3f; }
+.entity-mobile-row-text{ display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.entity-mobile-row-title{ font-size: 14.5px; font-weight: 600; color: var(--heading); overflow-wrap: break-word; }
+.entity-mobile-row-sub{ font-size: 12.5px; color: var(--ink-soft); overflow-wrap: break-word; }
+.entity-mobile-row-tag{ flex-shrink: 0; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); }
+/* A plain navigation affordance (this row always links straight to a
+   detail page — there's nothing to expand in place), so unlike
+   .opp-card-chevron on Sales this one never rotates. */
+.jobs-row-chevron{ flex-shrink: 0; font-size: 18px; color: var(--ink-soft); }
 
-/* ---- Push 5 additions ---- */
-.badge.s-accepted { background: #d9f2e3; color: var(--ok); }
-.banner.ok { background: #d9f2e3; border-color: var(--ok); color: #14502d; }
-.nav-count { display: inline-block; margin-left: 6px; min-width: 20px; padding: 0 6px; border-radius: 999px; background: #e0a800; color: #1c2430; font-size: 12px; font-weight: 700; text-align: center; line-height: 20px; }
-.field textarea.sig-notes { min-height: 60px; }
-.sig-pad { border: 2px dashed var(--border); border-radius: 10px; background: #fff; touch-action: none; position: relative; }
-.sig-pad canvas { display: block; width: 100%; touch-action: none; cursor: crosshair; }
-.sig-pad .sig-hint { position: absolute; left: 12px; top: 8px; color: var(--muted); font-size: 13px; pointer-events: none; }
+/* Shared mobile list toolbar (Sales, Projects): a search bar that actually
+   gets most of the row, plus a phase/stage dropdown pinned to the right
+   edge instead of a horizontal chip row competing with it for space — the
+   dropdown's own width is however wide its selected option needs, the
+   search bar (flex:1) takes everything left over. */
+.list-toolbar{ display: flex; gap: 8px; align-items: center; margin-bottom: 18px; min-width: 0; }
+.list-toolbar .search-bar{ flex: 1 1 auto; margin: 0; min-width: 0; }
+.list-toolbar select{ flex: 0 0 auto; width: auto; min-width: 0; }
+
+.list-row{ display: flex; gap: 6px; align-items: flex-start; margin-bottom: 8px; }
+.list-row textarea{ flex: 1; min-height: 44px; }
+.list-row input.amount{ width: 110px; flex: none; }
+.row-remove{
+  background: transparent; border: 1px solid var(--panel-line); color: var(--ink-soft);
+  width: 32px; height: 32px; border-radius: 4px; cursor: pointer; font-size: 15px; flex: none;
+}
+.row-remove:hover{ border-color: #a13f3f; color: #a13f3f; }
+
+.empty-state{ color: var(--ink-soft); font-style: italic; font-size: 13px; padding: 20px 0; text-align: center; }
+
+.search-bar{ margin-bottom: 18px; }
+
+.top-actions{ display:flex; justify-content: space-between; align-items:center; margin-bottom: 18px; flex-wrap: wrap; gap: 10px; }
+
+.section-actions{ display:flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
+.saved-flash{ font-size: 12px; color: #3a6b45; margin-left: 10px; }
+
+/* ---------- App shell (always-contracted icon rail) ---------- */
+/* Full-height flex column: the topbar takes whatever natural height its
+   content needs (so any configured logo size, up to the slider's max,
+   just works — no hardcoded pixel height to fight it), and shell-body
+   gets the exact remaining height for free via flex:1, no JS
+   measurement or magic numbers required anywhere. */
+.shell{ display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+.shell-topbar{
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 8px 16px;
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--header-line);
+}
+.shell-logo{ display: flex; justify-content: flex-start; align-items: center; }
+.shell-logo img{ display: block; max-height: 190px; } /* effectively a no-op against the logo-size slider's own 50-200px range — just a sane ceiling */
+.shell-logo .brand{ font-weight: 700; letter-spacing: 0.04em; color: var(--header-text); text-transform: uppercase; font-size: 14px; }
+.shell-logo .brand span{ color: var(--gold); }
+
+/* The logo sits left now (.shell-topbar is already justify-content:
+   flex-start), so this — not the logo — is what carries margin-left: auto
+   to reach the right edge. */
+.shell-topbar-actions{ display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.shell-topbar-icon-btn{
+  position: relative; display: flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 50%; border: none; background: transparent;
+  color: var(--header-text); cursor: pointer; text-decoration: none;
+}
+.shell-topbar-icon-btn:hover{ background: rgba(255,255,255,0.08); }
+.shell-topbar-icon-btn svg{ width: 19px; height: 19px; }
+.shell-topbar-icon-btn.spinning svg{ animation: shell-topbar-spin 0.8s linear infinite; }
+@keyframes shell-topbar-spin{ to{ transform: rotate(360deg); } }
+.shell-topbar-dot{
+  position: absolute; top: 4px; right: 5px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #c0524f; border: 1.5px solid var(--header-bg);
+}
+.shell-topbar-toast{
+  position: absolute; top: 100%; right: 0; margin-top: 6px;
+  background: var(--card-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 6px 10px; font-size: 11.5px; color: var(--ink); white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.15); z-index: 60;
+}
+
+.shell-header-left{ display: flex; flex-direction: column; justify-content: center; }
+.shell-nav-dot{
+  position: absolute; top: -2px; right: -2px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #c0524f;
+  border: 1.5px solid var(--panel);
+}
+
+.theme-toggle-btn{
+  width: 34px; height: 34px;
+  background: transparent; border: 1px solid var(--header-line); border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--header-text); flex-shrink: 0;
+}
+.theme-toggle-btn:hover{ border-color: var(--header-accent, var(--accent)); color: var(--header-accent, var(--accent)); }
+
+.signout-link{
+  background: transparent; border: none; width: 100%; text-align: left; cursor: pointer; font-family: inherit;
+}
+.signout-link:hover{ color: #c0524f; }
+
+.signout-btn{ width: calc(100% - 32px); margin: 0 16px; justify-content: center; }
+.signout-btn:hover{ background: var(--signout-hover-bg) !important; }
+
+.shell-body{ display: flex; align-items: stretch; flex: 1; min-height: 0; }
+
+.shell-sidebar{
+  background: var(--panel);
+  border-right: 1px solid var(--panel-line);
+  flex-shrink: 0;
+  transition: background-color 0.15s ease;
+  overflow-y: auto;
+  /* Setting overflow-y without overflow-x makes browsers compute the
+     x-axis as auto too (per spec, "visible" isn't allowed to pair with
+     a non-visible value on the other axis), so any 1px of horizontal
+     overflow from the fixed-width inner rail showed a scrollbar here. */
+  overflow-x: hidden;
+}
+.shell-sidebar-inner{
+  width: 84px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 0 0 8px;
+  box-sizing: border-box;
+}
+.shell-nav-links{ display: flex; flex-direction: column; }
+.shell-nav-link{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 7px 3px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--sidebar-inactive-text);
+  text-align: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  width: 100%;
+}
+.shell-nav-label{ display: block; line-height: 1.1; max-width: 78px; word-break: break-word; }
+.shell-nav-icon{ flex-shrink: 0; width: 20px; height: 20px; opacity: 0.8; }
+.shell-nav-link.active .shell-nav-icon{ opacity: 1; }
+.shell-nav-link:hover{ background: var(--line); }
+.shell-nav-link.active{ background: var(--sidebar-active-bg); color: var(--sidebar-active-text); }
+.shell-nav-divider{ height: 1px; background: var(--panel-line); margin: 4px 14px; flex-shrink: 0; }
+
+.shell-content{ flex: 1; min-width: 0; overflow-y: auto; overflow-x: hidden; }
+
+/* ---------- Mobile: unfixed header + bottom icon nav ---------- */
+.shell-bottomnav{ display: none; }
+@media (max-width: 899px){
+  .shell-topbar{ position: static; }
+  .shell-sidebar{ display: none !important; }
+  .shell-content{ padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+
+  .shell-bottomnav{
+    display: flex;
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 50;
+    background: #1c1b19;
+    padding: 6px 2px calc(10px + env(safe-area-inset-bottom));
+    justify-content: space-around;
+    align-items: center;
+  }
+  .shell-bottomnav-link{
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px;
+    flex: 1; min-width: 0;
+    padding: 6px 2px;
+    color: rgba(255,255,255,0.6);
+    /* The "More" trigger is a real <button>, unlike its sibling <Link>s, so
+       without an explicit reset it keeps the browser's native button chrome
+       (a light/white box + border) — a jarring light square on this dark
+       bar next to otherwise-transparent icons. */
+    background: none;
+    border: none;
+    font: inherit;
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+  }
+  .shell-bottomnav-link.active{ color: #fff; }
+  .shell-bottomnav-icon{ width: 22px; height: 22px; opacity: 0.9; }
+  .shell-bottomnav-link.active .shell-bottomnav-icon{ opacity: 1; }
+  .shell-bottomnav-label{
+    font-size: 9.5px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .shell-bottomnav-dot{
+    position: absolute; top: -1px; right: -3px;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #c0524f;
+    border: 1.5px solid #1c1b19;
+  }
+}
+
+/* ---------- BottomSheet: generic slide-up panel (bottom nav's "More" menu today) ---------- */
+.bottom-sheet-overlay{
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1100;
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.bottom-sheet{
+  width: 100%; max-width: 520px; background: var(--card-bg);
+  border-radius: 16px 16px 0 0; padding: 10px 8px calc(18px + env(safe-area-inset-bottom));
+  box-shadow: 0 -8px 30px rgba(0,0,0,0.25);
+  max-height: 80vh; overflow-y: auto;
+}
+.bottom-sheet-handle{ width: 36px; height: 4px; border-radius: 3px; background: var(--panel-line); margin: 4px auto 14px; }
+/* Drag-to-close zones: the handle, the title, and anything marked
+   data-sheet-drag. touch-action none keeps the browser from turning a
+   downward drag there into a scroll of the sheet. */
+.bottom-sheet-handle, .bottom-sheet-title, .bottom-sheet [data-sheet-drag]{ touch-action: none; }
+.bottom-sheet-handle{ position: relative; }
+.bottom-sheet-handle::before{ content: ''; position: absolute; left: -40px; right: -40px; top: -10px; bottom: -10px; }
+.bottom-sheet-title{ font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); padding: 0 10px 10px; }
+
+/* The More sheet's own contents: nav links styled like a taller version of
+   the sidebar's own nav-link row (icon + label, full width, tappable),
+   plus a hairline-divided lower group for Theme/Sign out — the two
+   controls that otherwise have no home on mobile at all, since the
+   sidebar that carries them on desktop is hidden below 900px. */
+.more-sheet-link{
+  display: flex; align-items: center; gap: 14px; width: 100%;
+  padding: 14px 12px; border-radius: 8px; border: none; background: transparent;
+  color: var(--heading); font-size: 15px; font-weight: 600; text-align: left;
+  cursor: pointer; font-family: inherit; text-decoration: none;
+}
+.more-sheet-link:active{ background: var(--panel); }
+.more-sheet-link.active{ color: var(--accent); }
+.more-sheet-icon{ width: 22px; height: 22px; flex-shrink: 0; opacity: 0.85; }
+.more-sheet-link.active .more-sheet-icon{ opacity: 1; }
+.more-sheet-dot{ width: 8px; height: 8px; border-radius: 50%; background: var(--rust); margin-left: -6px; }
+.more-sheet-divider{ height: 1px; background: var(--line); margin: 8px 4px; }
+
+.data-table{ width: 100%; border-collapse: collapse; font-size: 12.5px; background: var(--card-bg); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.data-table th{ text-align: left; font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-soft); background: var(--panel); padding: 8px 10px; border-bottom: 1px solid var(--panel-line); white-space: normal; word-break: break-word; line-height: 1.35; vertical-align: bottom; }
+.data-table td{ padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.data-table tbody tr{ cursor: pointer; }
+.data-table tbody tr:nth-child(even){ background: var(--panel); }
+.data-table tbody tr:hover{ background: var(--line); }
+.data-table tbody tr:last-child td{ border-bottom: none; }
+.data-table-wrap{
+  overflow: auto;
+  /* Capped instead of growing with row count — a 200+ row table used to
+     mean scrolling the whole page down past every row just to reach the
+     horizontal scrollbar (it sits at the table's own bottom edge). Capping
+     the height turns the table into its own scroll box, so both
+     scrollbars stay reachable near the top of the page no matter how
+     long the list is. */
+  max-height: 70vh;
+  border-radius: 6px;
+}
+.data-table{ border-radius: 0; }
+.data-table thead{ position: sticky; top: 0; z-index: 4; }
+
+/* Page level sticky header (DataTable stickyHeader): no height cap, the page
+   scrolls, and the header is moved by script. Separate borders so the
+   heading borders travel with the heading. */
+.data-table-wrap.data-table-wrap-page{ max-height: none; }
+.data-table-wrap-page .data-table{ border-collapse: separate; border-spacing: 0; }
+.data-table-wrap-page .data-table thead{ position: relative; z-index: 4; will-change: transform; }
+
+/* ---------- Desktop shell: main nav in the top bar, area sidebar on the left ---------- */
+/* Phones keep the bottom nav (see the max-width: 899px block above); every
+   rule here is only reached by markup that AppShell renders on a computer. */
+.shell-topnav{ display: flex; align-items: center; gap: 2px; margin-left: 14px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.shell-topnav::-webkit-scrollbar{ display: none; }
+.shell-topnav-link{
+  position: relative; flex-shrink: 0; padding: 8px 12px; border-radius: 6px;
+  font-size: 14px; font-weight: 500; color: var(--header-text); opacity: 0.72;
+  text-decoration: none; white-space: nowrap;
+}
+.shell-topnav-link:hover{ opacity: 1; background: rgba(255,255,255,0.08); }
+.shell-topnav-link.active{ opacity: 1; color: #f3dca3; background: rgba(201,161,74,0.16); font-weight: 600; }
+.shell-topnav-dot{
+  position: absolute; top: 5px; right: 4px; width: 7px; height: 7px; border-radius: 50%;
+  background: #c0524f; border: 1.5px solid var(--header-bg);
+}
+
+.shell-account{ position: relative; }
+.shell-account-btn{
+  width: 34px; height: 34px; border-radius: 50%; cursor: pointer; font-family: inherit;
+  border: 1px solid var(--header-line); background: rgba(255,255,255,0.08);
+  color: var(--header-text); font-size: 14px; font-weight: 600;
+}
+.shell-account-btn:hover{ background: rgba(255,255,255,0.14); }
+/* two initials need a little less size and tighter tracking than one letter */
+.shell-account-btn{ font-size: 13px; letter-spacing: 0.02em; padding: 0; line-height: 1; }
+.shell-account-head{ padding: 8px 12px 6px; max-width: 260px; }
+.shell-account-name{ font-size: 14px; font-weight: 600; color: var(--heading); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shell-account-sub{ font-size: 12px; color: var(--ink-soft); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.account-hero{ display: flex; align-items: center; gap: 16px; }
+.account-avatar{
+  width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--header-bg); color: var(--header-text);
+  font-size: 20px; font-weight: 600; letter-spacing: 0.02em;
+}
+.account-hero-name{ font-size: 18px; font-weight: 600; color: var(--heading); }
+.account-hero-sub{ font-size: 13px; color: var(--ink-soft); margin-top: 2px; word-break: break-all; }
+.shell-account-menu{
+  position: absolute; right: 0; top: calc(100% + 8px); min-width: 220px; z-index: 80;
+  background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25); padding: 6px;
+}
+.shell-account-item{
+  display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box;
+  padding: 10px 12px; border: 0; border-radius: 6px; background: transparent;
+  color: var(--ink); font: inherit; font-size: 14px; text-align: left; text-decoration: none; cursor: pointer;
+}
+.shell-account-item:hover{ background: var(--panel); }
+.shell-account-icon{ width: 18px; height: 18px; opacity: 0.8; flex-shrink: 0; }
+.shell-account-divider{ height: 1px; background: var(--line); margin: 6px 4px; }
+
+.jump-search{ position: relative; }
+.jump-search-box{
+  display: flex; align-items: center; gap: 8px; width: 240px; height: 36px; box-sizing: border-box;
+  padding: 0 10px; border: 1px solid var(--header-line); border-radius: 8px;
+  background: rgba(255,255,255,0.06); color: var(--header-text);
+}
+.jump-search-box:focus-within{ border-color: #c9a161; }
+.jump-search-box input{
+  flex: 1; min-width: 0; width: 100%; height: auto; min-height: 0; margin: 0; padding: 0;
+  border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: none;
+  color: inherit; font: inherit; font-size: 14px;
+}
+.jump-search-box input::placeholder{ color: var(--header-text); opacity: 0.55; }
+.jump-search-hint{ font-size: 11px; line-height: 1; padding: 2px 6px; border: 1px solid var(--header-line); border-radius: 4px; opacity: 0.7; }
+.jump-search-panel{
+  position: absolute; right: 0; top: calc(100% + 8px); width: 380px; max-width: 90vw; z-index: 80;
+  background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25); padding: 6px;
+}
+.jump-search-row{
+  display: flex; flex-direction: column; gap: 2px; width: 100%; box-sizing: border-box;
+  padding: 9px 12px; border: 0; border-radius: 6px; background: transparent;
+  color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.jump-search-row.active{ background: var(--panel); }
+.jump-search-main{ font-size: 14px; }
+.jump-search-sub{ font-size: 12px; color: var(--ink-soft); }
+.jump-search-empty{ padding: 12px; font-size: 13px; color: var(--ink-soft); }
+
+.shell-sidebar-wide{ width: 256px; box-sizing: border-box; padding: 18px 10px 24px; }
+.area-nav{ display: flex; flex-direction: column; gap: 2px; }
+.area-nav-title{ padding: 0 12px 12px; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); }
+.area-nav-link{ display: block; padding: 10px 12px; border-radius: 6px; font-size: 14px; font-weight: 500; color: var(--ink); text-decoration: none; }
+.area-nav-link:hover{ background: var(--line); }
+.area-nav-link.active{
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent); font-weight: 600; box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* Scrollbars follow the chosen theme (not the operating system's). */
+:root{ color-scheme: light; scrollbar-color: #b9b4aa #efece6; }
+[data-theme="dark"]{ color-scheme: dark; scrollbar-color: #4a4a50 #1f1f23; }
+
+
+/* ===================================================================
+   MonarchJobs layer: the page classes MonarchJobs already uses, drawn in the McLoud Jobs look.
+   =================================================================== */
+:root{
+  /* names older MonarchJobs styles and components still use */
+  --navy: var(--heading);
+  --card: var(--card-bg);
+  --text: var(--ink);
+  --muted: var(--ink-soft);
+  --border: var(--panel-line);
+  --danger: #a13f3f;
+  --ok: #3a6b45;
+  --warn-bg: #f6ecd0; --warn-line: #c9a14a; --warn-ink: #5c4400;
+  --bad-bg: #f6dedc; --bad-line: #a13f3f;
+  --ok-bg: #dfeee2;
+}
+[data-theme="dark"]{
+  --danger: #d46a67; --ok: #6fbf7c;
+  --warn-bg: #3a3320; --warn-line: #8a7433; --warn-ink: #e8d9a8;
+  --bad-bg: #3d2524; --bad-line: #a45350;
+  --ok-bg: #22332a;
+}
+body{ font-size: 14px; line-height: 1.45; }
+
+/* page frame: McLoud's .container */
+.page{ max-width: 1400px; margin: 0 auto; padding: 32px 24px 80px; width: 100%; min-width: 0; overflow-x: hidden; }
+.page.wide{ max-width: 1400px; }
+.page h1{ margin: 0 0 4px; font-size: 20px; color: var(--heading); font-weight: 700; }
+.page .sub{ color: var(--ink-soft); margin: 0 0 22px; font-size: 13.5px; }
+@media (max-width: 899px){ .page{ padding: 20px 14px 80px; } }
+
+/* cards, hints, fields */
+.card .hint{ color: var(--ink-soft); font-size: 13px; margin: 0 0 14px; }
+.card h2{ margin-bottom: 6px; }
+.field{ margin-bottom: 12px; }
+.field label{ display: block; font-size: 12px; font-weight: 400; color: var(--ink-soft); margin: 12px 0 5px; }
+.field .note{ color: var(--ink-soft); font-size: 12px; margin-top: 4px; }
+.row{ display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.grid2{ display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.grid2 > *{ min-width: 0; }
+@media (max-width: 700px){ .grid2{ grid-template-columns: 1fr; } }
+.muted{ color: var(--ink-soft); }
+.center-wrap{ min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; background: var(--bg); }
+.center-wrap .card{ width: 100%; max-width: 380px; }
+.center-wrap .brand{ display: block; text-align: center; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; font-size: 14px; color: var(--heading); margin-bottom: 14px; }
+.center-wrap .brand span{ color: var(--gold); }
+ul.phases{ padding-left: 20px; }
+ul.phases li{ margin-bottom: 6px; }
+
+/* buttons: <button className="primary|secondary|danger"> look like .btn */
+button.primary, button.secondary, button.danger{
+  font-family: inherit; font-weight: 600; font-size: 13.5px; padding: 10px 16px; border-radius: 5px;
+  border: 1px solid var(--panel-line); background: transparent; color: var(--heading); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  transition: background-color 0.12s, border-color 0.12s, color 0.12s;
+}
+button.secondary:hover{ border-color: var(--accent); color: var(--accent); }
+button.primary{ background: var(--accent); color: #fff; border-color: var(--accent); }
+button.primary:hover{ background: var(--accent-hover); border-color: var(--accent-hover); }
+button.danger{ background: transparent; color: var(--danger); border-color: var(--danger); }
+button.danger:hover{ background: #a13f3f; color: #fff; border-color: #a13f3f; }
+button.small{ padding: 6px 10px; font-size: 12px; }
+button.big{ padding: 14px 18px; font-size: 16px; border-radius: 8px; }
+button:disabled, .btn:disabled{ opacity: 0.5; cursor: not-allowed; }
+
+/* tabs: the old pill row becomes McLoud's underline tabs */
+.tabs{ display: flex; gap: 22px; flex-wrap: nowrap; margin-bottom: 20px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: thin; }
+.tabs button{
+  flex-shrink: 0; padding: 10px 2px; border: none; border-bottom: 2px solid transparent; border-radius: 0; background: transparent;
+  color: var(--ink-soft); font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.tabs button:hover{ color: var(--ink); }
+.tabs button.on{ color: var(--accent); border-bottom-color: var(--accent); font-weight: 700; }
+
+/* status badges (McLoud badge shape, white text on a colour) */
+.badge{ display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; padding: 4px 10px; border-radius: 20px; color: #fff; }
+.badge.off{ background: #9a9488; }
+.badge.test{ background: #a17c3f; }
+.badge.live{ background: #3a6b45; }
+.badge.warn{ background: #a13f3f; }
+.badge.s-new{ background: #a3a077; }
+.badge.s-quoted{ background: #a17c3f; }
+.badge.s-accepted{ background: #3a6b45; }
+.badge.s-booked{ background: #8a5a3f; }
+.badge.s-on_the_way, .badge.s-in_progress{ background: #8a3d14; }
+.badge.s-completed, .badge.s-closed{ background: #3a6b45; }
+.badge.s-cancelled, .badge.s-lost{ background: #6b6560; }
+[data-theme="dark"] .badge.s-new{ background: #8a8563; }
+[data-theme="dark"] .badge.s-quoted{ background: #b58a4a; }
+[data-theme="dark"] .badge.s-accepted, [data-theme="dark"] .badge.s-completed, [data-theme="dark"] .badge.s-closed, [data-theme="dark"] .badge.live{ background: #4f9160; }
+[data-theme="dark"] .badge.s-booked{ background: #b06f4a; }
+[data-theme="dark"] .badge.s-on_the_way, [data-theme="dark"] .badge.s-in_progress{ background: #c9713f; }
+[data-theme="dark"] .badge.s-cancelled, [data-theme="dark"] .badge.s-lost{ background: #8a8580; }
+
+/* messages and banners */
+.msg{ padding: 10px 12px; border-radius: 6px; margin: 12px 0; font-size: 13px; border: 1px solid transparent; }
+.msg.ok{ background: var(--ok-bg); color: var(--ok); border-color: var(--ok); }
+.msg.err{ background: var(--bad-bg); color: var(--danger); border-color: var(--bad-line); }
+.banner{ background: var(--warn-bg); border: 1px solid var(--warn-line); border-left-width: 4px; color: var(--warn-ink); border-radius: 6px; padding: 12px 14px; margin-bottom: 16px; font-weight: 600; font-size: 13.5px; }
+.banner.flag{ background: var(--bad-bg); border-color: var(--bad-line); color: var(--danger); }
+.banner.ok{ background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
+.copybox{ background: var(--panel); border: 1px dashed var(--panel-line); border-radius: 6px; padding: 8px 10px; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; word-break: break-all; }
+
+/* tables */
+table.table{ width: 100%; border-collapse: collapse; font-size: 13px; }
+table.table th{ text-align: left; font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-soft); background: var(--panel); padding: 8px 10px; border-bottom: 1px solid var(--panel-line); }
+table.table td{ text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+
+/* list rows (leads, jobs, customers) look like McLoud's .job-row cards */
+.list-item{
+  display: block; padding: 14px 18px; background: var(--card-bg); border: 1px solid var(--panel-line); border-radius: 8px;
+  margin-bottom: 10px; color: inherit; text-decoration: none; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.list-item:hover{ border-color: var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+[data-theme="dark"] .list-item{ border-color: #3d3d40; box-shadow: 0 1px 0 rgba(255,255,255,0.03), 0 4px 10px rgba(0,0,0,0.35); }
+.list-item .title{ font-weight: 600; font-size: 14.5px; color: var(--heading); }
+.list-item .meta{ color: var(--ink-soft); font-size: 12.5px; }
+.toolbar{ display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+.toolbar input[type=search], .toolbar input[type=text]{ flex: 1; min-width: 200px; }
+
+/* simple week board */
+.sched-wrap{ overflow-x: auto; }
+.sched{ width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; background: var(--card-bg); }
+.sched.min{ min-width: 900px; }
+.sched th, .sched td{ border: 1px solid var(--line); vertical-align: top; padding: 6px; }
+.sched th{ background: var(--panel); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-soft); }
+.sched td.today{ background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.visit{ display: block; background: var(--panel); border-left: 4px solid var(--accent); border-radius: 6px; padding: 5px 7px; margin-bottom: 6px; text-decoration: none; color: inherit; }
+.visit.flag{ background: var(--bad-bg); border-left-color: var(--danger); }
+.visit.done{ opacity: 0.6; }
+.visit .t{ font-weight: 600; }
+
+/* technician quick actions, approvals, signature */
+.field-actions{ margin-top: 10px; padding: 12px; background: var(--panel); border: 1px solid var(--panel-line); border-radius: 8px; }
+.field-actions button.primary.big{ width: 100%; }
+.minute-grid{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.nav-count{ display: inline-block; margin-left: 6px; min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; text-align: center; line-height: 18px; }
+.sig-pad{ border: 2px dashed var(--panel-line); border-radius: 8px; background: #fff; touch-action: none; position: relative; }
+.sig-pad canvas{ display: block; width: 100%; touch-action: none; cursor: crosshair; }
+.sig-pad .sig-hint{ position: absolute; left: 12px; top: 8px; color: #6b7686; font-size: 13px; pointer-events: none; }
+.field textarea.sig-notes{ min-height: 60px; }
+
+/* the customer page (/e/...) stays plain: light, no app shell */
+.customer-page{ background: var(--bg); min-height: 100vh; }
+.customer-page .page{ max-width: 760px; }
+.customer-brand{ text-align: center; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; font-size: 13px; color: var(--heading); padding: 18px 0 6px; }
+.customer-brand span{ color: var(--gold); }
+
+/* the shell on very wide sidebars-free pages: let content use the width */
+.shell-content > .page{ min-height: 100%; }
+.more-sheet-who{ display: flex; align-items: center; gap: 14px; padding: 6px 12px 12px; color: var(--heading); font-weight: 600; font-size: 15px; }
+.more-sheet-who small{ display: block; font-weight: 400; font-size: 12px; color: var(--ink-soft); }
+.page .row > h1{ margin: 0; }
+.page > .row:first-child{ margin-bottom: 6px; justify-content: space-between; }
+.stat-row{ display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 22px; }
+.stat-tile{ flex: 1 1 150px; background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; color: inherit; }
+a.stat-tile:hover{ border-color: var(--accent); }
+.stat-num{ font-size: 24px; font-weight: 700; color: var(--heading); line-height: 1.1; }
+.stat-label{ font-size: 12px; color: var(--ink-soft); margin-top: 4px; }
+.list-stack{ margin-bottom: 20px; }
+.list-stack > p.muted{ text-align: center; font-style: italic; padding: 20px 0; }
+.dash-section .row > h3{ margin: 0; }

@@ -63,7 +63,7 @@ function LeadsInner() {
       </div>
       <div className="toolbar"><input type="search" placeholder="Search name, phone, email or address" value={q} onChange={(e) => setQ(e.target.value)} /></div>
 
-      <div className="card">
+      <div className="list-stack">
         {rows.length === 0 && <p className="muted">No leads here.</p>}
         {rows.map((l) => (
           <Link key={l.id} href={l.status === 'booked' && l.job_id ? `/jobs/${l.job_id}` : `/leads/${l.id}`} className="list-item">

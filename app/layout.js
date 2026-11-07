@@ -1,4 +1,5 @@
 import './globals.css';
+import { ThemeProvider } from '@/lib/useTheme';
 
 export const metadata = {
   title: 'MonarchJobs',
@@ -9,13 +10,13 @@ export const metadata = {
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#1f3a5f',
+  themeColor: '#19181a',
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body><ThemeProvider>{children}</ThemeProvider></body>
     </html>
   );
 }

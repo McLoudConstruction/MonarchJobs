@@ -1,26 +1,26 @@
 /* Week timeline used to pick an appointment time and to browse the schedule. */
-.wg { border: 1px solid var(--border); border-radius: 10px; background: #fff; overflow: hidden; }
-.wg-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border); background: #f7f9fb; }
-.wg-bar select { padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; background: #fff; }
+.wg { border: 1px solid var(--border); border-radius: 8px; background: var(--card-bg); overflow: hidden; }
+.wg-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
+.wg-bar select { padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--paper); color: var(--ink); }
 .wg-bar .range { font-weight: 600; margin: 0 4px; }
 .wg-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--muted); padding: 6px 12px; border-bottom: 1px solid var(--border); }
 .wg-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: baseline; }
 .wg-scroll { overflow-x: auto; }
 .wg-inner { min-width: 760px; }
 .wg-head, .wg-body { display: grid; grid-template-columns: 52px repeat(7, 1fr); }
-.wg-head > div { padding: 6px 4px; text-align: center; font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--border); background: #eef1f5; border-left: 1px solid var(--border); }
+.wg-head > div { padding: 6px 4px; text-align: center; font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--border); background: var(--panel); color: var(--ink); border-left: 1px solid var(--border); }
 .wg-head > div:first-child { border-left: 0; }
-.wg-head .today { background: #dbe9f8; }
+.wg-head .today { background: color-mix(in srgb, var(--accent) 20%, var(--panel)); }
 .wg-head .out { display: block; font-weight: 400; font-size: 11px; color: var(--muted); }
 .wg-gutter { position: relative; }
-.wg-gutter span { position: absolute; right: 6px; transform: translateY(-50%); font-size: 11px; color: var(--muted); background: #fff; padding: 0 2px; }
+.wg-gutter span { position: absolute; right: 6px; transform: translateY(-50%); font-size: 11px; color: var(--muted); background: var(--card-bg); padding: 0 2px; }
 .wg-col { position: relative; border-left: 1px solid var(--border); background-image: linear-gradient(to bottom, var(--border) 1px, transparent 1px); background-size: 100% var(--wg-hour); }
 .wg-col.clickable { cursor: copy; }
-.wg-col.clickable:hover { background-color: #f6fafe; }
-.wg-col.today { background-color: #f7fbff; }
-.wg-visit { position: absolute; overflow: hidden; border-radius: 5px; padding: 2px 5px; font-size: 12px; line-height: 1.25; color: #10202f; text-decoration: none; border-left: 4px solid var(--wg-color); background: color-mix(in srgb, var(--wg-color) 16%, #fff); box-shadow: 0 0 0 1px rgba(0,0,0,0.06); }
+.wg-col.clickable:hover { background-color: color-mix(in srgb, var(--accent) 7%, transparent); }
+.wg-col.today { background-color: color-mix(in srgb, var(--accent) 6%, transparent); }
+.wg-visit { position: absolute; overflow: hidden; border-radius: 5px; padding: 2px 5px; font-size: 12px; line-height: 1.25; color: var(--ink); text-decoration: none; border-left: 4px solid var(--wg-color); background: color-mix(in srgb, var(--wg-color) 22%, var(--card-bg)); box-shadow: 0 0 0 1px rgba(0,0,0,0.06); }
 .wg-visit .t { font-weight: 700; white-space: nowrap; }
 .wg-visit.done { opacity: 0.5; }
 .wg-visit.flag { box-shadow: 0 0 0 2px var(--danger); }
-.wg-proposed { position: absolute; left: 2px; right: 2px; border: 2px dashed var(--navy); background: rgba(31,58,95,0.12); border-radius: 6px; padding: 2px 5px; font-size: 12px; font-weight: 700; color: var(--navy); pointer-events: none; overflow: hidden; z-index: 3; }
+.wg-proposed { position: absolute; left: 2px; right: 2px; border: 2px dashed var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); border-radius: 6px; padding: 2px 5px; font-size: 12px; font-weight: 700; color: var(--accent); pointer-events: none; overflow: hidden; z-index: 3; }
 .wg-hint { padding: 6px 12px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--border); }

@@ -43,6 +43,12 @@ function DashboardInner({ staff }) {
       <h1>{isOffice ? 'Dashboard' : 'My day'}</h1>
       <p className="sub">Welcome{staff.full_name ? `, ${staff.full_name}` : ''}.</p>
 
+      <div className="stat-row">
+        <div className="stat-tile"><div className="stat-num">{today.length}</div><div className="stat-label">Visits today</div></div>
+        {isOffice && <Link href="/leads" className="stat-tile"><div className="stat-num">{ready.length}</div><div className="stat-label">Ready to schedule</div></Link>}
+        {isOffice && <Link href="/leads" className="stat-tile"><div className="stat-num">{newLeads.length}</div><div className="stat-label">New leads</div></Link>}
+      </div>
+
       {isOffice && (flagged > 0 || unassigned > 0) && (
         <div className="banner flag">
           {flagged > 0 && <div>{flagged} visits today overlap for the same tech.</div>}
@@ -50,8 +56,8 @@ function DashboardInner({ staff }) {
         </div>
       )}
 
-      <div className="card">
-        <h2>Today</h2>
+      <div className="dash-section">
+        <h3>Today</h3>
         {today.length === 0 && <p className="muted">Nothing scheduled today.</p>}
         {today.map((v) => (
           <Link key={v.id} href={`/jobs/${v.job.id}`} className="list-item">
@@ -64,8 +70,8 @@ function DashboardInner({ staff }) {
       </div>
 
       {isOffice && ready.length > 0 && (
-        <div className="card">
-          <h2>Ready to schedule</h2>
+        <div className="dash-section">
+          <h3 className="dash-section-heading-rust">Ready to schedule</h3>
           <p className="hint">These customers approved their estimate. Pick a time and create the work order.</p>
           {ready.map((l) => (
             <Link key={l.id} href={`/leads/${l.id}`} className="list-item">
@@ -78,9 +84,9 @@ function DashboardInner({ staff }) {
       )}
 
       {isOffice && (
-        <div className="card">
+        <div className="dash-section">
           <div className="row" style={{ justifyContent: 'space-between' }}>
-            <h2>New leads</h2>
+            <h3>New leads</h3>
             <Link href="/leads"><button className="secondary small">All leads</button></Link>
           </div>
           {newLeads.length === 0 && <p className="muted">No new leads.</p>}

@@ -58,7 +58,7 @@ function JobsInner({ staff }) {
       <div className="tabs">
         {TABS.map(([k, label]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{label}</button>)}
       </div>
-      <div className="card">
+      <div className="list-stack">
         {shown.length === 0 && <p className="muted">No jobs here.</p>}
         {shown.map((j) => (
           <Link key={j.id} href={`/jobs/${j.id}`} className="list-item">
