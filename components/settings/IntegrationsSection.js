@@ -17,10 +17,6 @@ const SQUARE_FIELDS = [
   { name: 'environment', label: 'Environment', options: ['production', 'sandbox'] },
 ];
 
-const GOOGLE_FIELDS = [
-  { name: 'api_key', label: 'API key', secret: true, placeholder: 'AIza...' },
-];
-
 const TWILIO_FIELDS = [
   { name: 'account_sid', label: 'Account SID', placeholder: 'AC...' },
   { name: 'auth_token', label: 'Auth token', secret: true },
@@ -70,16 +66,6 @@ export default function IntegrationsSection({ token }) {
         token={token}
         onChanged={load}
         help="Used for payment links, which work well with tips. Add a webhook subscription in the Square Developer dashboard with the URL below, then paste its signature key here."
-      />
-      <IntegrationPanel
-        provider="google_maps"
-        title="Google Maps (address suggestions)"
-        status={data.google_maps}
-        fields={GOOGLE_FIELDS}
-        token={token}
-        onChanged={load}
-        plainBadge
-        help="Fills in the street, city, state and ZIP as an address is typed. Use a Google Cloud key with Maps JavaScript API and Places API (New) turned on, billing enabled, and limited to this website's address. Address fields still work without it."
       />
       <IntegrationPanel
         provider="twilio"

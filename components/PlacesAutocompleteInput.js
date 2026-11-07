@@ -2,54 +2,33 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { loadGoogleMapsPlaces } from '@/lib/googleMapsLoader';
+import { getSupabase } from '@/lib/supabaseClient';
 
-// A plain text input with a small suggestion list under it, using Google's Places (New) data call.
+// A plain text input with a small suggestion list under it. Suggestions come from our own server
+// (/api/places/*), which holds the Google key, so no key is ever sent to the browser.
 // Picking a suggestion fills in the street, city, state and ZIP through onPlaceSelected.
-// Same approach as the McLoud Jobs address field.
+// If the server has no key, the field simply stays a plain input.
 const DEBOUNCE_MS = 250;
 
-let placesLib = null;
-async function getPlacesLib() {
-  if (placesLib) return placesLib;
-  placesLib = await window.google.maps.importLibrary('places');
-  return placesLib;
+async function authHeader() {
+  const { data } = await getSupabase().auth.getSession();
+  const token = data?.session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : null;
 }
 
-const textOf = (f) => (!f ? '' : typeof f === 'string' ? f : f.text || '');
-
-function componentValue(components, type, short) {
-  const c = (components || []).find((x) => (x.types || []).includes(type));
-  if (!c) return '';
-  return short ? c.shortText || c.longText || '' : c.longText || c.shortText || '';
-}
-
-async function parsePlace(place) {
-  await place.fetchFields({ fields: ['addressComponents', 'displayName'] });
-  const comps = place.addressComponents || [];
-  return {
-    street: [componentValue(comps, 'street_number'), componentValue(comps, 'route')].filter(Boolean).join(' '),
-    city: componentValue(comps, 'locality') || componentValue(comps, 'sublocality') || componentValue(comps, 'administrative_area_level_2'),
-    state: componentValue(comps, 'administrative_area_level_1', true),
-    zip: componentValue(comps, 'postal_code'),
-  };
-}
+const newSession = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `s-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
 export default function PlacesAutocompleteInput({ value, onChange, onPlaceSelected, ...rest }) {
-  const [ready, setReady] = useState(false);
+  const [enabled, setEnabled] = useState(true);
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState(null);
-  const tokenRef = useRef(null);
+  const sessionRef = useRef(null);
   const timerRef = useRef(null);
   const reqRef = useRef(0);
   const wrapRef = useRef(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    loadGoogleMapsPlaces().then((ok) => { if (!cancelled) setReady(ok); });
-    return () => { cancelled = true; clearTimeout(timerRef.current); };
-  }, []);
+  useEffect(() => () => clearTimeout(timerRef.current), []);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -70,15 +49,18 @@ export default function PlacesAutocompleteInput({ value, onChange, onPlaceSelect
   async function fetchSuggestions(text) {
     const id = ++reqRef.current;
     try {
-      const { AutocompleteSuggestion, AutocompleteSessionToken } = await getPlacesLib();
-      if (!tokenRef.current) tokenRef.current = new AutocompleteSessionToken();
-      const { suggestions: results } = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
-        input: text,
-        includedRegionCodes: ['us'],
-        sessionToken: tokenRef.current,
+      const headers = await authHeader();
+      if (!headers) return;
+      if (!sessionRef.current) sessionRef.current = newSession();
+      const res = await fetch('/api/places/autocomplete', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input: text, sessionToken: sessionRef.current }),
       });
+      const body = await res.json().catch(() => ({}));
       if (id !== reqRef.current) return;
-      const list = (results || []).filter((s) => s.placePrediction);
+      if (body.enabled === false) { setEnabled(false); setSuggestions([]); setOpen(false); return; }
+      const list = body.suggestions || [];
       setSuggestions(list);
       setOpen(list.length > 0);
     } catch {
@@ -91,7 +73,7 @@ export default function PlacesAutocompleteInput({ value, onChange, onPlaceSelect
   function handleChange(e) {
     const text = e.target.value;
     onChange(e);
-    if (!ready) return;
+    if (!enabled) return;
     clearTimeout(timerRef.current);
     if (text.trim().length < 3) {
       reqRef.current++;
@@ -105,11 +87,15 @@ export default function PlacesAutocompleteInput({ value, onChange, onPlaceSelect
   async function pick(s) {
     setOpen(false);
     setSuggestions([]);
+    const session = sessionRef.current;
     try {
-      const parsed = await parsePlace(s.placePrediction.toPlace());
-      onPlaceSelected?.(parsed);
+      const headers = await authHeader();
+      if (!headers) return;
+      const res = await fetch(`/api/places/details?placeId=${encodeURIComponent(s.placeId)}${session ? `&sessionToken=${encodeURIComponent(session)}` : ''}`, { headers });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body.address) onPlaceSelected?.(body.address);
     } finally {
-      tokenRef.current = null; // a session ends when a place is chosen
+      sessionRef.current = null; // a session ends when a place is chosen
     }
   }
 
@@ -128,16 +114,13 @@ export default function PlacesAutocompleteInput({ value, onChange, onPlaceSelect
           position: 'fixed', top: rect.top, left: rect.left, width: rect.width, zIndex: 4000, background: '#fff',
           border: '1px solid var(--border)', borderRadius: 8, maxHeight: 260, overflowY: 'auto', boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
         }}>
-          {suggestions.map((s, i) => {
-            const p = s.placePrediction;
-            return (
-              <div key={p.placeId || i} onMouseDown={() => pick(s)}
-                style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ fontWeight: 600, fontSize: 15 }}>{textOf(p.mainText) || textOf(p.text)}</div>
-                <div style={{ fontSize: 13, color: 'var(--muted)' }}>{textOf(p.secondaryText)}</div>
-              </div>
-            );
-          })}
+          {suggestions.map((s) => (
+            <div key={s.placeId} onMouseDown={() => pick(s)}
+              style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>{s.main}</div>
+              <div style={{ fontSize: 13, color: 'var(--muted)' }}>{s.secondary}</div>
+            </div>
+          ))}
         </div>,
         document.body,
       )}

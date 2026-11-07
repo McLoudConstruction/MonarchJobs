@@ -53,3 +53,32 @@ test('estimate email escapes names so a customer or business name cannot inject 
   assert.ok(m.html.includes('&lt;b&gt;Evil&lt;/b&gt; &amp; Co'));
   assert.ok(m.html.includes('a&quot;b'));
 });
+
+import { parseAddressComponents, simplifySuggestions, validSessionToken } from '../lib/places.js';
+
+test('Google address components become street, city, state and ZIP', () => {
+  const comps = [
+    { longText: '123', types: ['street_number'] },
+    { longText: 'Main Street', types: ['route'] },
+    { longText: 'Springfield', types: ['locality', 'political'] },
+    { longText: 'Missouri', shortText: 'MO', types: ['administrative_area_level_1'] },
+    { longText: '65802', types: ['postal_code'] },
+  ];
+  assert.deepEqual(parseAddressComponents(comps), { street: '123 Main Street', city: 'Springfield', state: 'MO', zip: '65802' });
+  assert.deepEqual(parseAddressComponents(undefined), { street: '', city: '', state: '', zip: '' });
+});
+
+test('suggestions are trimmed to what the list shows', () => {
+  const out = simplifySuggestions({ suggestions: [
+    { placePrediction: { placeId: 'abc1234567', structuredFormat: { mainText: { text: '123 Main St' }, secondaryText: { text: 'Springfield, MO, USA' } } } },
+    { queryPrediction: { text: { text: 'x' } } },
+  ] });
+  assert.deepEqual(out, [{ placeId: 'abc1234567', main: '123 Main St', secondary: 'Springfield, MO, USA' }]);
+  assert.deepEqual(simplifySuggestions(null), []);
+});
+
+test('session tokens are limited to safe characters', () => {
+  assert.equal(validSessionToken('3f2c9a10-1b2c-4d5e-8f90-123456789abc'), true);
+  assert.equal(validSessionToken('bad token&x=1'), false);
+  assert.equal(validSessionToken(undefined), false);
+});
