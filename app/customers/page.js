@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AuthGate from '@/components/AuthGate';
 import { getSupabase } from '@/lib/supabaseClient';
+import PhoneInput from '@/components/PhoneInput';
+import { displayPhone, formatPhone, digitsOnly } from '@/lib/phone';
 
 const EMPTY = {
   customer_type: 'residential', first_name: '', last_name: '', company_name: '', phone: '', email: '',
@@ -28,7 +30,11 @@ function CustomersInner() {
       .order('display_name')
       .limit(200);
     const term = q.trim().replace(/[%,()]/g, ' ');
-    if (term) query = query.or(`display_name.ilike.%${term}%,phone.ilike.%${term}%,email.ilike.%${term}%`);
+    if (term) {
+      // digits typed as 816555 also match phones stored as (816) 555-1212
+      const formatted = digitsOnly(term).length >= 3 && /^[\d\s().+-]+$/.test(term) ? `,phone.ilike."%${formatPhone(term)}%"` : '';
+      query = query.or(`display_name.ilike.%${term}%,phone.ilike.%${term}%,email.ilike.%${term}%${formatted}`);
+    }
     const { data } = await query;
     setRows(data || []);
   }, [q]);
@@ -83,7 +89,7 @@ function CustomersInner() {
             <div className="field"><label>Company (if any)</label><input value={form.company_name} onChange={set('company_name')} /></div>
             <div className="field"><label>First name</label><input value={form.first_name} onChange={set('first_name')} /></div>
             <div className="field"><label>Last name</label><input value={form.last_name} onChange={set('last_name')} /></div>
-            <div className="field"><label>Phone</label><input type="tel" value={form.phone} onChange={set('phone')} /></div>
+            <div className="field"><label>Phone</label><PhoneInput value={form.phone} onChange={set('phone')} /></div>
             <div className="field"><label>Email</label><input type="email" value={form.email} onChange={set('email')} /></div>
           </div>
           <h2 style={{ marginTop: 8 }}>First service address (optional)</h2>
@@ -106,7 +112,7 @@ function CustomersInner() {
         {rows.map((c) => (
           <Link key={c.id} href={`/customers/${c.id}`} className="list-item">
             <div className="title">{c.display_name} <span className="badge off">{c.customer_type}</span></div>
-            <div className="meta">{[c.phone, c.email].filter(Boolean).join(' · ')}</div>
+            <div className="meta">{[displayPhone(c.phone), c.email].filter(Boolean).join(' · ')}</div>
           </Link>
         ))}
       </div>

@@ -4,121 +4,81 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import AuthGate from '@/components/AuthGate';
 import { getSupabase } from '@/lib/supabaseClient';
-import { fmtDateTime } from '@/lib/format';
+import { fmtDateTime, LEAD_STATUS, JOB_TYPES, leadDisplayName } from '@/lib/format';
+import { displayPhone, formatPhone, digitsOnly } from '@/lib/phone';
 
 const TABS = [
   ['open', 'Open'],
-  ['new', 'New'],
-  ['quoted', 'Quoted'],
-  ['booked', 'Booked'],
+  ['accepted', 'Ready to schedule'],
+  ['booked', 'Work orders'],
   ['lost', 'Lost'],
 ];
-const BLANK = { source: 'phone', name: '', phone: '', email: '', address: '', service_requested: '', notes: '' };
 
-function LeadsInner({ staff }) {
+function LeadsInner() {
   const [tab, setTab] = useState('open');
+  const [q, setQ] = useState('');
   const [rows, setRows] = useState([]);
-  const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState(BLANK);
-  const [msg, setMsg] = useState(null);
+  const [counts, setCounts] = useState({});
 
   const load = useCallback(async () => {
-    let q = getSupabase().from('leads').select('*').order('created_at', { ascending: false }).limit(200);
-    if (tab === 'open') q = q.in('status', ['new', 'quoted']);
-    else q = q.eq('status', tab);
-    const { data } = await q;
-    setRows(data || []);
-  }, [tab]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-
-  async function create(e) {
-    e.preventDefault();
-    if (!form.name.trim() && !form.phone.trim() && !form.email.trim()) {
-      setMsg('Enter at least a name, phone or email.');
-      return;
+    const sb = getSupabase();
+    let query = sb.from('leads')
+      .select('id,status,source,name,first_name,last_name,company_name,phone,email,address,job_type,service_requested,created_at,accepted_at,job_id,preferred_times')
+      .order(tab === 'accepted' ? 'accepted_at' : 'created_at', { ascending: tab === 'accepted' })
+      .limit(200);
+    query = tab === 'open' ? query.in('status', ['new', 'quoted']) : query.eq('status', tab);
+    const term = q.trim().replace(/[%,()]/g, ' ');
+    if (term) {
+      const formatted = digitsOnly(term).length >= 3 && /^[\d\s().+-]+$/.test(term) ? `,phone.ilike."%${formatPhone(term)}%"` : '';
+      query = query.or(`name.ilike.%${term}%,phone.ilike.%${term}%,email.ilike.%${term}%,address.ilike.%${term}%${formatted}`);
     }
-    const { error } = await getSupabase().from('leads').insert({ ...form, created_by: staff.id });
-    if (error) { setMsg(error.message); return; }
-    setForm(BLANK);
-    setAdding(false);
-    setMsg(null);
-    load();
-  }
+    const { data } = await query;
+    setRows(data || []);
+  }, [tab, q]);
 
-  async function setStatus(lead, status, extra = {}) {
-    const { error } = await getSupabase().from('leads').update({ status, ...extra }).eq('id', lead.id);
-    if (error) setMsg(error.message);
-    else load();
-  }
+  useEffect(() => { const t = setTimeout(load, 150); return () => clearTimeout(t); }, [load]);
 
-  async function markLost(lead) {
-    const reason = window.prompt('Why was this lead lost? (optional)') ?? null;
-    if (reason === null) return;
-    setStatus(lead, 'lost', { lost_reason: reason });
-  }
+  useEffect(() => {
+    getSupabase().from('leads').select('status').in('status', ['new', 'quoted', 'accepted']).then(({ data }) => {
+      const c = { open: 0, accepted: 0 };
+      for (const r of data || []) c[r.status === 'accepted' ? 'accepted' : 'open'] += 1;
+      setCounts(c);
+    });
+  }, [rows.length]);
 
   return (
     <>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <h1>Leads</h1>
-        <button className="primary" onClick={() => setAdding(!adding)}>{adding ? 'Cancel' : 'New lead'}</button>
+        <Link href="/leads/new"><button className="primary">New lead</button></Link>
       </div>
-      <p className="sub">Every contact is a lead until a job is booked. Website form submissions will arrive here too.</p>
-      {msg && <div className="msg err">{msg}</div>}
-
-      {adding && (
-        <form className="card" onSubmit={create}>
-          <h2>Log a lead</h2>
-          <div className="grid2">
-            <div className="field"><label>Name</label><input value={form.name} onChange={set('name')} /></div>
-            <div className="field"><label>Source</label>
-              <select value={form.source} onChange={set('source')}>
-                <option value="phone">Phone call</option><option value="web">Website</option>
-                <option value="referral">Referral</option><option value="manual">Other</option>
-              </select>
-            </div>
-            <div className="field"><label>Phone</label><input type="tel" value={form.phone} onChange={set('phone')} /></div>
-            <div className="field"><label>Email</label><input type="email" value={form.email} onChange={set('email')} /></div>
-          </div>
-          <div className="field"><label>Address</label><input value={form.address} onChange={set('address')} /></div>
-          <div className="field"><label>Service requested</label><input placeholder="Carpet cleaning, water in kitchen..." value={form.service_requested} onChange={set('service_requested')} /></div>
-          <div className="field"><label>Notes</label><textarea value={form.notes} onChange={set('notes')} /></div>
-          <button className="primary">Save lead</button>
-        </form>
-      )}
+      <p className="sub">Every job starts as a lead. Add the estimate, get it approved, pick a time, then create the work order.</p>
 
       <div className="tabs">
         {TABS.map(([k, label]) => (
-          <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{label}</button>
+          <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
+            {label}{counts[k] ? ` (${counts[k]})` : ''}
+          </button>
         ))}
       </div>
+      <div className="toolbar"><input type="search" placeholder="Search name, phone, email or address" value={q} onChange={(e) => setQ(e.target.value)} /></div>
 
       <div className="card">
         {rows.length === 0 && <p className="muted">No leads here.</p>}
         {rows.map((l) => (
-          <div key={l.id} className="list-item">
+          <Link key={l.id} href={l.status === 'booked' && l.job_id ? `/jobs/${l.job_id}` : `/leads/${l.id}`} className="list-item">
             <div className="title">
-              {l.name || l.phone || l.email} <span className={`badge s-${l.status}`}>{l.status}</span>{' '}
-              <span className="badge off">{l.source}</span>
+              {leadDisplayName(l) || displayPhone(l.phone) || l.email || 'Unnamed lead'}{' '}
+              <span className={`badge s-${l.status}`}>{LEAD_STATUS[l.status]}</span>{' '}
+              <span className="badge off">{JOB_TYPES[l.job_type]}</span>
             </div>
-            <div className="meta">{[l.phone, l.email, l.address].filter(Boolean).join(' · ')}</div>
+            <div className="meta">{[displayPhone(l.phone), l.email, l.address].filter(Boolean).join(' · ')}</div>
             {l.service_requested && <div>{l.service_requested}</div>}
-            {l.notes && <div className="meta">{l.notes}</div>}
-            {l.status === 'lost' && l.lost_reason && <div className="meta">Lost: {l.lost_reason}</div>}
-            <div className="meta">{fmtDateTime(l.created_at)}</div>
-            <div className="row" style={{ marginTop: 6 }}>
-              {l.status !== 'booked' && l.status !== 'lost' && (
-                <Link href={`/jobs/new?lead=${l.id}`}><button className="primary small">Book job</button></Link>
-              )}
-              {l.status === 'new' && <button className="secondary small" onClick={() => setStatus(l, 'quoted')}>Mark quoted</button>}
-              {(l.status === 'new' || l.status === 'quoted') && <button className="danger small" onClick={() => markLost(l)}>Lost</button>}
-              {l.status === 'lost' && <button className="secondary small" onClick={() => setStatus(l, 'new', { lost_reason: '' })}>Reopen</button>}
-              {l.status === 'booked' && l.job_id && <Link href={`/jobs/${l.job_id}`}><button className="secondary small">Open job</button></Link>}
+            {l.status === 'accepted' && l.preferred_times && <div className="meta">Customer's preferred times: {l.preferred_times}</div>}
+            <div className="meta">
+              {l.status === 'accepted' ? `Accepted ${fmtDateTime(l.accepted_at)}` : `Added ${fmtDateTime(l.created_at)}`}
             </div>
-          </div>
+          </Link>
         ))}
       </div>
     </>
@@ -126,5 +86,5 @@ function LeadsInner({ staff }) {
 }
 
 export default function LeadsPage() {
-  return <AuthGate officeOnly>{({ staff }) => <LeadsInner staff={staff} />}</AuthGate>;
+  return <AuthGate officeOnly>{() => <LeadsInner />}</AuthGate>;
 }

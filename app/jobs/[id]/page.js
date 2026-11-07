@@ -9,7 +9,8 @@ import VisitActions from '@/components/VisitActions';
 import EstimateCard from '@/components/EstimateCard';
 import { getSupabase } from '@/lib/supabaseClient';
 import { doubleBookedIds } from '@/lib/schedule';
-import { fmtDateTime, fmtTime, JOB_STATUS, JOB_TYPES, addressLine } from '@/lib/format';
+import { fmtDateTime, fmtDuration, JOB_STATUS, JOB_TYPES, addressLine } from '@/lib/format';
+import { displayPhone, telHref } from '@/lib/phone';
 
 const VISIT_STATUS = { scheduled: 'Scheduled', on_the_way: 'On the way', started: 'Started', finished: 'Finished', cancelled: 'Cancelled' };
 
@@ -122,6 +123,7 @@ function JobInner({ id, staff, token }) {
       <p className="sub">
         {isOffice ? <Link href={`/customers/${job.customer.id}`}>{job.customer.display_name}</Link> : job.customer.display_name}
         {' · '}{JOB_TYPES[job.job_type]}
+        {isOffice && job.lead_id && <>{' · '}<Link href={`/leads/${job.lead_id}`}>From lead</Link></>}
       </p>
 
       {warnings.map((w, i) => <div key={i} className="banner">Warning: {w}</div>)}
@@ -134,7 +136,7 @@ function JobInner({ id, staff, token }) {
         {job.address.gate_code && <div>Gate code: <strong>{job.address.gate_code}</strong></div>}
         {job.address.access_notes && <div className="meta">{job.address.access_notes}</div>}
         <div style={{ marginTop: 8 }}>
-          {job.customer.phone && <a href={`tel:${job.customer.phone}`}>{job.customer.phone}</a>}
+          {job.customer.phone && <a href={telHref(job.customer.phone)}>{displayPhone(job.customer.phone)}</a>}
           {job.customer.email && <> · <a href={`mailto:${job.customer.email}`}>{job.customer.email}</a></>}
         </div>
         {job.loss_summary && <p><strong>Loss summary:</strong> {job.loss_summary}</p>}
@@ -148,7 +150,7 @@ function JobInner({ id, staff, token }) {
         {visits.map((v) => (
           <div key={v.id} className="list-item">
             <div className="title">
-              {fmtDateTime(v.starts_at)} to {fmtTime(v.ends_at)}{' '}
+              {fmtDateTime(v.starts_at)} for {fmtDuration(v.duration_minutes)}{' '}
               <span className="badge off">{VISIT_STATUS[v.status]}</span>
               {flagged.has(v.id) && v.status !== 'cancelled' && <> <span className="badge warn">Double-booked</span></>}
             </div>
@@ -220,13 +222,20 @@ function JobInner({ id, staff, token }) {
           {contacts.map((c) => (
             <label key={c.id} className="row" style={{ marginBottom: 8 }}>
               <input type="checkbox" checked={jobContactIds.includes(c.id)} onChange={() => toggleContact(c.id)} />
-              {c.name} {c.role && <span className="badge off">{c.role}</span>} <span className="muted">{[c.phone, c.email].filter(Boolean).join(' · ')}</span>
+              {c.name} {c.role && <span className="badge off">{c.role}</span>} <span className="muted">{[displayPhone(c.phone), c.email].filter(Boolean).join(' · ')}</span>
             </label>
           ))}
         </div>
       )}
 
-      <EstimateCard jobId={id} jobStatus={job.status} staff={staff} onChanged={loadEvents} />
+      <EstimateCard
+        scope={{ jobId: id }}
+        open={!['closed', 'cancelled'].includes(job.status)}
+        staff={staff}
+        token={token}
+        contact={{ name: job.customer.display_name, phone: job.customer.phone, email: job.customer.email }}
+        onChanged={loadEvents}
+      />
 
       <div className="card">
         <h2>Invoice</h2>

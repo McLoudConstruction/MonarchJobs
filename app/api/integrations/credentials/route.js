@@ -13,7 +13,7 @@ export async function GET(request) {
     const statuses = await getStatuses();
     const base = siteUrl(request);
     for (const [p, def] of Object.entries(PROVIDERS)) {
-      statuses[p].webhookUrl = base + def.webhookPath;
+      if (def.webhookPath) statuses[p].webhookUrl = base + def.webhookPath;
     }
     return NextResponse.json({ integrations: statuses });
   } catch (e) {

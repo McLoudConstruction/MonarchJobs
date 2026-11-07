@@ -5,7 +5,9 @@ import Link from 'next/link';
 import AuthGate from '@/components/AuthGate';
 import { getSupabase } from '@/lib/supabaseClient';
 import { doubleBookedIds } from '@/lib/schedule';
-import { addDays, startOfDay, fmtDay, fmtTime } from '@/lib/format';
+import WeekGrid from '@/components/WeekGrid';
+import { addDays, startOfDay, fmtDay, fmtTime, fmtDuration } from '@/lib/format';
+import { weekStartMonday } from '@/lib/weekGrid';
 
 function weekStart(d) {
   const x = startOfDay(d);
@@ -17,6 +19,7 @@ function ScheduleInner({ staff }) {
   const [start, setStart] = useState(weekStart(new Date()));
   const [visits, setVisits] = useState([]);
   const [techs, setTechs] = useState([]);
+  const [view, setView] = useState('board'); // board | timeline
   const end = useMemo(() => addDays(start, 7), [start]);
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(start, i)), [start]);
   const isOffice = staff.role !== 'tech';
@@ -25,7 +28,7 @@ function ScheduleInner({ staff }) {
     const sb = getSupabase();
     const [v, s] = await Promise.all([
       sb.from('job_visits')
-        .select('id,tech_id,starts_at,ends_at,status,job:jobs(id,job_number,job_type,customer:customers(display_name),address:addresses(street,city))')
+        .select('id,tech_id,starts_at,ends_at,duration_minutes,status,job:jobs(id,job_number,job_type,customer:customers(display_name),address:addresses(street,city))')
         .gte('starts_at', start.toISOString()).lt('starts_at', end.toISOString())
         .neq('status', 'cancelled').order('starts_at'),
       sb.from('staff_users').select('id,full_name,email,role').eq('active', true).order('email'),
@@ -57,16 +60,29 @@ function ScheduleInner({ staff }) {
     <>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <h1>Schedule</h1>
-        {isOffice && <Link href="/jobs/new"><button className="primary">Book a job</button></Link>}
+        {isOffice && <Link href="/leads/new"><button className="primary">New lead</button></Link>}
       </div>
-      <div className="toolbar">
+      <div className="tabs">
+        <button className={view === 'board' ? 'on' : ''} onClick={() => setView('board')}>By tech</button>
+        <button className={view === 'timeline' ? 'on' : ''} onClick={() => setView('timeline')}>Time of day</button>
+      </div>
+      {view === 'board' && <div className="toolbar">
         <button className="secondary" onClick={() => setStart(addDays(start, -7))}>Previous week</button>
         <button className="secondary" onClick={() => setStart(weekStart(new Date()))}>This week</button>
         <button className="secondary" onClick={() => setStart(addDays(start, 7))}>Next week</button>
         <span className="muted">{fmtDay(days[0])} to {fmtDay(days[6])}</span>
-      </div>
-      {flagged.size > 0 && <div className="banner flag">{flagged.size} visits this week overlap another visit for the same tech. They are marked in red.</div>}
-      <div className="sched-wrap">
+      </div>}
+      {view === 'timeline' && (
+        <WeekGrid
+          weekStart={start}
+          onWeekChange={(d) => setStart(weekStartMonday(d))}
+          techs={isOffice ? techs.filter((t) => t.role === 'tech') : techs.filter((t) => t.id === staff.id)}
+          focusTechId={isOffice ? '' : staff.id}
+          linkVisits
+        />
+      )}
+      {view === 'board' && flagged.size > 0 && <div className="banner flag">{flagged.size} visits this week overlap another visit for the same tech. They are marked in red.</div>}
+      {view === 'board' && <div className="sched-wrap">
         <table className="sched min">
           <thead>
             <tr>
@@ -83,7 +99,7 @@ function ScheduleInner({ staff }) {
                     {cell(r, d).map((v) => (
                       <Link key={v.id} href={`/jobs/${v.job.id}`}
                         className={`visit${flagged.has(v.id) ? ' flag' : ''}${v.status === 'finished' ? ' done' : ''}`}>
-                        <div className="t">{fmtTime(v.starts_at)} to {fmtTime(v.ends_at)}</div>
+                        <div className="t">{fmtTime(v.starts_at)} · {fmtDuration(v.duration_minutes)}</div>
                         <div>#{v.job.job_number} {v.job.customer?.display_name}</div>
                         <div className="muted">{v.job.address?.street}</div>
                       </Link>
@@ -94,8 +110,8 @@ function ScheduleInner({ staff }) {
             ))}
           </tbody>
         </table>
-      </div>
-      {rows.length === 0 && <p className="muted">No techs yet. Add staff and set their role to Tech in Settings.</p>}
+      </div>}
+      {view === 'board' && rows.length === 0 && <p className="muted">No techs yet. Add staff and set their role to Tech in Settings.</p>}
     </>
   );
 }

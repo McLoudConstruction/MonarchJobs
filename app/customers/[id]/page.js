@@ -6,6 +6,9 @@ import { useParams } from 'next/navigation';
 import AuthGate from '@/components/AuthGate';
 import { getSupabase } from '@/lib/supabaseClient';
 import { fmtDateTime, JOB_STATUS, addressLine } from '@/lib/format';
+import PhoneInput from '@/components/PhoneInput';
+import AddressFields from '@/components/AddressFields';
+import { displayPhone } from '@/lib/phone';
 
 const BLANK_ADDR = { label: '', street: '', unit: '', city: '', state: 'MO', zip: '', gate_code: '', warnings: '', access_notes: '' };
 const BLANK_CONTACT = { name: '', phone: '', email: '', role: '', receives_notifications: true };
@@ -91,7 +94,7 @@ function Detail({ id }) {
     <>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <h1>{c.display_name}</h1>
-        <Link href={`/jobs/new?customer=${id}`}><button className="primary">Book a job</button></Link>
+        <Link href={`/leads/new?customer=${id}`}><button className="primary">New lead</button></Link>
       </div>
       <p className="sub">{c.customer_type}{c.last_visit_at ? ` · last visit ${fmtDateTime(c.last_visit_at)}` : ''}</p>
       {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
@@ -107,7 +110,7 @@ function Detail({ id }) {
           <div className="field"><label>Company</label><input value={c.company_name} onChange={set('company_name')} /></div>
           <div className="field"><label>First name</label><input value={c.first_name} onChange={set('first_name')} /></div>
           <div className="field"><label>Last name</label><input value={c.last_name} onChange={set('last_name')} /></div>
-          <div className="field"><label>Phone</label><input type="tel" value={c.phone} onChange={set('phone')} /></div>
+          <div className="field"><label>Phone</label><PhoneInput value={c.phone} onChange={set('phone')} /></div>
           <div className="field"><label>Email</label><input type="email" value={c.email} onChange={set('email')} /></div>
         </div>
         <div className="field"><label>Notes</label><textarea value={c.notes} onChange={set('notes')} /></div>
@@ -136,14 +139,8 @@ function Detail({ id }) {
         {addrs.length === 0 && <p className="muted">No addresses yet.</p>}
         {editAddr && (
           <form onSubmit={saveAddress} style={{ marginTop: 14 }}>
+            <AddressFields values={editAddr} onChange={(patch) => setEditAddr({ ...editAddr, ...patch })} required />
             <div className="grid2">
-              <div className="field"><label>Street</label><input required value={editAddr.street} onChange={setA('street')} /></div>
-              <div className="field"><label>Unit</label><input value={editAddr.unit} onChange={setA('unit')} /></div>
-              <div className="field"><label>City</label><input value={editAddr.city} onChange={setA('city')} /></div>
-              <div className="row">
-                <div className="field" style={{ width: 90 }}><label>State</label><input value={editAddr.state} onChange={setA('state')} /></div>
-                <div className="field" style={{ flex: 1 }}><label>ZIP</label><input value={editAddr.zip} onChange={setA('zip')} /></div>
-              </div>
               <div className="field"><label>Label</label><input placeholder="Rental, Office..." value={editAddr.label} onChange={setA('label')} /></div>
               <div className="field"><label>Gate code</label><input value={editAddr.gate_code} onChange={setA('gate_code')} /></div>
             </div>
@@ -166,7 +163,7 @@ function Detail({ id }) {
         {contacts.map((ct) => (
           <div key={ct.id} className="list-item">
             <div className="title">{ct.name} {ct.role && <span className="badge off">{ct.role}</span>}</div>
-            <div className="meta">{[ct.phone, ct.email].filter(Boolean).join(' · ')}</div>
+            <div className="meta">{[displayPhone(ct.phone), ct.email].filter(Boolean).join(' · ')}</div>
             <button className="danger small" style={{ marginTop: 6 }} onClick={() => deleteContact(ct)}>Remove</button>
           </div>
         ))}
@@ -176,7 +173,7 @@ function Detail({ id }) {
             <div className="grid2">
               <div className="field"><label>Name</label><input required value={newContact.name} onChange={setN('name')} /></div>
               <div className="field"><label>Role</label><input placeholder="Adjuster, manager..." value={newContact.role} onChange={setN('role')} /></div>
-              <div className="field"><label>Phone</label><input type="tel" value={newContact.phone} onChange={setN('phone')} /></div>
+              <div className="field"><label>Phone</label><PhoneInput value={newContact.phone} onChange={setN('phone')} /></div>
               <div className="field"><label>Email</label><input type="email" value={newContact.email} onChange={setN('email')} /></div>
             </div>
             <label className="row" style={{ marginBottom: 12 }}>

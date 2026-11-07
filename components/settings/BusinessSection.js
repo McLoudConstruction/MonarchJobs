@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
+import PhoneInput from '@/components/PhoneInput';
 
 export default function BusinessSection() {
   const [form, setForm] = useState({ business_name: '', phone: '', email: '', timezone: 'America/Chicago' });
@@ -33,7 +34,7 @@ export default function BusinessSection() {
       <h2>Business</h2>
       <p className="hint">Shown on estimates, invoices and customer messages.</p>
       <div className="field"><label>Business name</label><input value={form.business_name} onChange={set('business_name')} /></div>
-      <div className="field"><label>Phone</label><input value={form.phone} onChange={set('phone')} /></div>
+      <div className="field"><label>Phone</label><PhoneInput value={form.phone} onChange={set('phone')} /></div>
       <div className="field"><label>Email</label><input type="email" value={form.email} onChange={set('email')} /></div>
       <div className="field"><label>Time zone</label><input value={form.timezone} onChange={set('timezone')} /><div className="note">IANA name, for example America/Chicago.</div></div>
       {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}

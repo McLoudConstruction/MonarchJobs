@@ -5,14 +5,16 @@ import { apiFetch } from '@/lib/useAuth';
 
 // Generic credential panel driven by a field list. Secrets are write-only: after saving, only
 // the last 4 characters are shown and a blank input keeps the stored value.
-export default function IntegrationPanel({ provider, title, status, fields, token, onChanged, help }) {
+export default function IntegrationPanel({ provider, title, status, fields, token, onChanged, help, plainBadge = false }) {
   const [values, setValues] = useState({});
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const badge = !status?.configured
     ? <span className="badge off">Not connected</span>
-    : <span className={`badge ${status.mode === 'live' ? 'live' : 'test'}`}>Connected ({status.mode === 'live' ? 'live' : 'test mode'})</span>;
+    : plainBadge
+      ? <span className="badge live">Connected</span>
+      : <span className={`badge ${status.mode === 'live' ? 'live' : 'test'}`}>Connected ({status.mode === 'live' ? 'live' : 'test mode'})</span>;
 
   async function save(e) {
     e.preventDefault();
@@ -67,10 +69,12 @@ export default function IntegrationPanel({ provider, title, status, fields, toke
       </div>
       <p className="hint">{help}</p>
 
-      <div className="field">
-        <label>Webhook URL (paste into {title})</label>
-        <div className="copybox">{status?.webhookUrl || '...'}</div>
-      </div>
+      {status?.webhookUrl && (
+        <div className="field">
+          <label>Webhook URL (paste into {title})</label>
+          <div className="copybox">{status.webhookUrl}</div>
+        </div>
+      )}
 
       {fields.map((f) => (
         <div className="field" key={f.name}>

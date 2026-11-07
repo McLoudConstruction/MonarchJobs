@@ -2,16 +2,21 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
-import { estimateTotals, lineCents, ESTIMATE_STATUS } from '@/lib/estimate';
+import { apiFetch } from '@/lib/useAuth';
+import { estimateTotals, lineCents, estimateSnapshot, sameSnapshot, ESTIMATE_STATUS } from '@/lib/estimate';
 import { money, fmtDateTime, UNIT_LABELS } from '@/lib/format';
+import { displayPhone, toE164 } from '@/lib/phone';
 
 const BLANK_CUSTOM = { description: '', quantity: '1', unit: 'flat', unit_price: '' };
 
-// Estimate on the job record. Office/owner and the assigned tech can add, change and remove lines
-// while the job is open; every change is logged by the database with who and when.
-export default function EstimateCard({ jobId, jobStatus, staff, onChanged }) {
+// Estimate on a lead or on a job (scope = { leadId } or { jobId }). Office/owner, and the assigned tech
+// on a job, can add, change and remove lines while it is open; every change is logged by the database
+// with who and when. The office sends it to the customer by text and email; the customer approves and
+// signs on the secure link.
+export default function EstimateCard({ scope, open, staff, token, contact, onChanged }) {
   const isOffice = staff.role !== 'tech';
-  const open = !['closed', 'cancelled'].includes(jobStatus);
+  const scopeCol = scope.leadId ? 'lead_id' : 'job_id';
+  const scopeId = scope.leadId || scope.jobId;
 
   const [est, setEst] = useState(undefined); // undefined = loading, null = none yet
   const [lines, setLines] = useState([]);
@@ -23,19 +28,26 @@ export default function EstimateCard({ jobId, jobStatus, staff, onChanged }) {
   const [edit, setEdit] = useState(null);
   const [minimum, setMinimum] = useState('');
   const [msg, setMsg] = useState(null);
+  const [signature, setSignature] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState(null);
 
   const load = useCallback(async () => {
     const sb = getSupabase();
-    const { data: e } = await sb.from('estimates').select('*').eq('job_id', jobId).maybeSingle();
+    const { data: e } = await sb.from('estimates').select('*').eq(scopeCol, scopeId).maybeSingle();
     setEst(e || null);
     if (e) {
       setMinimum(String(e.minimum_charge));
-      const { data: l } = await sb.from('estimate_lines').select('*').eq('estimate_id', e.id).order('sort_order').order('created_at');
+      const [{ data: l }, { data: sig }] = await Promise.all([
+        sb.from('estimate_lines').select('*').eq('estimate_id', e.id).order('sort_order').order('created_at'),
+        sb.from('estimate_signatures').select('*').eq('estimate_id', e.id).order('signed_at', { ascending: false }).limit(1),
+      ]);
       setLines(l || []);
+      setSignature(sig?.[0] || null);
     }
     const { data: p } = await sb.from('price_items').select('*').eq('active', true).order('sort_order').order('name');
     setItems(p || []);
-  }, [jobId]);
+  }, [scopeCol, scopeId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -45,13 +57,13 @@ export default function EstimateCard({ jobId, jobStatus, staff, onChanged }) {
   }
 
   function fail(error) {
-    setMsg({ err: true, text: error.message.includes('row-level security') ? 'Not allowed. The job may be closed or cancelled.' : error.message });
+    setMsg({ err: true, text: error.message.includes('row-level security') ? 'Not allowed. The job may be closed or cancelled, or the lead already has a work order.' : error.message });
   }
 
   async function start() {
     setMsg(null);
     const { data: s } = await getSupabase().from('settings').select('job_minimum').eq('id', 1).maybeSingle();
-    const { error } = await getSupabase().from('estimates').insert({ job_id: jobId, minimum_charge: s?.job_minimum ?? 0, created_by: staff.id });
+    const { error } = await getSupabase().from('estimates').insert({ [scopeCol]: scopeId, minimum_charge: s?.job_minimum ?? 0, created_by: staff.id });
     if (error) return fail(error);
     changed();
   }
@@ -112,6 +124,20 @@ export default function EstimateCard({ jobId, jobStatus, staff, onChanged }) {
     changed();
   }
 
+  async function send() {
+    setSending(true);
+    setMsg(null);
+    setSendResult(null);
+    try {
+      const r = await apiFetch(`/api/estimates/${est.id}/send`, token, { method: 'POST' });
+      setSendResult(r);
+      changed();
+    } catch (err) {
+      setMsg({ err: true, text: err.message });
+    }
+    setSending(false);
+  }
+
   if (est === undefined) return <div className="card"><h2>Estimate</h2><p className="muted">Loading...</p></div>;
 
   if (est === null) {
@@ -119,7 +145,7 @@ export default function EstimateCard({ jobId, jobStatus, staff, onChanged }) {
       <div className="card">
         <h2>Estimate</h2>
         {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
-        {open ? <button className="primary" onClick={start}>Start estimate</button> : <p className="muted">No estimate on this job.</p>}
+        {open ? <button className="primary" onClick={start}>Start estimate</button> : <p className="muted">No estimate.</p>}
       </div>
     );
   }
@@ -219,14 +245,55 @@ export default function EstimateCard({ jobId, jobStatus, staff, onChanged }) {
           </form>
 
           <div className="row">
-            {est.status === 'draft' && <button className="primary" onClick={() => updateEstimate({ status: 'sent', sent_at: new Date().toISOString() })}>Mark as sent</button>}
+            {est.status !== 'approved' && (
+              <button className="primary" disabled={sending || lines.length === 0} onClick={send}>
+                {sending ? 'Sending...' : est.status === 'draft' ? 'Send to customer' : 'Send again'}
+              </button>
+            )}
             {est.status === 'sent' && <>
-              <button className="primary" onClick={() => updateEstimate({ status: 'approved', approved_at: new Date().toISOString() })}>Mark approved</button>
+              <button className="secondary" onClick={() => updateEstimate({ status: 'approved', approved_at: new Date().toISOString() })}>Mark approved</button>
               <button className="danger" onClick={() => updateEstimate({ status: 'declined', declined_at: new Date().toISOString() })}>Mark declined</button>
             </>}
+            {est.status === 'draft' && <button className="secondary" onClick={() => updateEstimate({ status: 'sent', sent_at: new Date().toISOString() })}>Mark as sent (without messaging)</button>}
             {est.status !== 'draft' && <button className="secondary" onClick={() => updateEstimate({ status: 'draft' })}>Back to draft</button>}
             <a href={`/e/${est.share_token}?preview=1`} target="_blank" rel="noreferrer"><button type="button" className="secondary">Preview customer view</button></a>
           </div>
+          {est.status !== 'approved' && (
+            <p className="hint" style={{ marginTop: 8 }}>
+              Sends a text and an email with a link to view and approve the estimate to{' '}
+              {[contact?.phone && displayPhone(contact.phone), contact?.email].filter(Boolean).join(' and ') || 'the customer (no phone or email on file yet)'}.
+            </p>
+          )}
+
+          {sendResult && (
+            <div className={`msg ${sendResult.ok ? 'ok' : 'err'}`}>
+              {sendResult.ok ? 'Sent.' : 'Nothing could be sent automatically.'}
+              <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                <li>Text: {sendResult.results.sms.detail}</li>
+                <li>Email: {sendResult.results.email.detail}</li>
+              </ul>
+              {!sendResult.ok && (
+                <div className="row" style={{ marginTop: 8 }}>
+                  {toE164(contact?.phone) && <a href={`sms:${toE164(contact.phone)}?&body=${encodeURIComponent(sendResult.sms_body)}`}><button type="button" className="secondary small">Open in Messages</button></a>}
+                  {contact?.email && <a href={`mailto:${contact.email}?subject=${encodeURIComponent(sendResult.subject)}&body=${encodeURIComponent(sendResult.text_body)}`}><button type="button" className="secondary small">Open in email</button></a>}
+                  <button type="button" className="secondary small" onClick={() => updateEstimate({ status: 'sent', sent_at: new Date().toISOString() })}>I sent it myself</button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {signature && (
+            <div className="field-actions" style={{ marginTop: 12 }}>
+              <strong>Approved by {signature.signer_name}</strong> on {fmtDateTime(signature.signed_at)} for {money(signature.total_cents / 100)}.
+              <div><img src={signature.signature_png} alt={`Signature of ${signature.signer_name}`} style={{ maxWidth: 260, maxHeight: 90, border: '1px solid var(--border)', borderRadius: 6, background: '#fff', marginTop: 6 }} /></div>
+              {signature.preferred_times && <div className="meta">Preferred times: {signature.preferred_times}</div>}
+              {!sameSnapshot(signature.lines_snapshot ? { minimum_charge: signature.minimum_charge, lines: signature.lines_snapshot } : null, estimateSnapshot(lines, est.minimum_charge)) && (
+                <div className="banner flag" style={{ marginTop: 8, marginBottom: 0 }}>
+                  This estimate was changed after the customer signed it. Send it again if they need to approve the new version.
+                </div>
+              )}
+            </div>
+          )}
 
           {est.status !== 'draft' && (
             <div style={{ marginTop: 12 }}>
@@ -238,7 +305,6 @@ export default function EstimateCard({ jobId, jobStatus, staff, onChanged }) {
               <p className="muted" style={{ marginTop: 8 }}>
                 {est.view_count > 0 ? `Customer last viewed this ${fmtDateTime(est.last_viewed_at)} (${est.view_count} ${est.view_count === 1 ? 'view' : 'views'}).` : 'Not viewed by the customer yet.'}
               </p>
-              <p className="hint">Texting and emailing this link automatically comes with notifications. Until then, copy and send it.</p>
             </div>
           )}
         </div>

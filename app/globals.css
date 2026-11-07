@@ -139,3 +139,12 @@ button.big { padding: 14px 18px; font-size: 17px; border-radius: 10px; }
 .minute-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .field-actions { margin-top: 10px; padding: 12px; background: #f4f7fb; border: 1px solid var(--border); border-radius: 10px; }
 .field-actions button.primary.big { width: 100%; }
+
+/* ---- Push 5 additions ---- */
+.badge.s-accepted { background: #d9f2e3; color: var(--ok); }
+.banner.ok { background: #d9f2e3; border-color: var(--ok); color: #14502d; }
+.nav-count { display: inline-block; margin-left: 6px; min-width: 20px; padding: 0 6px; border-radius: 999px; background: #e0a800; color: #1c2430; font-size: 12px; font-weight: 700; text-align: center; line-height: 20px; }
+.field textarea.sig-notes { min-height: 60px; }
+.sig-pad { border: 2px dashed var(--border); border-radius: 10px; background: #fff; touch-action: none; position: relative; }
+.sig-pad canvas { display: block; width: 100%; touch-action: none; cursor: crosshair; }
+.sig-pad .sig-hint { position: absolute; left: 12px; top: 8px; color: var(--muted); font-size: 13px; pointer-events: none; }
