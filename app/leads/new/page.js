@@ -53,7 +53,7 @@ function NewLead({ staff }) {
     <>
       <h1>New lead</h1>
       <p className="sub">{customer ? `For existing customer ${customer.display_name}.` : 'Enter what you know now. Add the estimate and pick a time on the next screen.'}</p>
-      <form onSubmit={create}>
+      <form onSubmit={create} className="lead-new">
         <LeadForm value={form} onChange={(patch) => setForm((f) => ({ ...f, ...patch }))} />
         {msg && <div className="msg err">{msg}</div>}
         <button className="primary" disabled={busy}>{busy ? 'Saving...' : 'Save lead'}</button>

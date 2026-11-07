@@ -25,7 +25,7 @@ export function pickLeadFields(obj) {
 export default function LeadForm({ value, onChange }) {
   const set = (k) => (e) => onChange({ [k]: e.target.value });
   return (
-    <>
+    <div className="lead-form">
       <div className="card">
         <h2>Contact</h2>
         <div className="grid2">
@@ -71,6 +71,6 @@ export default function LeadForm({ value, onChange }) {
         <div className="field"><label>Loss summary for the tech</label><input placeholder="Short blurb: what happened, what to bring" value={value.loss_summary} onChange={set('loss_summary')} /></div>
         <div className="field"><label>Internal notes</label><textarea value={value.notes} onChange={set('notes')} /><div className="note">Never shown to the customer. Carried onto the job.</div></div>
       </div>
-    </>
+    </div>
   );
 }

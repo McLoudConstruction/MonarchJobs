@@ -152,6 +152,8 @@ function LeadInner({ id, staff, token }) {
       )}
       {lead.status === 'booked' && <div className="banner ok">A work order was created from this lead. Further changes happen on the job.</div>}
 
+      <div className="lead-layout">
+        <div className="lead-left">
       {open && !lead.customer_id && matches.length > 0 && (
         <div className="card">
           <h2>Existing customer?</h2>
@@ -187,6 +189,8 @@ function LeadInner({ id, staff, token }) {
         </div>}
       </form>
 
+        </div>
+        <div className="lead-right">
       <EstimateCard
         scope={{ leadId: id }}
         open={open}
@@ -224,6 +228,8 @@ function LeadInner({ id, staff, token }) {
           </div>
         ))}
         {events.length === 0 && <p className="muted">No history yet.</p>}
+      </div>
+        </div>
       </div>
     </>
   );
