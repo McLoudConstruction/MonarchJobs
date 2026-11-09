@@ -23,7 +23,7 @@ export function pickLeadFields(obj) {
 
 // The three groups of fields, exported so the new-lead wizard can show them one step at a time.
 // The lead page still shows them all together through LeadForm below.
-export function ContactSection({ value, onChange }) {
+export function ContactSection({ value, onChange, autoFocusName = false }) {
   const set = (k) => (e) => onChange({ [k]: e.target.value });
   return (
     <div className="card">
@@ -35,7 +35,7 @@ export function ContactSection({ value, onChange }) {
           </select>
         </div>
         <div className="field"><label>Company (if any)</label><input value={value.company_name} onChange={set('company_name')} /></div>
-        <div className="field"><label>First name</label><input value={value.first_name} onChange={set('first_name')} autoComplete="off" /></div>
+        <div className="field"><label>First name</label><input value={value.first_name} onChange={set('first_name')} autoComplete="off" autoFocus={autoFocusName} /></div>
         <div className="field"><label>Last name</label><input value={value.last_name} onChange={set('last_name')} autoComplete="off" /></div>
         <div className="field"><label>Phone</label><PhoneInput value={value.phone} onChange={set('phone')} /></div>
         <div className="field"><label>Email</label><input type="email" value={value.email} onChange={set('email')} /></div>
@@ -55,31 +55,46 @@ export function AddressSection({ value, onChange }) {
   return (
     <div className="card">
       <h2>Service address</h2>
-      <AddressFields values={value} onChange={onChange} />
-      <div className="grid2">
-        <div className="field"><label>Gate code</label><input value={value.gate_code} onChange={set('gate_code')} /></div>
-        <div className="field"><label>Warnings (pets, hazards)</label><input value={value.warnings} onChange={set('warnings')} /></div>
-      </div>
+      <AddressFields
+        values={value}
+        onChange={onChange}
+        extra={<div className="field"><label>Gate code</label><input value={value.gate_code} onChange={set('gate_code')} /></div>}
+      />
+      <div className="field"><label>Warnings (pets, hazards)</label><input value={value.warnings} onChange={set('warnings')} /></div>
     </div>
   );
 }
 
-export function ServiceSection({ value, onChange }) {
+// wide = the new-lead wizard's two-column layout; the lead page uses the stacked one.
+export function ServiceSection({ value, onChange, wide = false }) {
   const set = (k) => (e) => onChange({ [k]: e.target.value });
+  const jobType = (
+    <div className="field"><label>Job type</label>
+      <select value={value.job_type} onChange={set('job_type')}>
+        {Object.entries(JOB_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+      </select>
+    </div>
+  );
+  const po = <div className="field"><label>PO number</label><input value={value.po_number} onChange={set('po_number')} /></div>;
+  const requested = <div className="field"><label>Service requested</label><input placeholder="Carpet cleaning, water in kitchen..." value={value.service_requested} onChange={set('service_requested')} /></div>;
+  const loss = <div className="field"><label>Loss summary for the tech</label><input placeholder="Short blurb: what happened, what to bring" value={value.loss_summary} onChange={set('loss_summary')} /></div>;
+  const notes = <div className="field"><label>Internal notes</label><textarea value={value.notes} onChange={set('notes')} /><div className="note">Never shown to the customer. Carried onto the job.</div></div>;
+  if (wide) {
+    return (
+      <div className="card">
+        <h2>Service</h2>
+        <div className="grid2">{jobType}{po}{requested}{loss}</div>
+        {notes}
+      </div>
+    );
+  }
   return (
     <div className="card">
       <h2>Service</h2>
-      <div className="grid2">
-        <div className="field"><label>Job type</label>
-          <select value={value.job_type} onChange={set('job_type')}>
-            {Object.entries(JOB_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
-        </div>
-        <div className="field"><label>PO number</label><input value={value.po_number} onChange={set('po_number')} /></div>
-      </div>
-      <div className="field"><label>Service requested</label><input placeholder="Carpet cleaning, water in kitchen..." value={value.service_requested} onChange={set('service_requested')} /></div>
-      <div className="field"><label>Loss summary for the tech</label><input placeholder="Short blurb: what happened, what to bring" value={value.loss_summary} onChange={set('loss_summary')} /></div>
-      <div className="field"><label>Internal notes</label><textarea value={value.notes} onChange={set('notes')} /><div className="note">Never shown to the customer. Carried onto the job.</div></div>
+      <div className="grid2">{jobType}{po}</div>
+      {requested}
+      {loss}
+      {notes}
     </div>
   );
 }

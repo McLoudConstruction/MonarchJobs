@@ -4,7 +4,7 @@ import PlacesAutocompleteInput from '@/components/PlacesAutocompleteInput';
 
 // Street, unit, city, state and ZIP. Typing in the street field offers address suggestions, and
 // picking one fills in the rest. onChange receives the fields that changed, e.g. { city: 'Lee's Summit' }.
-export default function AddressFields({ values, onChange, required = false }) {
+export default function AddressFields({ values, onChange, required = false, extra = null }) {
   const v = (k) => values[k] ?? '';
   return (
     <div className="grid2">
@@ -29,6 +29,7 @@ export default function AddressFields({ values, onChange, required = false }) {
         <div className="field" style={{ width: 90 }}><label>State</label><input value={v('state')} maxLength={2} onChange={(e) => onChange({ state: e.target.value.toUpperCase() })} /></div>
         <div className="field" style={{ flex: 1 }}><label>ZIP</label><input value={v('zip')} inputMode="numeric" onChange={(e) => onChange({ zip: e.target.value })} /></div>
       </div>
+      {extra}
     </div>
   );
 }

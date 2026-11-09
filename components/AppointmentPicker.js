@@ -16,7 +16,7 @@ export function defaultAppointment() {
 // Start time + length + tech, with the week's schedule beside it so the best slot can be seen and
 // clicked. There is no end time: an appointment is a start and a duration.
 // value: { start: 'YYYY-MM-DDTHH:mm' (local), duration: minutes, techId, override }
-export default function AppointmentPicker({ value, onChange, staffList, excludeVisitId = null, onConflicts }) {
+export default function AppointmentPicker({ value, onChange, staffList, excludeVisitId = null, onConflicts, split = false }) {
   const [weekStart, setWeekStart] = useState(() => weekStartMonday(value.start ? new Date(value.start) : new Date()));
   const [conflicts, setConflicts] = useState([]);
 
@@ -58,7 +58,8 @@ export default function AppointmentPicker({ value, onChange, staffList, excludeV
   );
 
   return (
-    <div>
+    <div className={split ? 'appt-split' : undefined}>
+      <div className="appt-controls">
       <div className="grid2">
         <div className="field">
           <label>Start</label>
@@ -90,6 +91,8 @@ export default function AppointmentPicker({ value, onChange, staffList, excludeV
         </div>
       )}
 
+      </div>
+      <div className="appt-grid">
       <WeekGrid
         weekStart={weekStart}
         onWeekChange={setWeekStart}
@@ -100,6 +103,7 @@ export default function AppointmentPicker({ value, onChange, staffList, excludeV
         onPick={(date) => set({ start: toLocalInput(date) })}
         hint="Click an open spot in the week to set the start time. Dashed box is the appointment you are setting."
       />
+      </div>
     </div>
   );
 }

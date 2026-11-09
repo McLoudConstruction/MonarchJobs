@@ -66,7 +66,6 @@ export default function AppShell({ staff, signOut, children }) {
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
   }, [accountOpen]);
 
-  const desktop = mounted && !isMobile;
   const moreItems = [
     ...nav.filter((n) => !n.primary),
     ...(canSettings ? [{ href: '/settings', label: 'Settings', icon: SettingsIcon }] : []),
@@ -75,52 +74,54 @@ export default function AppShell({ staff, signOut, children }) {
 
   return (
     <div className="shell">
-      <div className="shell-topbar">
-        <div className="shell-logo"><span className="brand">Monarch <span>Jobs</span></span></div>
-        {desktop && (
-          <nav className="shell-topnav" aria-label="Main">
-            {nav.map((n) => (
-              <Link key={n.href} href={n.href} className={`shell-topnav-link ${isActive(n, pathname) ? 'active' : ''}`} aria-current={isActive(n, pathname) ? 'page' : undefined}>
-                {n.label}
-                {n.href === '/leads' && ready > 0 && <span className="nav-count" title="Approved estimates waiting to be scheduled">{ready}</span>}
-              </Link>
-            ))}
-          </nav>
-        )}
-        <div className="shell-topbar-actions">
-          {desktop && <JobJumpSearch role={staff.role} />}
-          {desktop && (
-            <div ref={accountRef} className="shell-account">
-              <button type="button" className="shell-account-btn" aria-haspopup="menu" aria-expanded={accountOpen} aria-label={`Account menu for ${name}`} title={name} onClick={() => setAccountOpen((o) => !o)}>
-                {initials}
+      <aside className="side" aria-label="Main">
+        <div className="side-brand"><span className="brand">Monarch <span>Jobs</span></span></div>
+        <div className="side-search"><JobJumpSearch role={staff.role} /></div>
+        <nav className="side-nav">
+          {nav.map((n) => (
+            <Link key={n.href} href={n.href} className={`side-link ${isActive(n, pathname) ? 'active' : ''}`} aria-current={isActive(n, pathname) ? 'page' : undefined}>
+              <n.icon className="side-icon" />
+              <span>{n.label}</span>
+              {n.href === '/leads' && ready > 0 && <span className="nav-count" title="Approved estimates waiting to be scheduled">{ready}</span>}
+            </Link>
+          ))}
+        </nav>
+        <div className="side-spacer" />
+        <div ref={accountRef} className="shell-account side-account">
+          <button type="button" className="side-account-toggle" aria-haspopup="menu" aria-expanded={accountOpen} aria-label={`Account menu for ${name}`} onClick={() => setAccountOpen((o) => !o)}>
+            <span className="shell-account-btn side-avatar">{initials}</span>
+            <span className="side-who">{name}<small>{roleLabel}</small></span>
+          </button>
+          {accountOpen && (
+            <div className="shell-account-menu" role="menu">
+              <div className="shell-account-head">
+                <div className="shell-account-name">{name || 'Signed in'}</div>
+                <div className="shell-account-sub">{roleLabel}{staff.email && staff.email !== name ? ` · ${staff.email}` : ''}</div>
+              </div>
+              <div className="shell-account-divider" />
+              <button type="button" role="menuitem" className="shell-account-item" onClick={() => { setTheme(theme === 'dark' ? 'light' : 'dark'); setAccountOpen(false); }}>
+                {theme === 'dark' ? <MoonIcon className="shell-account-icon" /> : <SunIcon className="shell-account-icon" />}
+                {theme === 'dark' ? 'Dark mode' : 'Light mode'}
               </button>
-              {accountOpen && (
-                <div className="shell-account-menu" role="menu">
-                  <div className="shell-account-head">
-                    <div className="shell-account-name">{name || 'Signed in'}</div>
-                    <div className="shell-account-sub">{roleLabel}{staff.email && staff.email !== name ? ` · ${staff.email}` : ''}</div>
-                  </div>
-                  <div className="shell-account-divider" />
-                  <button type="button" role="menuitem" className="shell-account-item" onClick={() => { setTheme(theme === 'dark' ? 'light' : 'dark'); setAccountOpen(false); }}>
-                    {theme === 'dark' ? <MoonIcon className="shell-account-icon" /> : <SunIcon className="shell-account-icon" />}
-                    {theme === 'dark' ? 'Dark mode' : 'Light mode'}
-                  </button>
-                  {canSettings && (
-                    <Link href="/settings" role="menuitem" className="shell-account-item" onClick={() => setAccountOpen(false)}>
-                      <SettingsIcon className="shell-account-icon" />
-                      Settings
-                    </Link>
-                  )}
-                  <div className="shell-account-divider" />
-                  <button type="button" role="menuitem" className="shell-account-item" onClick={signOut}>
-                    <SignOutIcon className="shell-account-icon" />
-                    Sign out
-                  </button>
-                </div>
+              {canSettings && (
+                <Link href="/settings" role="menuitem" className="shell-account-item" onClick={() => setAccountOpen(false)}>
+                  <SettingsIcon className="shell-account-icon" />
+                  Settings
+                </Link>
               )}
+              <div className="shell-account-divider" />
+              <button type="button" role="menuitem" className="shell-account-item" onClick={signOut}>
+                <SignOutIcon className="shell-account-icon" />
+                Sign out
+              </button>
             </div>
           )}
         </div>
+      </aside>
+
+      {/* phones keep a slim top bar with the logo and the bottom nav */}
+      <div className="shell-topbar shell-topbar-mobile">
+        <div className="shell-logo"><span className="brand">Monarch <span>Jobs</span></span></div>
       </div>
 
       <div className="shell-body">

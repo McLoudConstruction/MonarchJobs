@@ -97,9 +97,8 @@ function NewLead({ staff }) {
 
   return (
     <>
-      <h1>New lead</h1>
-      <p className="sub">{customer ? `For existing customer ${customer.display_name}.` : 'Customer first, then the service, then a time if you are booking now.'}</p>
       <LeadWizard
+        subtitle={customer ? `for existing customer ${customer.display_name}` : ''}
         value={form}
         onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
         appt={appt}

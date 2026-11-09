@@ -1025,38 +1025,94 @@ a.stat-tile:hover{ border-color: var(--accent); }
 .lead-right .list-item{ padding: 8px 12px; margin-bottom: 6px; box-shadow: none; }
 @media (max-width: 700px){ .lead-form .grid2{ grid-template-columns: 1fr 1fr; } .lead-form .row{ flex-wrap: nowrap; } }
 
-/* ---------- New lead wizard: uses the full page width, one step at a time ---------- */
-.wizard{ width: 100%; }
-.wizard-steps{ list-style: none; display: flex; gap: 8px; margin: 0 0 18px; padding: 0; }
-.wizard-steps li{ flex: 1 1 0; min-width: 0; }
-.wizard-steps button{
-  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer;
-  background: var(--card-bg); border: 1px solid var(--line); border-bottom: 3px solid var(--line);
-  border-radius: 8px; padding: 10px 14px; color: var(--ink-soft); font: inherit;
+/* ---------- Desktop sidebar nav (replaces the top bar on computers) ---------- */
+.side{
+  width: 212px; flex-shrink: 0; box-sizing: border-box; display: flex; flex-direction: column;
+  padding: 16px 10px 12px; background: var(--header-bg); border-right: 1px solid var(--header-line);
+  color: var(--header-text); position: relative; z-index: 60;
 }
-.wizard-steps button:disabled{ cursor: default; opacity: 0.55; }
+.side-brand{ padding: 2px 10px 14px; }
+.side-brand .brand{ font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; font-size: 14px; color: var(--header-text); }
+.side-brand .brand span{ color: var(--gold); }
+.side-search{ margin-bottom: 12px; }
+.side .jump-search-box{ width: 100%; }
+.side .jump-search-panel{ left: 0; right: auto; width: 340px; }
+.side-nav{ display: flex; flex-direction: column; gap: 2px; }
+.side-link{
+  position: relative; display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: 6px;
+  font-size: 14px; font-weight: 500; color: var(--header-text); opacity: 0.74; text-decoration: none;
+}
+.side-link:hover{ opacity: 1; background: rgba(255,255,255,0.08); }
+.side-link.active{ opacity: 1; color: #f3dca3; background: rgba(201,161,74,0.16); font-weight: 600; }
+.side-icon{ width: 18px; height: 18px; flex-shrink: 0; }
+.side-link .nav-count{ margin-left: auto; }
+.side-spacer{ flex: 1; }
+.side-account{ position: relative; }
+.side-account-toggle{
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border-radius: 8px; cursor: pointer;
+  background: transparent; border: 1px solid transparent; color: var(--header-text); font: inherit; text-align: left;
+}
+.side-account-toggle:hover{ background: rgba(255,255,255,0.08); }
+.side-avatar{ flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.side-who{ display: flex; flex-direction: column; min-width: 0; font-size: 13px; font-weight: 600; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-who small{ font-weight: 400; font-size: 11.5px; opacity: 0.65; }
+.side .shell-account-menu{ left: 0; right: auto; top: auto; bottom: calc(100% + 8px); min-width: 220px; }
+
+@media (min-width: 900px){
+  .shell{ flex-direction: row; }
+  .shell-topbar-mobile{ display: none; }
+  .shell-body{ flex: 1; min-width: 0; }
+}
+@media (max-width: 899px){ .side{ display: none; } }
+
+/* ---------- New lead wizard: built for a live phone call. Each step fits one screen with no scrolling
+   and the buttons stay at the bottom. ---------- */
+.page:has(.wizard){ padding-top: 14px; padding-bottom: 12px; overflow: visible; }
+@media (min-width: 900px){
+  .shell-content:has(.wizard){ overflow: hidden; }
+  .page:has(.wizard){ height: 100%; box-sizing: border-box; }
+  .wizard{ display: flex; flex-direction: column; height: 100%; min-height: 0; }
+}
+.wizard-head{ display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
+.wizard-head h1{ margin: 0; }
+.wizard-sub{ color: var(--ink-soft); font-size: 13px; }
+.wizard-steps{ list-style: none; display: flex; gap: 6px; margin: 0 0 0 auto; padding: 0; }
+.wizard-steps button{
+  display: flex; align-items: center; gap: 8px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600;
+  background: var(--card-bg); border: 1px solid var(--line); border-bottom: 3px solid var(--line);
+  border-radius: 8px; padding: 6px 14px 4px 10px; color: var(--ink-soft);
+}
+.wizard-steps button:disabled{ cursor: default; opacity: 0.5; }
 .wizard-steps li.current button{ border-bottom-color: var(--accent); color: var(--heading); }
 .wizard-steps li.done button{ border-bottom-color: var(--accent); }
 .wizard-num{
-  flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
-  border: 1.5px solid currentColor; font-weight: 700; font-size: 13px;
+  width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; flex: none;
+  border: 1.5px solid currentColor; font-size: 12px; font-weight: 700;
 }
 .wizard-steps li.current .wizard-num{ background: var(--accent); border-color: var(--accent); color: #fff; }
-.wizard-label{ font-weight: 600; font-size: 14px; line-height: 1.2; }
-.wizard-label small{ display: block; font-weight: 400; font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
-.wizard-recap{ background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; margin-bottom: 14px; font-size: 14px; }
+.wizard-recap{ background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; margin-bottom: 10px; font-size: 13.5px; }
 .wizard-recap .linklike{ margin-left: 10px; background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; }
-.wizard-body{ margin-bottom: 14px; }
-.wizard-two{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+.wizard-body{ flex: 1; min-height: 0; overflow-y: auto; }
+.wizard-two{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
 @media (max-width: 900px){ .wizard-two{ grid-template-columns: 1fr; } }
-/* roomier than the compact lead-page form */
-.wizard .lead-form .card{ padding: 18px 20px; margin-bottom: 0; }
-.wizard .lead-form .card h2{ font-size: 13px; margin-bottom: 12px; }
-.wizard .lead-form .grid2{ gap: 0 16px; }
+/* compact fields so a full step fits on a laptop screen */
+.wizard .lead-form .card{ padding: 12px 16px 6px; margin-bottom: 0; }
+.wizard .lead-form .card h2{ font-size: 12px; margin: 0 0 8px; }
+.wizard .lead-form .grid2{ gap: 0 14px; }
 .wizard .lead-form .field{ margin-bottom: 12px; }
-.wizard .lead-form .field label{ font-size: 12.5px; margin-bottom: 4px; }
+.wizard .lead-form .field label{ font-size: 12px; margin: 0 0 3px; }
 .wizard .lead-form input, .wizard .lead-form select, .wizard .lead-form textarea{ padding: 9px 10px; font-size: 14px; }
-.wizard .lead-form textarea{ min-height: 96px; }
-.wizard-actions{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 0 4px; }
+.wizard .lead-form textarea{ min-height: 84px; }
+.wizard-actions{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 0 2px; flex-shrink: 0; }
 .wizard-spacer{ flex: 1; }
-@media (max-width: 700px){ .wizard-steps .wizard-label small{ display: none; } .wizard-steps button{ padding: 8px 10px; gap: 8px; } }
+.wizard-msg{ margin: 0; padding: 6px 10px; }
+/* schedule step: controls on the left, week on the right, the week scrolls inside its own box */
+.wizard-schedule{ display: flex; flex-direction: column; height: 100%; box-sizing: border-box; padding: 12px 16px; margin: 0; }
+.wizard-schedule-head{ display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; flex-shrink: 0; }
+.wizard-schedule-head h2{ margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+.wizard-schedule-head .hint{ margin: 0; font-size: 13px; }
+.appt-split{ display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 18px; flex: 1; min-height: 0; }
+.appt-split .appt-controls{ overflow-y: auto; }
+.appt-split .appt-controls .grid2{ grid-template-columns: 1fr; }
+.appt-split .appt-grid{ min-height: 0; overflow: auto; }
+@media (max-width: 900px){ .appt-split{ grid-template-columns: 1fr; } .wizard-schedule{ height: auto; } }
