@@ -23,6 +23,7 @@ export default function PlacesAutocompleteInput({ value, onChange, onPlaceSelect
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState(null);
+  const [notice, setNotice] = useState('');
   const sessionRef = useRef(null);
   const timerRef = useRef(null);
   const reqRef = useRef(0);
@@ -50,7 +51,7 @@ export default function PlacesAutocompleteInput({ value, onChange, onPlaceSelect
     const id = ++reqRef.current;
     try {
       const headers = await authHeader();
-      if (!headers) return;
+      if (!headers) { setNotice('Address suggestions: you are not signed in. Refresh the page.'); return; }
       if (!sessionRef.current) sessionRef.current = newSession();
       const res = await fetch('/api/places/autocomplete', {
         method: 'POST',
@@ -59,12 +60,19 @@ export default function PlacesAutocompleteInput({ value, onChange, onPlaceSelect
       });
       const body = await res.json().catch(() => ({}));
       if (id !== reqRef.current) return;
-      if (body.enabled === false) { setEnabled(false); setSuggestions([]); setOpen(false); return; }
+      if (body.enabled === false) {
+        setEnabled(false); setSuggestions([]); setOpen(false);
+        setNotice('Address suggestions are off: the server has no GOOGLE_MAPS_API_KEY (add it in Vercel, then redeploy).');
+        return;
+      }
+      if (!res.ok || body.error) setNotice(body.error || `Address suggestions failed (${res.status}).`);
+      else setNotice('');
       const list = body.suggestions || [];
       setSuggestions(list);
       setOpen(list.length > 0);
     } catch {
       if (id !== reqRef.current) return;
+      setNotice('Address suggestions could not reach the server.');
       setSuggestions([]);
       setOpen(false);
     }
@@ -109,6 +117,7 @@ export default function PlacesAutocompleteInput({ value, onChange, onPlaceSelect
         autoComplete="off"
         {...rest}
       />
+      {notice && <div className="note" style={{ color: 'var(--danger, #b42318)', marginTop: 3 }}>{notice}</div>}
       {open && rect && typeof document !== 'undefined' && createPortal(
         <div style={{
           position: 'fixed', top: rect.top, left: rect.left, width: rect.width, zIndex: 4000, background: '#fff',

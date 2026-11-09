@@ -28,8 +28,11 @@ export async function POST(request) {
       cache: 'no-store',
     });
     if (!res.ok) {
-      console.error('places autocomplete failed', res.status, (await res.text()).slice(0, 300));
-      return NextResponse.json({ enabled: true, suggestions: [], error: 'Address lookup is unavailable.' });
+      const raw = (await res.text()).slice(0, 600);
+      console.error('places autocomplete failed', res.status, raw);
+      let reason = '';
+      try { const j = JSON.parse(raw); reason = [j.error?.status, j.error?.message].filter(Boolean).join(': '); } catch { /* not JSON */ }
+      return NextResponse.json({ enabled: true, suggestions: [], error: `Google rejected the lookup (${res.status}). ${reason}`.trim() });
     }
     return NextResponse.json({ enabled: true, suggestions: simplifySuggestions(await res.json()) });
   } catch (e) {

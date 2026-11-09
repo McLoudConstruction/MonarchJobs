@@ -3,14 +3,27 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AuthGate from '@/components/AuthGate';
-import LeadForm, { BLANK_LEAD, pickLeadFields } from '@/components/LeadForm';
+import LeadWizard from '@/components/LeadWizard';
+import { BLANK_LEAD, pickLeadFields } from '@/components/LeadForm';
+import { defaultAppointment } from '@/components/AppointmentPicker';
 import { getSupabase } from '@/lib/supabaseClient';
+import { fromLocalInput } from '@/lib/format';
+
+const BOOK_ERRORS = {
+  TECH_DOUBLE_BOOKED: 'That tech is already booked then. Tick "Book anyway" or pick another time or tech.',
+  LEAD_NEEDS_ADDRESS: 'Add the service address before creating the work order.',
+  NOT_ALLOWED: 'Only the office and owner can create work orders.',
+};
+const friendly = (m) => BOOK_ERRORS[Object.keys(BOOK_ERRORS).find((k) => (m || '').includes(k))] || m;
 
 function NewLead({ staff }) {
   const router = useRouter();
   const customerId = useSearchParams().get('customer');
   const [form, setForm] = useState(BLANK_LEAD);
   const [customer, setCustomer] = useState(null);
+  const [staffList, setStaffList] = useState([]);
+  const [appt, setAppt] = useState(defaultAppointment);
+  const [conflicts, setConflicts] = useState([]);
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -34,30 +47,72 @@ function NewLead({ staff }) {
     });
   }, [customerId]);
 
-  async function create(e) {
-    e.preventDefault();
-    setMsg(null);
-    if (![form.first_name, form.last_name, form.company_name, form.phone, form.email].some((x) => x.trim())) {
-      setMsg('Enter at least a name, phone or email.');
-      return;
-    }
-    setBusy(true);
+  // techs for the schedule step
+  useEffect(() => {
+    getSupabase().from('staff_users').select('id,full_name,email,role').eq('active', true).order('email')
+      .then(({ data }) => setStaffList(data || []));
+  }, []);
+
+  const hasContact = () => [form.first_name, form.last_name, form.company_name, form.phone, form.email].some((x) => (x || '').trim());
+
+  // Saves the lead and returns its id, or null (with a message) if it failed.
+  async function insertLead() {
+    if (!hasContact()) { setMsg('Enter at least a name, phone or email.'); return null; }
     const { data, error } = await getSupabase().from('leads')
       .insert({ ...pickLeadFields(form), customer_id: customer?.id ?? null, created_by: staff.id })
       .select('id').single();
-    if (error) { setMsg(error.message); setBusy(false); return; }
-    router.push(`/leads/${data.id}`);
+    if (error) { setMsg(error.message); return null; }
+    return data.id;
+  }
+
+  async function save() {
+    setMsg(null);
+    setBusy(true);
+    const id = await insertLead();
+    if (!id) { setBusy(false); return; }
+    router.push(`/leads/${id}`);
+  }
+
+  async function saveAndBook() {
+    setMsg(null);
+    if (!form.street.trim()) { setMsg(BOOK_ERRORS.LEAD_NEEDS_ADDRESS); return; }
+    if (conflicts.length && !appt.override) { setMsg(BOOK_ERRORS.TECH_DOUBLE_BOOKED); return; }
+    setBusy(true);
+    const id = await insertLead();
+    if (!id) { setBusy(false); return; }
+    const { data: jobId, error } = await getSupabase().rpc('create_work_order', {
+      p_lead: id,
+      p_starts_at: fromLocalInput(appt.start),
+      p_duration_minutes: appt.duration,
+      p_tech: appt.techId || null,
+      p_allow_conflict: !!appt.override,
+    });
+    if (error) {
+      // the lead is saved; open it so nothing typed is lost
+      router.push(`/leads/${id}`);
+      return;
+    }
+    router.push(`/jobs/${jobId}`);
   }
 
   return (
     <>
       <h1>New lead</h1>
-      <p className="sub">{customer ? `For existing customer ${customer.display_name}.` : 'Enter what you know now. Add the estimate and pick a time on the next screen.'}</p>
-      <form onSubmit={create} className="lead-new">
-        <LeadForm value={form} onChange={(patch) => setForm((f) => ({ ...f, ...patch }))} />
-        {msg && <div className="msg err">{msg}</div>}
-        <button className="primary" disabled={busy}>{busy ? 'Saving...' : 'Save lead'}</button>
-      </form>
+      <p className="sub">{customer ? `For existing customer ${customer.display_name}.` : 'Customer first, then the service, then a time if you are booking now.'}</p>
+      <LeadWizard
+        value={form}
+        onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
+        appt={appt}
+        onApptChange={setAppt}
+        staffList={staffList}
+        conflicts={conflicts}
+        onConflicts={setConflicts}
+        onSave={save}
+        onSaveAndBook={saveAndBook}
+        busy={busy}
+        msg={msg}
+        setMsg={setMsg}
+      />
     </>
   );
 }

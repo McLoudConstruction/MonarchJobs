@@ -1011,7 +1011,6 @@ a.stat-tile:hover{ border-color: var(--accent); }
 .lead-layout{ display: grid; grid-template-columns: minmax(320px, 440px) minmax(0, 1fr); gap: 20px; align-items: start; }
 .lead-left, .lead-right{ min-width: 0; }
 @media (max-width: 1000px){ .lead-layout{ grid-template-columns: 1fr; } }
-.lead-new{ max-width: 460px; }
 .lead-form .card{ padding: 12px 14px; margin-bottom: 12px; }
 .lead-form .card h2{ font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 8px; }
 .lead-form .grid2{ gap: 0 10px; }
@@ -1025,3 +1024,39 @@ a.stat-tile:hover{ border-color: var(--accent); }
 .lead-left > .card .hint{ font-size: 12px; margin-bottom: 8px; }
 .lead-right .list-item{ padding: 8px 12px; margin-bottom: 6px; box-shadow: none; }
 @media (max-width: 700px){ .lead-form .grid2{ grid-template-columns: 1fr 1fr; } .lead-form .row{ flex-wrap: nowrap; } }
+
+/* ---------- New lead wizard: uses the full page width, one step at a time ---------- */
+.wizard{ width: 100%; }
+.wizard-steps{ list-style: none; display: flex; gap: 8px; margin: 0 0 18px; padding: 0; }
+.wizard-steps li{ flex: 1 1 0; min-width: 0; }
+.wizard-steps button{
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer;
+  background: var(--card-bg); border: 1px solid var(--line); border-bottom: 3px solid var(--line);
+  border-radius: 8px; padding: 10px 14px; color: var(--ink-soft); font: inherit;
+}
+.wizard-steps button:disabled{ cursor: default; opacity: 0.55; }
+.wizard-steps li.current button{ border-bottom-color: var(--accent); color: var(--heading); }
+.wizard-steps li.done button{ border-bottom-color: var(--accent); }
+.wizard-num{
+  flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  border: 1.5px solid currentColor; font-weight: 700; font-size: 13px;
+}
+.wizard-steps li.current .wizard-num{ background: var(--accent); border-color: var(--accent); color: #fff; }
+.wizard-label{ font-weight: 600; font-size: 14px; line-height: 1.2; }
+.wizard-label small{ display: block; font-weight: 400; font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+.wizard-recap{ background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; margin-bottom: 14px; font-size: 14px; }
+.wizard-recap .linklike{ margin-left: 10px; background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; }
+.wizard-body{ margin-bottom: 14px; }
+.wizard-two{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+@media (max-width: 900px){ .wizard-two{ grid-template-columns: 1fr; } }
+/* roomier than the compact lead-page form */
+.wizard .lead-form .card{ padding: 18px 20px; margin-bottom: 0; }
+.wizard .lead-form .card h2{ font-size: 13px; margin-bottom: 12px; }
+.wizard .lead-form .grid2{ gap: 0 16px; }
+.wizard .lead-form .field{ margin-bottom: 12px; }
+.wizard .lead-form .field label{ font-size: 12.5px; margin-bottom: 4px; }
+.wizard .lead-form input, .wizard .lead-form select, .wizard .lead-form textarea{ padding: 9px 10px; font-size: 14px; }
+.wizard .lead-form textarea{ min-height: 96px; }
+.wizard-actions{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 0 4px; }
+.wizard-spacer{ flex: 1; }
+@media (max-width: 700px){ .wizard-steps .wizard-label small{ display: none; } .wizard-steps button{ padding: 8px 10px; gap: 8px; } }
