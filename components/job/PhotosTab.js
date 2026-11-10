@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { countByKind, filterPhotos } from '@/lib/jobDocs';
 import { fmtDay } from '@/lib/format';
 import { FilePick, KindChips, PhotoGrid, UploadStatus } from '@/components/job/PhotoUi';
+import LibraryUploadDialog from '@/components/job/LibraryUploadDialog';
 
 const dayKey = (iso) => { const d = new Date(iso); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
 
@@ -12,6 +13,7 @@ const dayKey = (iso) => { const d = new Date(iso); return `${d.getFullYear()}-${
 export default function PhotosTab({ photos, isOffice, uploader, onOpen }) {
   const [filter, setFilter] = useState('all');
   const [showArchived, setShowArchived] = useState(false);
+  const [libOpen, setLibOpen] = useState(false);
   // the first pictures on a job are most often "before"
   const [addKind, setAddKind] = useState(photos.length ? 'during' : 'before');
 
@@ -38,17 +40,18 @@ export default function PhotosTab({ photos, isOffice, uploader, onOpen }) {
     <>
       <div className="card">
         <h2>Add photos</h2>
-        <p className="hint">Pictures are shrunk on your phone and kept on the job for good. Choose what they show, then take or pick them.</p>
+        <p className="hint">Pictures are shrunk on your phone and kept on the job for good. Choose what they show, then take or pick them. "Choose from library" lets you pick the folder and watch each photo upload.</p>
         <div className="field" style={{ marginTop: 0 }}>
           <label>These photos are</label>
           <KindChips value={addKind} onChange={setAddKind} />
         </div>
         <div className="row">
           <FilePick label="Take photo" capture onFiles={add} className="primary" />
-          <FilePick label="Choose from library" onFiles={add} />
+          <button type="button" className="secondary" onClick={() => setLibOpen(true)}>Choose from library</button>
         </div>
         <UploadStatus uploader={uploader} />
       </div>
+      <LibraryUploadDialog open={libOpen} onClose={() => setLibOpen(false)} uploader={uploader} defaultKind={addKind} />
 
       <div className="card">
         <div className="row" style={{ justifyContent: 'space-between' }}>
