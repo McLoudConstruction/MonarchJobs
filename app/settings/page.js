@@ -65,7 +65,7 @@ export default function SettingsPage() {
                 <BrandingSection token={token} />
               </>
             )}
-            {tab === 'users' && <UsersSection currentUserId={staff.id} />}
+            {tab === 'users' && <UsersSection currentUserId={staff.id} token={token} />}
             {tab === 'prices' && <PriceListSection />}
             {tab === 'integrations' && <IntegrationsSection token={token} />}
           </div>

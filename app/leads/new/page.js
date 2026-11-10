@@ -49,7 +49,7 @@ function NewLead({ staff }) {
 
   // techs for the schedule step
   useEffect(() => {
-    getSupabase().from('staff_users').select('id,full_name,email,role').eq('active', true).order('email')
+    getSupabase().from('staff_users').select('id,full_name,email,role').eq('active', true).order('full_name')
       .then(({ data }) => setStaffList(data || []));
   }, []);
 

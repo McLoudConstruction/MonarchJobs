@@ -8,6 +8,7 @@ import { doubleBookedIds } from '@/lib/schedule';
 import WeekGrid from '@/components/WeekGrid';
 import { addDays, startOfDay, fmtDay, fmtTime, fmtDuration } from '@/lib/format';
 import { weekStartMonday } from '@/lib/weekGrid';
+import { staffName } from '@/lib/userDisplay';
 
 function weekStart(d) {
   const x = startOfDay(d);
@@ -31,7 +32,7 @@ function ScheduleInner({ staff }) {
         .select('id,tech_id,starts_at,ends_at,duration_minutes,status,job:jobs(id,job_number,job_type,customer:customers(display_name),address:addresses(street,city))')
         .gte('starts_at', start.toISOString()).lt('starts_at', end.toISOString())
         .neq('status', 'cancelled').order('starts_at'),
-      sb.from('staff_users').select('id,full_name,email,role').eq('active', true).order('email'),
+      sb.from('staff_users').select('id,full_name,email,role').eq('active', true).order('full_name'),
     ]);
     setVisits(v.data || []);
     setTechs(s.data || []);
@@ -45,7 +46,7 @@ function ScheduleInner({ staff }) {
     const ids = new Set(visits.map((v) => v.tech_id));
     const list = techs.filter((t) => t.role === 'tech' || ids.has(t.id));
     const visible = isOffice ? list : list.filter((t) => t.id === staff.id);
-    return [...visible.map((t) => ({ id: t.id, label: t.full_name || t.email })), ...(isOffice ? [{ id: null, label: 'Unassigned' }] : [])];
+    return [...visible.map((t) => ({ id: t.id, label: staffName(t) })), ...(isOffice ? [{ id: null, label: 'Unassigned' }] : [])];
   }, [techs, visits, isOffice, staff.id]);
 
   const today = startOfDay(new Date()).getTime();

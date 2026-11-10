@@ -7,6 +7,7 @@ import { getSupabase } from '@/lib/supabaseClient';
 import { startOfDay, addDays, fmtTime, fmtDateTime, fmtDuration, JOB_TYPES, leadDisplayName } from '@/lib/format';
 import { displayPhone } from '@/lib/phone';
 import { doubleBookedIds } from '@/lib/schedule';
+import { displayNameFor } from '@/lib/userDisplay';
 
 function DashboardInner({ staff }) {
   const isOffice = staff.role !== 'tech';
@@ -41,7 +42,7 @@ function DashboardInner({ staff }) {
   return (
     <>
       <h1>{isOffice ? 'Dashboard' : 'My day'}</h1>
-      <p className="sub">Welcome{staff.full_name ? `, ${staff.full_name}` : ''}.</p>
+      <p className="sub">Welcome, {displayNameFor(staff.full_name, staff.email)}.</p>
 
       <div className="stat-row">
         <div className="stat-tile"><div className="stat-num">{today.length}</div><div className="stat-label">Visits today</div></div>

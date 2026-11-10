@@ -12,6 +12,7 @@ import { getSupabase } from '@/lib/supabaseClient';
 import { doubleBookedIds } from '@/lib/schedule';
 import { fmtDateTime, fmtDuration, JOB_STATUS, JOB_TYPES, addressLine } from '@/lib/format';
 import { displayPhone, telHref } from '@/lib/phone';
+import { staffName, displayNameFor } from '@/lib/userDisplay';
 
 const JOB_TABS = [['customer', 'Customer info'], ['details', 'Job Details'], ['estimate', 'Estimate Details']];
 const tabFromHash = () => {
@@ -90,7 +91,13 @@ function JobInner({ id, staff, token }) {
 
   const name = (uid) => {
     const s = staffList.find((x) => x.id === uid);
-    return s ? s.full_name || s.email : 'Unassigned';
+    return s ? staffName(s) : 'Unassigned';
+  };
+  // Who did it, by name. Falls back to a tidied email for people no longer in the active list.
+  const actorName = (e, none) => {
+    const s = staffList.find((x) => x.id === e.actor_id);
+    if (s) return staffName(s);
+    return e.actor_email ? displayNameFor(null, e.actor_email) : none;
   };
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
@@ -274,7 +281,7 @@ function JobInner({ id, staff, token }) {
         {events.map((e) => (
           <div key={e.id} className="list-item">
             <div className="title">{e.kind.replace(/_/g, ' ')}</div>
-            <div className="meta">{fmtDateTime(e.at)} · {e.actor_email || 'system'}</div>
+            <div className="meta">{fmtDateTime(e.at)} · {actorName(e, 'system')}</div>
           </div>
         ))}
         {events.length === 0 && <p className="muted">No history yet.</p>}

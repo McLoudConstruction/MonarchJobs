@@ -131,7 +131,7 @@ export default function AppShell({ staff, signOut, children }) {
             <div className="shell-account-menu" role="menu">
               <div className="shell-account-head">
                 <div className="shell-account-name">{name || 'Signed in'}</div>
-                <div className="shell-account-sub">{roleLabel}{staff.email && staff.email !== name ? ` · ${staff.email}` : ''}</div>
+                <div className="shell-account-sub">{roleLabel}</div>
               </div>
               <div className="shell-account-divider" />
               <button type="button" role="menuitem" className="shell-account-item" onClick={() => { setTheme(theme === 'dark' ? 'light' : 'dark'); setAccountOpen(false); }}>

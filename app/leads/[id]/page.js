@@ -10,6 +10,7 @@ import AppointmentPicker, { defaultAppointment } from '@/components/AppointmentP
 import { getSupabase } from '@/lib/supabaseClient';
 import { fromLocalInput, fmtDateTime, LEAD_STATUS, leadDisplayName } from '@/lib/format';
 import { displayPhone } from '@/lib/phone';
+import { staffName, displayNameFor } from '@/lib/userDisplay';
 
 const WORK_ORDER_ERRORS = {
   TECH_DOUBLE_BOOKED: 'That tech is already booked then. Tick the box to book anyway, or pick another time or tech.',
@@ -44,7 +45,7 @@ function LeadInner({ id, staff, token }) {
     setForm((cur) => cur ?? pickLeadFields(l));
     const [ev, st, est, cu] = await Promise.all([
       sb.from('job_events').select('*').eq('lead_id', id).order('at', { ascending: false }).limit(50),
-      sb.from('staff_users').select('id,full_name,email,role').eq('active', true).order('email'),
+      sb.from('staff_users').select('id,full_name,email,role').eq('active', true).order('full_name'),
       sb.from('estimates').select('id,status').eq('lead_id', id).maybeSingle(),
       l.customer_id ? sb.from('customers').select('id,display_name,phone,email').eq('id', l.customer_id).maybeSingle() : Promise.resolve({ data: null }),
     ]);
@@ -69,6 +70,13 @@ function LeadInner({ id, staff, token }) {
   }, [id, lead, load]);
 
   if (!lead || !form) return <p className="muted">Loading lead...</p>;
+
+  // Who did it, by name. Falls back to a tidied email for people no longer in the active list.
+  const actorName = (e) => {
+    const s = staffList.find((x) => x.id === e.actor_id);
+    if (s) return staffName(s);
+    return e.actor_email ? displayNameFor(null, e.actor_email) : 'customer / system';
+  };
 
   const open = !['booked', 'lost'].includes(lead.status);
   const change = (patch) => { setForm((f) => ({ ...f, ...patch })); setDirty(true); };
@@ -239,7 +247,7 @@ function LeadInner({ id, staff, token }) {
         {events.map((e) => (
           <div key={e.id} className="list-item">
             <div className="title">{e.kind.replace(/_/g, ' ')}</div>
-            <div className="meta">{fmtDateTime(e.at)} · {e.actor_email || 'customer / system'}</div>
+            <div className="meta">{fmtDateTime(e.at)} · {actorName(e)}</div>
           </div>
         ))}
         {events.length === 0 && <p className="muted">No history yet.</p>}

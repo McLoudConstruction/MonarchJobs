@@ -5,6 +5,7 @@ import { getSupabase } from '@/lib/supabaseClient';
 import WeekGrid from '@/components/WeekGrid';
 import { DURATION_CHOICES, fmtDuration, fmtDateTime, fromLocalInput, toLocalInput } from '@/lib/format';
 import { weekStartMonday } from '@/lib/weekGrid';
+import { staffName } from '@/lib/userDisplay';
 
 export function defaultAppointment() {
   const d = new Date();
@@ -76,7 +77,7 @@ export default function AppointmentPicker({ value, onChange, staffList, excludeV
         <label>Tech</label>
         <select value={value.techId} onChange={(e) => set({ techId: e.target.value })}>
           <option value="">Unassigned</option>
-          {staffList.map((s) => <option key={s.id} value={s.id}>{s.full_name || s.email} ({s.role})</option>)}
+          {staffList.map((s) => <option key={s.id} value={s.id}>{staffName(s)} ({s.role})</option>)}
         </select>
       </div>
       {validStart && <p className="hint" style={{ marginTop: -6 }}>Appointment: <strong>{fmtDateTime(startDate)} for {fmtDuration(value.duration)}</strong></p>}

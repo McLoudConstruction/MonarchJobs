@@ -3,6 +3,8 @@
 import { useAuth } from '@/lib/useAuth';
 import AppShell from '@/components/AppShell';
 import SetupNotice from '@/components/SetupNotice';
+import NameGate from '@/components/NameGate';
+import { hasRealName } from '@/lib/userDisplay';
 
 // Constants so the hook's dependency does not change on every render.
 const OWNER_ONLY = ['owner'];
@@ -27,6 +29,11 @@ export default function AuthGate({ ownerOnly = false, officeOnly = false, childr
         </div>
       </div>
     );
+  }
+
+  // Everyone must have a name saved before using the app.
+  if (!hasRealName(auth.staff.full_name)) {
+    return <NameGate token={auth.token} onSaved={auth.reload} signOut={auth.signOut} />;
   }
 
   if (auth.error === 'forbidden') {

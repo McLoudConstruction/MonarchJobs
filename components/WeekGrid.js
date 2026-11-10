@@ -6,6 +6,7 @@ import { getSupabase } from '@/lib/supabaseClient';
 import { addDays, fmtDay, fmtTime, fmtDuration } from '@/lib/format';
 import { doubleBookedIds } from '@/lib/schedule';
 import { DAY_START_HOUR, DAY_END_HOUR, layoutDay, timeFromFraction, fractionFromTime, dragStartFromPoint, weekStartMonday, techColor } from '@/lib/weekGrid';
+import { staffName } from '@/lib/userDisplay';
 import './weekgrid.css';
 
 const HOUR_PX = 44;
@@ -43,7 +44,7 @@ export default function WeekGrid({
   }, [weekStart, weekEnd]);
 
   const techIds = useMemo(() => techs.map((t) => t.id), [techs]);
-  const techName = (id) => { const t = techs.find((x) => x.id === id); return t ? t.full_name || t.email : 'Unassigned'; };
+  const techName = (id) => { const t = techs.find((x) => x.id === id); return t ? staffName(t) : 'Unassigned'; };
   const shown = useMemo(
     () => visits.filter((v) => v.id !== excludeVisitId && (view === 'all' || v.tech_id === view)),
     [visits, view, excludeVisitId],
@@ -109,13 +110,13 @@ export default function WeekGrid({
         <label className="muted" style={{ fontSize: 14 }}>Show{' '}
           <select value={view} onChange={(e) => setView(e.target.value)}>
             <option value="all">All techs</option>
-            {techs.map((t) => <option key={t.id} value={t.id}>{t.full_name || t.email}</option>)}
+            {techs.map((t) => <option key={t.id} value={t.id}>{staffName(t)}</option>)}
           </select>
         </label>
       </div>
       <div className="wg-legend">
         {techs.filter((t) => view === 'all' || t.id === view).map((t) => (
-          <span key={t.id}><i style={{ background: techColor(techIds, t.id) }} />{t.full_name || t.email}</span>
+          <span key={t.id}><i style={{ background: techColor(techIds, t.id) }} />{staffName(t)}</span>
         ))}
         <span><i style={{ background: techColor(techIds, null) }} />Unassigned</span>
       </div>
