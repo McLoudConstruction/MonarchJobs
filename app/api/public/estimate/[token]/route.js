@@ -35,7 +35,7 @@ export async function GET(request, { params }) {
   const [{ data: lines }, { data: found }, { data: settings }] = await Promise.all([
     admin.from('estimate_lines').select('description,unit,quantity,unit_price,sort_order,created_at').eq('estimate_id', est.id).order('sort_order').order('created_at'),
     subject,
-    admin.from('settings').select('business_name,phone,email').eq('id', 1).maybeSingle(),
+    admin.from('settings').select('business_name,phone,email,logo_path').eq('id', 1).maybeSingle(),
   ]);
   const job = !found ? null : est.job_id
     ? found

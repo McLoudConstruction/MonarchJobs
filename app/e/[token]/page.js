@@ -6,6 +6,7 @@ import SignaturePad from '@/components/SignaturePad';
 import { estimateTotals, lineCents } from '@/lib/estimate';
 import { money, addressLine, fmtDateTime, JOB_TYPES, UNIT_LABELS } from '@/lib/format';
 import { displayPhone } from '@/lib/phone';
+import { logoUrl } from '@/lib/branding';
 
 // Customer-facing estimate page. No sign-in; the secret link is the access. Stands alone, without the
 // app shell. The customer can review the estimate, approve it and sign. Approving tells the office
@@ -84,6 +85,9 @@ function EstimateView() {
   const contact = [displayPhone(data.business.phone), data.business.email].filter(Boolean).join(' · ');
   return (
     <div className="page customer-page" style={{ maxWidth: 720 }}>
+      {logoUrl(data.business.logo_path) && (
+        <img src={logoUrl(data.business.logo_path)} alt={data.business.business_name || 'Logo'} style={{ display: 'block', maxWidth: '100%', maxHeight: 110, objectFit: 'contain', margin: '0 0 12px' }} />
+      )}
       <h1>{data.business.business_name || 'Estimate'}</h1>
       <p className="sub">{contact}</p>
       <div className="card">
