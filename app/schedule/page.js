@@ -97,14 +97,15 @@ function ScheduleInner({ staff }) {
                 <th>{r.label}</th>
                 {days.map((d) => (
                   <td key={d.getTime()} className={d.getTime() === today ? 'today' : ''}>
-                    {cell(r, d).map((v) => (
+                    {(() => { const vs = cell(r, d); return vs.map((v) => (
                       <Link key={v.id} href={`/jobs/${v.job.id}`}
-                        className={`visit${flagged.has(v.id) ? ' flag' : ''}${v.status === 'finished' ? ' done' : ''}`}>
+                        title={`${fmtTime(v.starts_at)} · ${fmtDuration(v.duration_minutes)} - #${v.job.job_number} ${v.job.customer?.display_name || ''}${v.job.address?.street ? `, ${v.job.address.street}` : ''}`}
+                        className={`visit${vs.length > 1 ? ' compact' : ''}${flagged.has(v.id) ? ' flag' : ''}${v.status === 'finished' ? ' done' : ''}`}>
                         <div className="t">{fmtTime(v.starts_at)} · {fmtDuration(v.duration_minutes)}</div>
                         <div>#{v.job.job_number} {v.job.customer?.display_name}</div>
                         <div className="muted">{v.job.address?.street}</div>
                       </Link>
-                    ))}
+                    )); })()}
                   </td>
                 ))}
               </tr>
