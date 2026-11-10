@@ -131,7 +131,7 @@ export default function SketchTab({ jobId, sketches, photos, isOffice, logEvent,
     return (
       <div className="card">
         <h2>Sketch</h2>
-        <p className="hint">Draw the rooms for this job, with sizes, notes and photos on each room. The total square footage is added up for you.</p>
+        <p className="hint">Draw the rooms for this job: any shape, with angled walls, wall breaks, sizes, notes and photos on each room. Mark where the water went with the Water tool and the wet square footage is worked out for each room. Shortcuts: V select, R room, B wall break, C corner, W water.</p>
         {loadErr && <div className="msg err">{loadErr}</div>}
         <form className="row" onSubmit={addSketch}>
           <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Name, for example Main floor" maxLength={60} style={{ flex: 1, minWidth: 180 }} aria-label="Sketch name" />

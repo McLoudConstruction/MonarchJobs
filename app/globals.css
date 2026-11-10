@@ -1205,7 +1205,7 @@ a.stat-tile:hover{ border-color: var(--accent); }
 .sketch-tools button:disabled{ opacity: 0.4; cursor: not-allowed; }
 .sketch-stage{ position: relative; width: 100%; height: min(62vh, 560px); min-height: 320px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
 .sketch-canvas{ display: block; touch-action: none; user-select: none; -webkit-user-select: none; cursor: default; }
-.sketch-canvas.tool-room, .sketch-canvas.tool-pen, .sketch-canvas.tool-text{ cursor: crosshair; }
+.sketch-canvas.tool-room, .sketch-canvas.tool-pen, .sketch-canvas.tool-text, .sketch-canvas.tool-water, .sketch-canvas.tool-break, .sketch-canvas.tool-corner{ cursor: crosshair; }
 .sketch-canvas.tool-pan{ cursor: grab; }
 .sketch-summary{ margin: 8px 0; font-size: 13px; font-weight: 600; }
 .sketch-summary .muted{ font-weight: 400; }
@@ -1431,3 +1431,10 @@ a.stat-tile:hover{ border-color: var(--accent); }
 .markup-actions .btn:not(.btn-primary):hover{ color: #fff; border-color: #fff; }
 .markup-actions .btn:disabled{ opacity: 0.45; cursor: default; }
 .lead-tab .linklike{ background: none; border: 0; padding: 0; color: var(--accent-text); cursor: pointer; font: inherit; text-decoration: underline; }
+
+/* sketch: shortcut letters, water, wet area */
+.sketch-tools button .sk-key{ margin-left: 6px; font-size: 10px; font-weight: 700; opacity: 0.55; border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; line-height: 14px; display: inline-block; }
+@media (pointer: coarse){ .sketch-tools button .sk-key{ display: none; } }
+.sk-dot{ display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+.sk-wet{ color: #1f6fd0; }
+[data-theme="dark"] .sk-wet{ color: #7db4ff; }
