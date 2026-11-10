@@ -59,6 +59,7 @@ export default function BrandingSection({ token }) {
       body.append('file', file);
       const r = await apiFetch('/api/branding/logo', token, { method: 'POST', body });
       setPath(r.logo_path);
+      window.dispatchEvent(new Event('branding-changed'));
       clearChoice();
       setMsg({ text: 'Logo saved.' });
     } catch (err) {
@@ -74,6 +75,7 @@ export default function BrandingSection({ token }) {
     try {
       await apiFetch('/api/branding/logo', token, { method: 'DELETE' });
       setPath(null);
+      window.dispatchEvent(new Event('branding-changed'));
       setMsg({ text: 'Logo removed.' });
     } catch (err) {
       setMsg({ err: true, text: err.message });
@@ -86,7 +88,7 @@ export default function BrandingSection({ token }) {
   return (
     <div className="card">
       <h2>Logo</h2>
-      <p className="hint">Shown at the top of the estimate page your customers open. PNG, JPG or WebP, up to 2 MB. A PNG with a transparent background works best.</p>
+      <p className="hint">Shown in the app's top-left corner (in place of the Monarch Jobs text) and at the top of the estimate page your customers open. PNG, JPG or WebP, up to 2 MB. A PNG with a transparent background works best.</p>
 
       <div
         style={{

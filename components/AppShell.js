@@ -9,6 +9,7 @@ import { initialsFor, displayNameFor } from '@/lib/userDisplay';
 import { DashboardIcon, SalesIcon, ScheduleIcon, JobDashboardIcon, SettingsIcon, SunIcon, MoonIcon, UserIcon, SignOutIcon, MoreIcon } from '@/components/icons';
 import BottomSheet from '@/components/BottomSheet';
 import JobJumpSearch from '@/components/JobJumpSearch';
+import { logoUrl } from '@/lib/branding';
 
 const ALL = ['owner', 'office', 'tech'];
 const OFFICE = ['owner', 'office'];
@@ -24,6 +25,39 @@ const NAV = [
   { href: '/customers', label: 'Customers', icon: UserIcon, roles: OFFICE },
 ];
 
+// The business logo replaces the "Monarch Jobs" text once one is uploaded in Settings. The path is
+// remembered for the browser session so the logo is there immediately on every page.
+const LOGO_CACHE = 'mj_logo_path';
+
+function useBrandLogo() {
+  const [brand, setBrand] = useState({ loaded: false, path: null });
+  useEffect(() => {
+    try {
+      const cached = sessionStorage.getItem(LOGO_CACHE);
+      if (cached !== null) setBrand({ loaded: true, path: cached || null });
+    } catch { /* storage unavailable */ }
+    let alive = true;
+    const load = () => getSupabase().from('settings').select('logo_path').eq('id', 1).maybeSingle()
+      .then(({ data }) => {
+        if (!alive) return;
+        const path = data?.logo_path || null;
+        setBrand({ loaded: true, path });
+        try { sessionStorage.setItem(LOGO_CACHE, path || ''); } catch { /* ignore */ }
+      });
+    load();
+    window.addEventListener('branding-changed', load);
+    return () => { alive = false; window.removeEventListener('branding-changed', load); };
+  }, []);
+  return brand;
+}
+
+function Brand({ brand }) {
+  const url = logoUrl(brand.path);
+  if (url) return <img className="brand-logo" src={url} alt="Monarch Cleaning & Restoration" />;
+  // hidden until we know, so the text does not flash before the logo appears
+  return <span className="brand" style={brand.loaded ? undefined : { visibility: 'hidden' }}>Monarch <span>Jobs</span></span>;
+}
+
 const isActive = (item, pathname) => pathname === item.href || pathname.startsWith(`${item.href}/`);
 
 export default function AppShell({ staff, signOut, children }) {
@@ -35,6 +69,7 @@ export default function AppShell({ staff, signOut, children }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef(null);
+  const brand = useBrandLogo();
 
   const nav = NAV.filter((n) => n.roles.includes(staff.role));
   const canSettings = staff.role === 'owner';
@@ -75,7 +110,7 @@ export default function AppShell({ staff, signOut, children }) {
   return (
     <div className="shell">
       <aside className="side" aria-label="Main">
-        <div className="side-brand"><span className="brand">Monarch <span>Jobs</span></span></div>
+        <div className="side-brand"><Brand brand={brand} /></div>
         <div className="side-search"><JobJumpSearch role={staff.role} /></div>
         <nav className="side-nav">
           {nav.map((n) => (
@@ -121,7 +156,7 @@ export default function AppShell({ staff, signOut, children }) {
 
       {/* phones keep a slim top bar with the logo and the bottom nav */}
       <div className="shell-topbar shell-topbar-mobile">
-        <div className="shell-logo"><span className="brand">Monarch <span>Jobs</span></span></div>
+        <div className="shell-logo"><Brand brand={brand} /></div>
       </div>
 
       <div className="shell-body">
