@@ -3,19 +3,17 @@
 import { useMemo, useState } from 'react';
 import { countByKind, filterPhotos } from '@/lib/jobDocs';
 import { fmtDay } from '@/lib/format';
-import { FilePick, KindChips, PhotoGrid, UploadStatus } from '@/components/job/PhotoUi';
+import { KindChips, PhotoGrid, UploadStatus } from '@/components/job/PhotoUi';
 import LibraryUploadDialog from '@/components/job/LibraryUploadDialog';
 
 const dayKey = (iso) => { const d = new Date(iso); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
 
-// Photos tab: add pictures (camera or library) as Before / During / After / Damage / Other, filter,
+// Photos tab: add pictures (camera or library, folder chosen in a popup), filter,
 // open one to caption, mark up, move to a room, download or archive.
 export default function PhotosTab({ photos, isOffice, uploader, onOpen }) {
   const [filter, setFilter] = useState('all');
   const [showArchived, setShowArchived] = useState(false);
-  const [libOpen, setLibOpen] = useState(false);
-  // the first pictures on a job are most often "before"
-  const [addKind, setAddKind] = useState(photos.length ? 'during' : 'before');
+  const [dlg, setDlg] = useState(null); // null | 'camera' | 'library'
 
   const counts = useMemo(() => countByKind(photos), [photos]);
   const archivedCount = useMemo(() => photos.filter((p) => p.archived_at).length, [photos]);
@@ -34,34 +32,24 @@ export default function PhotosTab({ photos, isOffice, uploader, onOpen }) {
     return out;
   }, [list]);
 
-  const add = (files) => uploader.upload(files, { kind: addKind });
-
   return (
     <>
       <div className="card">
-        <h2>Add photos</h2>
-        <p className="hint">Pictures are shrunk on your phone and kept on the job for good. Choose what they show, then take or pick them. "Choose from library" lets you pick the folder and watch each photo upload.</p>
-        <div className="field" style={{ marginTop: 0 }}>
-          <label>These photos are</label>
-          <KindChips value={addKind} onChange={setAddKind} />
-        </div>
-        <div className="row">
-          <FilePick label="Take photo" capture onFiles={add} className="primary" />
-          <button type="button" className="secondary" onClick={() => setLibOpen(true)}>Choose from library</button>
-        </div>
-        <UploadStatus uploader={uploader} />
-      </div>
-      <LibraryUploadDialog open={libOpen} onClose={() => setLibOpen(false)} uploader={uploader} defaultKind={addKind} />
-
-      <div className="card">
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <h2>{showArchived ? 'Archived photos' : 'Photos'} <span className="muted">({showArchived ? archivedCount : counts.all})</span></h2>
-          {isOffice && archivedCount > 0 && (
+          <div className="row">
+            <button type="button" className="primary small" onClick={() => setDlg('camera')}>Take photo</button>
+            <button type="button" className="secondary small" onClick={() => setDlg('library')}>Choose from library</button>
+          </div>
+        </div>
+        <UploadStatus uploader={uploader} />
+        {isOffice && archivedCount > 0 && (
+          <div className="row" style={{ marginTop: 8 }}>
             <button type="button" className="secondary small" onClick={() => { setShowArchived(!showArchived); setFilter('all'); }}>
               {showArchived ? 'Back to photos' : `Archived (${archivedCount})`}
             </button>
-          )}
-        </div>
+          </div>
+        )}
         {!showArchived && <KindChips value={filter} onChange={setFilter} counts={counts} includeAll />}
         {days.map((d) => (
           <section key={d.key} className="ph-day">
@@ -71,10 +59,11 @@ export default function PhotosTab({ photos, isOffice, uploader, onOpen }) {
         ))}
         {list.length === 0 && (
           <p className="muted">
-            {showArchived ? 'No archived photos.' : filter === 'all' ? 'No photos yet. Take the first one above.' : 'No photos of this type yet.'}
+            {showArchived ? 'No archived photos.' : filter === 'all' ? 'No photos yet. Use Take photo or Choose from library.' : 'No photos of this type yet.'}
           </p>
         )}
       </div>
+      <LibraryUploadDialog open={!!dlg} camera={dlg === 'camera'} onClose={() => setDlg(null)} uploader={uploader} />
     </>
   );
 }

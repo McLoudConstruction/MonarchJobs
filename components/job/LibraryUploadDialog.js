@@ -7,15 +7,15 @@ import { PHOTO_KINDS } from '@/lib/jobDocs';
 
 // "Choose from library": pick the folder (photo type) first, then choose pictures. Each one shows
 // here, with its own progress, as it uploads. Retry works for any that fail.
-export default function LibraryUploadDialog({ open, onClose, uploader, defaultKind }) {
-  const [kind, setKind] = useState(defaultKind);
+export default function LibraryUploadDialog({ open, onClose, uploader, camera = false }) {
+  const [kind, setKind] = useState(null); // no folder is chosen until the person picks one
   const [items, setItems] = useState([]); // { id, file, preview, kind, status, error }
   const input = useRef(null);
   const seq = useRef(0);
   const itemsRef = useRef([]);
   itemsRef.current = items;
 
-  useEffect(() => { if (open) setKind(defaultKind); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (open) setKind(null); }, [open]);
   // free the preview pictures when the dialog is closed or left
   useEffect(() => () => itemsRef.current.forEach((i) => URL.revokeObjectURL(i.preview)), []);
 
@@ -30,6 +30,7 @@ export default function LibraryUploadDialog({ open, onClose, uploader, defaultKi
     uploader.upload(files, { kind: k, quiet: true, onItem });
   }
   function choose(files) {
+    if (!kind) return;
     const added = files.map((file) => ({
       id: ++seq.current, file, preview: URL.createObjectURL(file), kind, status: 'waiting', error: '',
     }));
@@ -51,21 +52,24 @@ export default function LibraryUploadDialog({ open, onClose, uploader, defaultKi
   }
 
   return (
-    <PopupModal open={open} onClose={finish} title="Add photos from library">
+    <PopupModal open={open} onClose={finish} title={camera ? 'Take photo' : 'Add photos from library'}>
       <div className="lib-dialog">
         <div className="field" style={{ marginTop: 0 }}>
-          <label>Put these photos in</label>
+          <label>Choose a folder</label>
           <KindChips value={kind} onChange={setKind} />
         </div>
         <div className="row">
-          <button type="button" className="primary" onClick={() => input.current?.click()}>
-            {items.length ? `Add more to ${PHOTO_KINDS[kind]}` : `Choose photos for ${PHOTO_KINDS[kind]}`}
+          <button type="button" className="primary" disabled={!kind} onClick={() => input.current?.click()}>
+            {!kind ? 'Pick a folder first'
+              : camera ? (items.length ? `Take another for ${PHOTO_KINDS[kind]}` : `Take photo for ${PHOTO_KINDS[kind]}`)
+              : (items.length ? `Add more to ${PHOTO_KINDS[kind]}` : `Choose photos for ${PHOTO_KINDS[kind]}`)}
           </button>
           <input
             ref={input}
             type="file"
             accept="image/*"
-            multiple
+            multiple={!camera}
+            {...(camera ? { capture: 'environment' } : {})}
             style={{ display: 'none' }}
             onChange={(e) => { const f = [...e.target.files]; e.target.value = ''; if (f.length) choose(f); }}
           />
