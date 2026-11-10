@@ -5,6 +5,7 @@ import { countByKind, filterPhotos } from '@/lib/jobDocs';
 import { fmtDay } from '@/lib/format';
 import { KindChips, PhotoGrid, UploadStatus } from '@/components/job/PhotoUi';
 import LibraryUploadDialog from '@/components/job/LibraryUploadDialog';
+import CameraCapture from '@/components/job/CameraCapture';
 
 const dayKey = (iso) => { const d = new Date(iso); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
 
@@ -63,7 +64,8 @@ export default function PhotosTab({ photos, isOffice, uploader, onOpen }) {
           </p>
         )}
       </div>
-      <LibraryUploadDialog open={!!dlg} camera={dlg === 'camera'} onClose={() => setDlg(null)} uploader={uploader} />
+      <LibraryUploadDialog open={dlg === 'library'} onClose={() => setDlg(null)} uploader={uploader} />
+      <CameraCapture open={dlg === 'camera'} onClose={() => setDlg(null)} uploader={uploader} />
     </>
   );
 }
