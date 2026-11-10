@@ -9,6 +9,7 @@ export default function IntegrationPanel({ provider, title, status, fields, toke
   const [values, setValues] = useState({});
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false); // collapsed by default; click the header to add or edit details
 
   const badge = !status?.configured
     ? <span className="badge off">Not connected</span>
@@ -63,10 +64,22 @@ export default function IntegrationPanel({ provider, title, status, fields, toke
 
   return (
     <form className="card" onSubmit={save}>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <h2>{title}</h2>
-        {badge}
-      </div>
+      <button
+        type="button"
+        className="row"
+        aria-expanded={open}
+        aria-controls={`${provider}-body`}
+        onClick={() => setOpen((o) => !o)}
+        style={{ justifyContent: 'space-between', width: '100%', background: 'none', border: 0, padding: 0, cursor: 'pointer', color: 'inherit', font: 'inherit', textAlign: 'left' }}
+      >
+        <h2 style={{ margin: 0 }}>{title}</h2>
+        <span className="row" style={{ gap: 10 }}>
+          {badge}
+          <span aria-hidden="true" style={{ display: 'inline-block', transition: 'transform 0.15s', transform: open ? 'rotate(90deg)' : 'none' }}>&#9656;</span>
+        </span>
+      </button>
+      {open && (
+      <div id={`${provider}-body`} style={{ marginTop: 12 }}>
       <p className="hint">{help}</p>
 
       {status?.webhookUrl && (
@@ -106,6 +119,8 @@ export default function IntegrationPanel({ provider, title, status, fields, toke
         <button type="button" className="secondary" disabled={busy || !status?.configured} onClick={test}>Test connection</button>
         <button type="button" className="danger" disabled={busy || !status?.updatedAt} onClick={remove}>Remove keys</button>
       </div>
+      </div>
+      )}
     </form>
   );
 }
