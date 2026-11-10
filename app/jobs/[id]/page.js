@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import AuthGate from '@/components/AuthGate';
 import VisitForm from '@/components/VisitForm';
 import VisitActions from '@/components/VisitActions';
+import OnTheWayModal from '@/components/OnTheWayModal';
 import EstimateCard from '@/components/EstimateCard';
 import { getSupabase } from '@/lib/supabaseClient';
 import { doubleBookedIds } from '@/lib/schedule';
@@ -33,6 +34,7 @@ function JobInner({ id, staff, token }) {
   const [form, setForm] = useState(null);
   const [visitEdit, setVisitEdit] = useState(null); // visit object, or {} for new
   const [tab, setTab] = useState('customer');
+  const [otwOpen, setOtwOpen] = useState(false);
 
   // keep the open tab across refreshes and back/forward (#customer, #details, #estimate)
   useEffect(() => {
@@ -129,13 +131,17 @@ function JobInner({ id, staff, token }) {
   }
 
   const warnings = [job.address?.warnings, job.warning].filter(Boolean);
+  // the visit "On the way" applies to: the next one still waiting, if this person may act on it
+  const otwVisit = visits.find((v) => ['scheduled', 'on_the_way'].includes(v.status) && (isOffice || v.tech_id === staff.id));
   const anyFlag = visits.some((v) => flagged.has(v.id) && v.status !== 'cancelled');
 
   return (
     <>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <h1>Job #{job.job_number} <span className={`badge s-${job.status}`}>{JOB_STATUS[job.status]}</span></h1>
+        {otwVisit && <button type="button" className="primary" onClick={() => setOtwOpen(true)}>On the way</button>}
       </div>
+      {otwVisit && <OnTheWayModal open={otwOpen} visit={otwVisit} token={token} onClose={() => setOtwOpen(false)} onDone={load} />}
       <p className="sub">
         {isOffice ? <Link href={`/customers/${job.customer.id}`}>{job.customer.display_name}</Link> : job.customer.display_name}
         {' · '}{JOB_TYPES[job.job_type]}
