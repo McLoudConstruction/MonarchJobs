@@ -104,6 +104,20 @@ function LeadInner({ id, staff, token }) {
     setStatus(status, { lost_reason: '' });
   }
 
+  // Owner only (matches the database rule). A lead that became a work order stays, because the job came from it.
+  async function deleteLead() {
+    if (!window.confirm(`Delete ${leadDisplayName(lead) || 'this lead'} permanently? This also removes its estimate and history. It cannot be undone.`)) return;
+    setBusy(true);
+    setMsg(null);
+    const { data, error } = await getSupabase().from('leads').delete().eq('id', id).select('id');
+    if (error || !data?.length) {
+      setMsg({ err: true, text: error?.message || 'Could not delete this lead. Only the owner can delete leads.' });
+      setBusy(false);
+      return;
+    }
+    router.push('/leads');
+  }
+
   async function linkCustomer(customerId) {
     const { error } = await getSupabase().from('leads').update({ customer_id: customerId }).eq('id', id);
     if (error) setMsg({ err: true, text: error.message });
@@ -137,6 +151,7 @@ function LeadInner({ id, staff, token }) {
         <div className="row">
           {open && <button className="danger" onClick={markLost}>Mark lost</button>}
           {lead.status === 'lost' && <button className="secondary" onClick={reopen}>Reopen</button>}
+          {staff.role === 'owner' && lead.status !== 'booked' && <button className="danger" disabled={busy} onClick={deleteLead}>Delete lead</button>}
           {lead.status === 'booked' && lead.job_id && <Link href={`/jobs/${lead.job_id}`}><button className="primary">Open work order</button></Link>}
         </div>
       </div>

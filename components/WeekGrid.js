@@ -1,26 +1,31 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { getSupabase } from '@/lib/supabaseClient';
 import { addDays, fmtDay, fmtTime, fmtDuration } from '@/lib/format';
 import { doubleBookedIds } from '@/lib/schedule';
-import { DAY_START_HOUR, DAY_END_HOUR, layoutDay, timeFromFraction, fractionFromTime, weekStartMonday, techColor } from '@/lib/weekGrid';
+import { DAY_START_HOUR, DAY_END_HOUR, layoutDay, timeFromFraction, fractionFromTime, dragStartFromPoint, weekStartMonday, techColor } from '@/lib/weekGrid';
 import './weekgrid.css';
 
 const HOUR_PX = 44;
 const HOURS = Array.from({ length: DAY_END_HOUR - DAY_START_HOUR }, (_, i) => DAY_START_HOUR + i);
 const hourLabel = (h) => `${h % 12 === 0 ? 12 : h % 12} ${h < 12 ? 'AM' : 'PM'}`;
 
-// A week of visits laid out by time of day. Pass onPick to let the person click a time slot (used when
-// scheduling); pass proposed to draw the appointment being planned; pass linkVisits to open a job
-// when its block is clicked (used on the Schedule page).
+// A week of visits laid out by time of day. Pass onPick to let the person click a time slot, or drag the
+// dashed appointment box to a new time or day (used when scheduling); pass proposed to draw the
+// appointment being planned; pass linkVisits to open a job when its block is clicked (used on the
+// Schedule page).
 export default function WeekGrid({
   weekStart, onWeekChange, techs, focusTechId = '', proposed = null, onPick = null,
   excludeVisitId = null, linkVisits = false, hint = null,
 }) {
   const [visits, setVisits] = useState([]);
   const [view, setView] = useState(focusTechId || 'all');
+  const [dragStart, setDragStart] = useState(null); // Date while the planned appointment is being dragged
+  const colRefs = useRef([]);
+  const dragRef = useRef(null);
+  const justDragged = useRef(false);
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const weekEnd = useMemo(() => addDays(weekStart, 7), [weekStart]);
 
@@ -47,12 +52,51 @@ export default function WeekGrid({
   const todayKey = new Date().toDateString();
 
   function pick(e, day) {
-    if (!onPick) return;
+    if (!onPick || justDragged.current) return;
     const r = e.currentTarget.getBoundingClientRect();
     onPick(timeFromFraction(day, (e.clientY - r.top) / r.height));
   }
 
-  const propStart = proposed?.start ? new Date(proposed.start) : null;
+  const propStart = dragStart || (proposed?.start ? new Date(proposed.start) : null);
+
+  // Drag the planned appointment. Listeners go on the window so the drag keeps working when the box
+  // moves into another day's column (the box is redrawn there).
+  function beginDrag(e, day) {
+    if (!onPick || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const col = colRefs.current[days.findIndex((d) => d.toDateString() === day.toDateString())];
+    if (!col) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const r = col.getBoundingClientRect();
+    const boxTop = r.top + fractionFromTime(propStart, day) * r.height;
+    const state = { grab: (e.clientY - boxTop) / r.height, latest: null, moved: false, startX: e.clientX, startY: e.clientY };
+    dragRef.current = state;
+
+    const onMove = (ev) => {
+      if (!state.moved && Math.hypot(ev.clientX - state.startX, ev.clientY - state.startY) < 4) return;
+      state.moved = true;
+      const rects = colRefs.current.map((c) => c.getBoundingClientRect());
+      const next = dragStartFromPoint(days, rects, ev.clientX, ev.clientY, state.grab);
+      if (next) { state.latest = next; setDragStart(next); }
+    };
+    const finish = (commit) => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      dragRef.current = null;
+      setDragStart(null);
+      if (state.moved) {
+        justDragged.current = true; // swallow the click that follows a drag
+        setTimeout(() => { justDragged.current = false; }, 0);
+        if (commit && state.latest) onPick(state.latest);
+      }
+    };
+    const onUp = () => finish(true);
+    const onCancel = () => finish(false);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
+  }
 
   return (
     <div className="wg" style={{ '--wg-hour': `${HOUR_PX}px` }}>
@@ -99,7 +143,8 @@ export default function WeekGrid({
               const pTop = showProposed ? fractionFromTime(propStart, d) : 0;
               const pHeight = showProposed ? ((proposed.duration || 60) / ((DAY_END_HOUR - DAY_START_HOUR) * 60)) : 0;
               return (
-                <div key={d.getTime()} className={`wg-col${onPick ? ' clickable' : ''}${d.toDateString() === todayKey ? ' today' : ''}`}
+                <div key={d.getTime()} ref={(el) => { colRefs.current[days.indexOf(d)] = el; }}
+                  className={`wg-col${onPick ? ' clickable' : ''}${d.toDateString() === todayKey ? ' today' : ''}`}
                   style={{ height: HOURS.length * HOUR_PX }} onClick={(e) => pick(e, d)}>
                   {items.map(({ visit: v, top, height, lane, lanes }) => {
                     const style = {
@@ -122,7 +167,10 @@ export default function WeekGrid({
                     );
                   })}
                   {showProposed && pTop < 1 && pTop + pHeight > 0 && (
-                    <div className="wg-proposed" style={{ top: `${Math.max(pTop, 0) * 100}%`, height: `${Math.min(pHeight, 1 - Math.max(pTop, 0)) * 100}%` }}>
+                    <div className={`wg-proposed${onPick ? ' draggable' : ''}${dragStart ? ' dragging' : ''}`}
+                      onPointerDown={(e) => beginDrag(e, d)} onClick={(e) => e.stopPropagation()}
+                      title={onPick ? 'Drag to move the appointment' : undefined}
+                      style={{ top: `${Math.max(pTop, 0) * 100}%`, height: `${Math.min(pHeight, 1 - Math.max(pTop, 0)) * 100}%` }}>
                       New: {fmtTime(propStart)} · {fmtDuration(proposed.duration)}
                     </div>
                   )}

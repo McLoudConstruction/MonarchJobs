@@ -23,4 +23,6 @@
 .wg-visit.done { opacity: 0.5; }
 .wg-visit.flag { box-shadow: 0 0 0 2px var(--danger); }
 .wg-proposed { position: absolute; left: 2px; right: 2px; border: 2px dashed var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); border-radius: 6px; padding: 2px 5px; font-size: 12px; font-weight: 700; color: var(--accent); pointer-events: none; overflow: hidden; z-index: 3; }
+.wg-proposed.draggable { pointer-events: auto; cursor: grab; touch-action: none; user-select: none; }
+.wg-proposed.dragging { cursor: grabbing; background: color-mix(in srgb, var(--accent) 26%, transparent); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
 .wg-hint { padding: 6px 12px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--border); }

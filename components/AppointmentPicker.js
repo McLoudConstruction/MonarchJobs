@@ -101,7 +101,7 @@ export default function AppointmentPicker({ value, onChange, staffList, excludeV
         proposed={validStart ? { start: startDate, duration: value.duration } : null}
         excludeVisitId={excludeVisitId}
         onPick={(date) => set({ start: toLocalInput(date) })}
-        hint="Click an open spot in the week to set the start time. Dashed box is the appointment you are setting."
+        hint="Click an open spot in the week to set the start time, or drag the dashed box (the appointment you are setting) to a new time or day."
       />
       </div>
     </div>

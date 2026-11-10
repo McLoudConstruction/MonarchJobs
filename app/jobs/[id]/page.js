@@ -12,6 +12,12 @@ import { doubleBookedIds } from '@/lib/schedule';
 import { fmtDateTime, fmtDuration, JOB_STATUS, JOB_TYPES, addressLine } from '@/lib/format';
 import { displayPhone, telHref } from '@/lib/phone';
 
+const JOB_TABS = [['customer', 'Customer info'], ['details', 'Job Details'], ['estimate', 'Estimate Details']];
+const tabFromHash = () => {
+  const h = typeof window === 'undefined' ? '' : window.location.hash.replace('#', '');
+  return JOB_TABS.some(([k]) => k === h) ? h : 'customer';
+};
+
 const VISIT_STATUS = { scheduled: 'Scheduled', on_the_way: 'On the way', started: 'Started', finished: 'Finished', cancelled: 'Cancelled' };
 
 function JobInner({ id, staff, token }) {
@@ -26,6 +32,16 @@ function JobInner({ id, staff, token }) {
   const [msg, setMsg] = useState(null);
   const [form, setForm] = useState(null);
   const [visitEdit, setVisitEdit] = useState(null); // visit object, or {} for new
+  const [tab, setTab] = useState('customer');
+
+  // keep the open tab across refreshes and back/forward (#customer, #details, #estimate)
+  useEffect(() => {
+    setTab(tabFromHash());
+    const onHash = () => setTab(tabFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  const openTab = (k) => { setTab(k); window.history.replaceState(null, '', `#${k}`); };
 
   const load = useCallback(async () => {
     const sb = getSupabase();
@@ -130,18 +146,49 @@ function JobInner({ id, staff, token }) {
       {anyFlag && <div className="banner flag">Double-booked: one of this job's visits overlaps another visit for the same tech. Move one of them.</div>}
       {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
 
+      <div className="tabs" role="tablist">
+        {JOB_TABS.map(([k, label]) => (
+          <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => openTab(k)}>{label}</button>
+        ))}
+      </div>
+
+      {tab === 'customer' && (
+        <>
+      <div className="card">
+        <h2>Customer</h2>
+        <div className="title">{isOffice ? <Link href={`/customers/${job.customer.id}`}>{job.customer.display_name}</Link> : job.customer.display_name}</div>
+        <div>
+          {job.customer.phone && <a href={telHref(job.customer.phone)}>{displayPhone(job.customer.phone)}</a>}
+          {job.customer.email && <>{job.customer.phone ? ' · ' : ''}<a href={`mailto:${job.customer.email}`}>{job.customer.email}</a></>}
+          {!job.customer.phone && !job.customer.email && <span className="muted">No phone or email on file.</span>}
+        </div>
+      </div>
+
       <div className="card">
         <h2>Site</h2>
         <div className="title">{addressLine(job.address)}</div>
         {job.address.gate_code && <div>Gate code: <strong>{job.address.gate_code}</strong></div>}
         {job.address.access_notes && <div className="meta">{job.address.access_notes}</div>}
-        <div style={{ marginTop: 8 }}>
-          {job.customer.phone && <a href={telHref(job.customer.phone)}>{displayPhone(job.customer.phone)}</a>}
-          {job.customer.email && <> · <a href={`mailto:${job.customer.email}`}>{job.customer.email}</a></>}
-        </div>
-        {job.loss_summary && <p><strong>Loss summary:</strong> {job.loss_summary}</p>}
       </div>
 
+      {isOffice && contacts.length > 0 && (
+        <div className="card">
+          <h2>Also notify</h2>
+          <p className="hint">Extra contacts receive this job's notifications once messaging is switched on.</p>
+          {contacts.map((c) => (
+            <label key={c.id} className="row" style={{ marginBottom: 8 }}>
+              <input type="checkbox" checked={jobContactIds.includes(c.id)} onChange={() => toggleContact(c.id)} />
+              {c.name} {c.role && <span className="badge off">{c.role}</span>} <span className="muted">{[displayPhone(c.phone), c.email].filter(Boolean).join(' · ')}</span>
+            </label>
+          ))}
+        </div>
+      )}
+
+        </>
+      )}
+
+      {tab === 'details' && (
+        <>
       <div className="card">
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <h2>Visits</h2>
@@ -210,24 +257,27 @@ function JobInner({ id, staff, token }) {
         <div className="card">
           <h2>Notes</h2>
           {job.po_number && <p>PO: {job.po_number}</p>}
+          {job.loss_summary && <p><strong>Loss summary:</strong> {job.loss_summary}</p>}
           <p><strong>Customer notes:</strong> {job.customer_notes || 'None'}</p>
           <p><strong>Internal notes:</strong> {job.internal_notes || 'None'}</p>
         </div>
       )}
 
-      {isOffice && contacts.length > 0 && (
-        <div className="card">
-          <h2>Also notify</h2>
-          <p className="hint">Extra contacts receive this job's notifications once messaging is switched on.</p>
-          {contacts.map((c) => (
-            <label key={c.id} className="row" style={{ marginBottom: 8 }}>
-              <input type="checkbox" checked={jobContactIds.includes(c.id)} onChange={() => toggleContact(c.id)} />
-              {c.name} {c.role && <span className="badge off">{c.role}</span>} <span className="muted">{[displayPhone(c.phone), c.email].filter(Boolean).join(' · ')}</span>
-            </label>
-          ))}
-        </div>
+      <div className="card">
+        <h2>History</h2>
+        {events.map((e) => (
+          <div key={e.id} className="list-item">
+            <div className="title">{e.kind.replace(/_/g, ' ')}</div>
+            <div className="meta">{fmtDateTime(e.at)} · {e.actor_email || 'system'}</div>
+          </div>
+        ))}
+        {events.length === 0 && <p className="muted">No history yet.</p>}
+      </div>
+        </>
       )}
 
+      {tab === 'estimate' && (
+        <>
       <EstimateCard
         scope={{ jobId: id }}
         open={!['closed', 'cancelled'].includes(job.status)}
@@ -242,16 +292,8 @@ function JobInner({ id, staff, token }) {
         <p className="muted">Invoicing and payments arrive in the next update.</p>
       </div>
 
-      <div className="card">
-        <h2>History</h2>
-        {events.map((e) => (
-          <div key={e.id} className="list-item">
-            <div className="title">{e.kind.replace(/_/g, ' ')}</div>
-            <div className="meta">{fmtDateTime(e.at)} · {e.actor_email || 'system'}</div>
-          </div>
-        ))}
-        {events.length === 0 && <p className="muted">No history yet.</p>}
-      </div>
+        </>
+      )}
     </>
   );
 }
