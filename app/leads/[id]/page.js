@@ -8,8 +8,8 @@ import LeadForm, { pickLeadFields } from '@/components/LeadForm';
 import EstimateCard from '@/components/EstimateCard';
 import AppointmentPicker, { defaultAppointment } from '@/components/AppointmentPicker';
 import { getSupabase } from '@/lib/supabaseClient';
-import { fromLocalInput, fmtDateTime, LEAD_STATUS, leadDisplayName } from '@/lib/format';
-import { displayPhone } from '@/lib/phone';
+import { fromLocalInput, fmtDateTime, LEAD_STATUS, JOB_TYPES, leadDisplayName, addressLine } from '@/lib/format';
+import { displayPhone, telHref } from '@/lib/phone';
 import { staffName, displayNameFor } from '@/lib/userDisplay';
 
 const WORK_ORDER_ERRORS = {
@@ -21,6 +21,17 @@ const WORK_ORDER_ERRORS = {
   NOT_ALLOWED: 'Only the office and owner can create work orders.',
 };
 const friendly = (m) => WORK_ORDER_ERRORS[Object.keys(WORK_ORDER_ERRORS).find((k) => (m || '').includes(k))] || m;
+
+const LEAD_TABS = [
+  ['overview', 'Overview'],
+  ['details', 'Details'],
+  ['estimate', 'Estimate'],
+  ['history', 'History'],
+];
+const tabFromHash = () => {
+  const raw = typeof window === 'undefined' ? '' : window.location.hash.replace('#', '');
+  return LEAD_TABS.some(([k]) => k === raw) ? raw : 'overview';
+};
 
 function LeadInner({ id, staff, token }) {
   const router = useRouter();
@@ -36,6 +47,16 @@ function LeadInner({ id, staff, token }) {
   const [conflicts, setConflicts] = useState([]);
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState('overview');
+
+  // keep the open tab across refreshes and back/forward (#overview, #details ...)
+  useEffect(() => {
+    setTab(tabFromHash());
+    const onHash = () => setTab(tabFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  const openTab = (k) => { setTab(k); window.history.replaceState(null, '', `#${k}`); };
 
   const load = useCallback(async () => {
     const sb = getSupabase();
@@ -175,85 +196,137 @@ function LeadInner({ id, staff, token }) {
       )}
       {lead.status === 'booked' && <div className="banner ok">A work order was created from this lead. Further changes happen on the job.</div>}
 
-      <div className="lead-layout">
-        <div className="lead-left">
-      {open && !lead.customer_id && matches.length > 0 && (
-        <div className="card">
-          <h2>Existing customer?</h2>
-          <p className="hint">This phone number or email matches a customer already on file. Use them to keep one history and their saved addresses.</p>
-          {matches.map((m) => (
-            <div key={m.id} className="list-item row" style={{ justifyContent: 'space-between' }}>
-              <div><div className="title">{m.display_name}</div><div className="meta">{[displayPhone(m.phone), m.email].filter(Boolean).join(' · ')}</div></div>
-              <div className="row">
-                <Link href={`/customers/${m.id}`}><button type="button" className="secondary small">View</button></Link>
-                <button type="button" className="primary small" onClick={() => linkCustomer(m.id)}>Use this customer</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      {linked && (
-        <div className="card">
-          <div className="row" style={{ justifyContent: 'space-between' }}>
-            <div>Existing customer: <Link href={`/customers/${linked.id}`}><strong>{linked.display_name}</strong></Link>
-              <div className="meta">The work order uses their customer record. Contact edits below do not change it.</div></div>
-            {open && <button type="button" className="secondary small" onClick={() => linkCustomer(null)}>Unlink</button>}
-          </div>
-        </div>
-      )}
+      <div className="tabs" role="tablist">
+        {LEAD_TABS.map(([k, label]) => (
+          <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => openTab(k)}>
+            {label}
+            {k === 'details' && dirty && <span className="tab-count" title="Unsaved changes">!</span>}
+            {k === 'history' && events.length > 0 && <span className="tab-count">{events.length}</span>}
+          </button>
+        ))}
+      </div>
 
-      <form onSubmit={onSave}>
-        <fieldset disabled={!open} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-          <LeadForm value={form} onChange={change} />
-        </fieldset>
-        {open && <div className="row" style={{ marginBottom: 20 }}>
-          <button className="primary">Save changes</button>
-          {dirty && <span className="muted">Unsaved changes</span>}
-        </div>}
-      </form>
-
-        </div>
-        <div className="lead-right">
-      <EstimateCard
-        scope={{ leadId: id }}
-        open={open}
-        staff={staff}
-        token={token}
-        contact={{ name, phone: lead.phone, email: lead.email }}
-        onChanged={load}
-      />
-
-      {open && (
-        <div className="card">
-          <h2>Create work order</h2>
-          <p className="hint">
-            Pick the start time and how long it will take. Creating the work order turns this lead into a job with its first visit,
-            and the estimate moves onto the job.
-          </p>
-          {!estApproved && (
-            <div className="banner">
-              {estimate ? 'The customer has not approved the estimate yet.' : 'There is no estimate yet.'} You can still create the work order, for example if they approved by phone.
+      {tab === 'overview' && (
+        <div className="lead-tab">
+          {open && !lead.customer_id && matches.length > 0 && (
+            <div className="card">
+              <h2>Existing customer?</h2>
+              <p className="hint">This phone number or email matches a customer already on file. Use them to keep one history and their saved addresses.</p>
+              {matches.map((m) => (
+                <div key={m.id} className="list-item row" style={{ justifyContent: 'space-between' }}>
+                  <div><div className="title">{m.display_name}</div><div className="meta">{[displayPhone(m.phone), m.email].filter(Boolean).join(' · ')}</div></div>
+                  <div className="row">
+                    <Link href={`/customers/${m.id}`}><button type="button" className="secondary small">View</button></Link>
+                    <button type="button" className="primary small" onClick={() => linkCustomer(m.id)}>Use this customer</button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
-          <AppointmentPicker value={appt} onChange={setAppt} staffList={staffList} onConflicts={setConflicts} />
-          <button className="primary big" style={{ marginTop: 14 }} disabled={busy} onClick={createWorkOrder}>
-            {busy ? 'Creating...' : 'Create work order'}
-          </button>
+          {linked && (
+            <div className="card">
+              <div className="row" style={{ justifyContent: 'space-between' }}>
+                <div>Existing customer: <Link href={`/customers/${linked.id}`}><strong>{linked.display_name}</strong></Link>
+                  <div className="meta">The work order uses their customer record. Contact edits on the Details tab do not change it.</div></div>
+                {open && <button type="button" className="secondary small" onClick={() => linkCustomer(null)}>Unlink</button>}
+              </div>
+            </div>
+          )}
+
+          <div className="card">
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <h2>Summary</h2>
+              <button type="button" className="secondary small" onClick={() => openTab('details')}>Edit details</button>
+            </div>
+            <div className="grid2">
+              <div className="field"><label>Contact</label>
+                <div className="title">{name}</div>
+                <div className="meta">
+                  {lead.phone && <a href={telHref(lead.phone)}>{displayPhone(lead.phone)}</a>}
+                  {lead.phone && lead.email ? ' · ' : ''}
+                  {lead.email && <a href={`mailto:${lead.email}`}>{lead.email}</a>}
+                  {!lead.phone && !lead.email && 'No phone or email yet'}
+                </div>
+              </div>
+              <div className="field"><label>Service address</label>
+                <div className="title">{addressLine(lead) || 'No address yet'}</div>
+                {(lead.gate_code || lead.warnings) && <div className="meta">{[lead.gate_code && `Gate ${lead.gate_code}`, lead.warnings].filter(Boolean).join(' · ')}</div>}
+              </div>
+              <div className="field"><label>Job</label>
+                <div className="title">{JOB_TYPES[lead.job_type] || lead.job_type || '-'}</div>
+                {lead.service_requested && <div className="meta">{lead.service_requested}</div>}
+              </div>
+              <div className="field"><label>Estimate</label>
+                <div className="title">{estimate ? estimate.status.replace(/_/g, ' ') : 'None yet'}</div>
+                <div className="meta"><button type="button" className="linklike" onClick={() => openTab('estimate')}>{estimate ? 'Open estimate' : 'Create estimate'}</button></div>
+              </div>
+            </div>
+            {lead.loss_summary && <div className="field"><label>Loss summary</label><div>{lead.loss_summary}</div></div>}
+            {lead.notes && <div className="field"><label>Internal notes</label><div style={{ whiteSpace: 'pre-wrap' }}>{lead.notes}</div></div>}
+          </div>
+
+          {open && (
+            <div className="card">
+              <h2>Create work order</h2>
+              <p className="hint">
+                Pick the start time and how long it will take. Creating the work order turns this lead into a job with its first visit,
+                and the estimate moves onto the job.
+              </p>
+              {!estApproved && (
+                <div className="banner">
+                  {estimate ? 'The customer has not approved the estimate yet.' : 'There is no estimate yet.'} You can still create the work order, for example if they approved by phone.
+                </div>
+              )}
+              <AppointmentPicker value={appt} onChange={setAppt} staffList={staffList} onConflicts={setConflicts} />
+              <button className="primary big" style={{ marginTop: 14 }} disabled={busy} onClick={createWorkOrder}>
+                {busy ? 'Creating...' : 'Create work order'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      <div className="card">
-        <h2>History</h2>
-        {events.map((e) => (
-          <div key={e.id} className="list-item">
-            <div className="title">{e.kind.replace(/_/g, ' ')}</div>
-            <div className="meta">{fmtDateTime(e.at)} · {actorName(e)}</div>
-          </div>
-        ))}
-        {events.length === 0 && <p className="muted">No history yet.</p>}
-      </div>
+      {tab === 'details' && (
+        <div className="lead-tab">
+          <form onSubmit={onSave}>
+            <fieldset disabled={!open} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+              <LeadForm value={form} onChange={change} />
+            </fieldset>
+            {open && <div className="row" style={{ marginBottom: 20 }}>
+              <button className="primary">Save changes</button>
+              {dirty && <span className="muted">Unsaved changes</span>}
+            </div>}
+          </form>
         </div>
-      </div>
+      )}
+
+      {tab === 'estimate' && (
+        <div className="lead-tab">
+          <EstimateCard
+            scope={{ leadId: id }}
+            open={open}
+            staff={staff}
+            token={token}
+            contact={{ name, phone: lead.phone, email: lead.email }}
+            onChanged={load}
+          />
+        </div>
+      )}
+
+      {tab === 'history' && (
+        <div className="lead-tab">
+          <div className="card">
+            <h2>History</h2>
+            {events.map((e) => (
+              <div key={e.id} className="list-item">
+                <div className="title">{e.kind.replace(/_/g, ' ')}</div>
+                <div className="meta">{fmtDateTime(e.at)} · {actorName(e)}</div>
+              </div>
+            ))}
+            {events.length === 0 && <p className="muted">No history yet.</p>}
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -1018,6 +1018,7 @@ a.stat-tile:hover{ border-color: var(--accent); }
 /* Lead pages: compact contact details, form on the left, estimate and scheduling on the right */
 .lead-layout{ display: grid; grid-template-columns: minmax(320px, 440px) minmax(0, 1fr); gap: 20px; align-items: start; }
 .lead-left, .lead-right{ min-width: 0; }
+.lead-tab{ max-width: 860px; }
 @media (max-width: 1000px){ .lead-layout{ grid-template-columns: 1fr; } }
 .lead-form .card{ padding: 12px 14px; margin-bottom: 12px; }
 .lead-form .card h2{ font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 8px; }
@@ -1429,3 +1430,4 @@ a.stat-tile:hover{ border-color: var(--accent); }
 .markup-actions .btn:not(.btn-primary){ color: #d8d3c0; border-color: #4a4636; }
 .markup-actions .btn:not(.btn-primary):hover{ color: #fff; border-color: #fff; }
 .markup-actions .btn:disabled{ opacity: 0.45; cursor: default; }
+.lead-tab .linklike{ background: none; border: 0; padding: 0; color: var(--accent-text); cursor: pointer; font: inherit; text-decoration: underline; }
