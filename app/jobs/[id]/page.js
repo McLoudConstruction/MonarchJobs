@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import AuthGate from '@/components/AuthGate';
@@ -8,17 +8,38 @@ import VisitForm from '@/components/VisitForm';
 import VisitActions from '@/components/VisitActions';
 import OnTheWayModal from '@/components/OnTheWayModal';
 import EstimateCard from '@/components/EstimateCard';
+import PhotosTab from '@/components/job/PhotosTab';
+import SketchTab from '@/components/job/SketchTab';
+import UpdatesTab from '@/components/job/UpdatesTab';
+import PhotoViewer from '@/components/job/PhotoViewer';
+import { UploadStatus } from '@/components/job/PhotoUi';
+import { usePhotoUploader } from '@/lib/usePhotoUploader';
+import { eventLabel, updateRecipients } from '@/lib/jobDocs';
 import { getSupabase } from '@/lib/supabaseClient';
 import { doubleBookedIds } from '@/lib/schedule';
 import { fmtDateTime, fmtDuration, JOB_STATUS, JOB_TYPES, addressLine } from '@/lib/format';
 import { displayPhone, telHref } from '@/lib/phone';
 import { staffName, displayNameFor } from '@/lib/userDisplay';
 
-const JOB_TABS = [['customer', 'Customer info'], ['details', 'Job Details'], ['estimate', 'Estimate Details']];
+const JOB_TABS = [
+  ['overview', 'Overview'],
+  ['details', 'Details'],
+  ['photos', 'Photos'],
+  ['sketch', 'Sketch'],
+  ['updates', 'Updates'],
+  ['estimate', 'Estimate'],
+  ['history', 'History'],
+];
+// links and bookmarks made before the tabs were reworked (#customer was the first tab)
+const OLD_TABS = { customer: 'overview' };
 const tabFromHash = () => {
-  const h = typeof window === 'undefined' ? '' : window.location.hash.replace('#', '');
-  return JOB_TABS.some(([k]) => k === h) ? h : 'customer';
+  const raw = typeof window === 'undefined' ? '' : window.location.hash.replace('#', '');
+  const h = OLD_TABS[raw] || raw;
+  return JOB_TABS.some(([k]) => k === h) ? h : 'overview';
 };
+
+// A missing table means migration 007 has not been run yet.
+const missingTable = (err) => !!err && (err.code === '42P01' || /does not exist|schema cache|Could not find the table/i.test(err.message || ''));
 
 const VISIT_STATUS = { scheduled: 'Scheduled', on_the_way: 'On the way', started: 'Started', finished: 'Finished', cancelled: 'Cancelled' };
 
@@ -34,10 +55,17 @@ function JobInner({ id, staff, token }) {
   const [msg, setMsg] = useState(null);
   const [form, setForm] = useState(null);
   const [visitEdit, setVisitEdit] = useState(null); // visit object, or {} for new
-  const [tab, setTab] = useState('customer');
+  const [tab, setTab] = useState('overview');
+  const [photos, setPhotos] = useState([]);
+  const [sketches, setSketches] = useState([]);
+  const [updates, setUpdates] = useState([]);
+  const [docsMissing, setDocsMissing] = useState(false);
+  const [viewer, setViewer] = useState(null); // { ids, startId }
+  const roomInput = useRef(null);
+  const roomTarget = useRef(null);
   const [otwOpen, setOtwOpen] = useState(false);
 
-  // keep the open tab across refreshes and back/forward (#customer, #details, #estimate)
+  // keep the open tab across refreshes and back/forward (#overview, #photos, #sketch ...)
   useEffect(() => {
     setTab(tabFromHash());
     const onHash = () => setTab(tabFromHash());
@@ -57,13 +85,20 @@ function JobInner({ id, staff, token }) {
       status: j.status, job_type: j.job_type, po_number: j.po_number, loss_summary: j.loss_summary,
       customer_notes: j.customer_notes, internal_notes: j.internal_notes, warning: j.warning, billing_contact_id: j.billing_contact_id || '',
     });
-    const [v, ct, jc, ev, st] = await Promise.all([
+    const [v, ct, jc, ev, st, ph, sk, up] = await Promise.all([
       sb.from('job_visits').select('*').eq('job_id', id).order('starts_at'),
       isOffice ? sb.from('contacts').select('*').eq('customer_id', j.customer_id) : Promise.resolve({ data: [] }),
       sb.from('job_contacts').select('contact_id').eq('job_id', id),
       sb.from('job_events').select('*').eq('job_id', id).order('at', { ascending: false }).limit(50),
       sb.from('staff_users').select('id,full_name,email,role').eq('active', true),
+      sb.from('job_photos').select('*').eq('job_id', id).order('taken_at', { ascending: false }),
+      sb.from('job_sketches').select('id,name,sort_order,created_at').eq('job_id', id).order('sort_order').order('created_at'),
+      sb.from('job_updates').select('*').eq('job_id', id).order('created_at', { ascending: false }),
     ]);
+    setDocsMissing(missingTable(ph.error) || missingTable(sk.error) || missingTable(up.error));
+    setPhotos(ph.data || []);
+    setSketches(sk.data || []);
+    setUpdates(up.data || []);
     setVisits(v.data || []);
     setContacts(ct.data || []);
     setJobContactIds((jc.data || []).map((r) => r.contact_id));
@@ -87,7 +122,40 @@ function JobInner({ id, staff, token }) {
     setEvents(data || []);
   }, [id]);
 
+  const reloadPhotos = useCallback(async () => {
+    const { data } = await getSupabase().from('job_photos').select('*').eq('job_id', id).order('taken_at', { ascending: false });
+    setPhotos(data || []);
+  }, [id]);
+  const reloadSketches = useCallback(async () => {
+    const { data } = await getSupabase().from('job_sketches').select('id,name,sort_order,created_at').eq('job_id', id).order('sort_order').order('created_at');
+    setSketches(data || []);
+  }, [id]);
+  const reloadUpdates = useCallback(async () => {
+    const { data } = await getSupabase().from('job_updates').select('*').eq('job_id', id).order('created_at', { ascending: false });
+    setUpdates(data || []);
+    loadEvents();
+  }, [id, loadEvents]);
+
+  const logEvent = useCallback(async (kind, details) => {
+    await getSupabase().from('job_events').insert({ job_id: id, actor_id: staff.id, actor_email: staff.email, kind, details });
+    loadEvents();
+  }, [id, staff.id, staff.email, loadEvents]);
+
+  const uploader = usePhotoUploader({ jobId: id, onUploaded: reloadPhotos, logEvent });
+  const photosById = useMemo(() => new Map(photos.map((p) => [p.id, p])), [photos]);
+
   if (!job || !form) return <p className="muted">Loading job...</p>;
+
+  const openViewer = (list, startId) => setViewer({ ids: list.map((p) => p.id), startId });
+  const viewerList = viewer ? viewer.ids.map((i) => photosById.get(i)).filter(Boolean) : [];
+  const authorName = (uid) => {
+    const s = staffList.find((x) => x.id === uid);
+    return s ? staffName(s) : '';
+  };
+  function addRoomPhoto(sketchId, room) {
+    roomTarget.current = { sketchId, roomKey: room.id };
+    roomInput.current?.click();
+  }
 
   const name = (uid) => {
     const s = staffList.find((x) => x.id === uid);
@@ -100,10 +168,6 @@ function JobInner({ id, staff, token }) {
     return e.actor_email ? displayNameFor(null, e.actor_email) : none;
   };
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-
-  async function logEvent(kind, details) {
-    await getSupabase().from('job_events').insert({ job_id: id, actor_id: staff.id, actor_email: staff.email, kind, details });
-  }
 
   async function saveJob(e) {
     e.preventDefault();
@@ -159,13 +223,22 @@ function JobInner({ id, staff, token }) {
       {anyFlag && <div className="banner flag">Double-booked: one of this job's visits overlaps another visit for the same tech. Move one of them.</div>}
       {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
 
+      {docsMissing && (
+        <div className="banner">Photos, sketches and updates are switched off until migration 007 is run in Supabase (SQL Editor, file supabase/migrations/007_job_documentation.sql).</div>
+      )}
+
       <div className="tabs" role="tablist">
-        {JOB_TABS.map(([k, label]) => (
-          <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => openTab(k)}>{label}</button>
-        ))}
+        {JOB_TABS.map(([k, label]) => {
+          const n = k === 'photos' ? photos.filter((p) => !p.archived_at).length : k === 'sketch' ? sketches.length : k === 'updates' ? updates.length : 0;
+          return (
+            <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => openTab(k)}>
+              {label}{n > 0 && <span className="tab-count">{n}</span>}
+            </button>
+          );
+        })}
       </div>
 
-      {tab === 'customer' && (
+      {tab === 'overview' && (
         <>
       <div className="card">
         <h2>Customer</h2>
@@ -184,24 +257,6 @@ function JobInner({ id, staff, token }) {
         {job.address.access_notes && <div className="meta">{job.address.access_notes}</div>}
       </div>
 
-      {isOffice && contacts.length > 0 && (
-        <div className="card">
-          <h2>Also notify</h2>
-          <p className="hint">Extra contacts receive this job's notifications once messaging is switched on.</p>
-          {contacts.map((c) => (
-            <label key={c.id} className="row" style={{ marginBottom: 8 }}>
-              <input type="checkbox" checked={jobContactIds.includes(c.id)} onChange={() => toggleContact(c.id)} />
-              {c.name} {c.role && <span className="badge off">{c.role}</span>} <span className="muted">{[displayPhone(c.phone), c.email].filter(Boolean).join(' · ')}</span>
-            </label>
-          ))}
-        </div>
-      )}
-
-        </>
-      )}
-
-      {tab === 'details' && (
-        <>
       <div className="card">
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <h2>Visits</h2>
@@ -238,6 +293,23 @@ function JobInner({ id, staff, token }) {
         )}
       </div>
 
+      {isOffice && contacts.length > 0 && (
+        <div className="card">
+          <h2>Also notify</h2>
+          <p className="hint">Extra contacts receive this job's progress updates (and its other notifications once messaging is switched on).</p>
+          {contacts.map((c) => (
+            <label key={c.id} className="row" style={{ marginBottom: 8 }}>
+              <input type="checkbox" checked={jobContactIds.includes(c.id)} onChange={() => toggleContact(c.id)} />
+              {c.name} {c.role && <span className="badge off">{c.role}</span>} <span className="muted">{[displayPhone(c.phone), c.email].filter(Boolean).join(' · ')}</span>
+            </label>
+          ))}
+        </div>
+      )}
+        </>
+      )}
+
+      {tab === 'details' && (
+        <>
       {isOffice ? (
         <form className="card" onSubmit={saveJob}>
           <h2>Job details</h2>
@@ -263,7 +335,7 @@ function JobInner({ id, staff, token }) {
           <div className="field"><label>Loss summary for the tech</label><input value={form.loss_summary} onChange={set('loss_summary')} /></div>
           <div className="field"><label>Job warning (banner)</label><input value={form.warning} onChange={set('warning')} /></div>
           <div className="field"><label>Customer-facing notes</label><textarea value={form.customer_notes} onChange={set('customer_notes')} /><div className="note">May appear on estimates and invoices.</div></div>
-          <div className="field"><label>Internal notes</label><textarea value={form.internal_notes} onChange={set('internal_notes')} /><div className="note">Never shown to the customer.</div></div>
+          <div className="field"><label>Internal notes</label><textarea value={form.internal_notes} onChange={set('internal_notes')} /><div className="note">Never shown to the customer. For dated notes with photos, use the Updates tab.</div></div>
           <button className="primary">Save job</button>
         </form>
       ) : (
@@ -275,18 +347,48 @@ function JobInner({ id, staff, token }) {
           <p><strong>Internal notes:</strong> {job.internal_notes || 'None'}</p>
         </div>
       )}
-
-      <div className="card">
-        <h2>History</h2>
-        {events.map((e) => (
-          <div key={e.id} className="list-item">
-            <div className="title">{e.kind.replace(/_/g, ' ')}</div>
-            <div className="meta">{fmtDateTime(e.at)} · {actorName(e, 'system')}</div>
-          </div>
-        ))}
-        {events.length === 0 && <p className="muted">No history yet.</p>}
-      </div>
         </>
+      )}
+
+      {tab === 'photos' && (
+        <PhotosTab photos={photos} isOffice={isOffice} uploader={uploader} onOpen={openViewer} />
+      )}
+
+      {tab === 'sketch' && (
+        <>
+          <UploadStatus uploader={uploader} />
+          <SketchTab
+            jobId={id}
+            sketches={sketches}
+            photos={photos}
+            isOffice={isOffice}
+            logEvent={logEvent}
+            onReload={reloadSketches}
+            onAddRoomPhoto={addRoomPhoto}
+            onViewPhotos={(list) => list.length && openViewer(list, list[0].id)}
+          />
+        </>
+      )}
+
+      {tab === 'updates' && (
+        <UpdatesTab
+          jobId={id}
+          updates={updates}
+          photos={photos}
+          isOffice={isOffice}
+          staff={staff}
+          token={token}
+          authorName={authorName}
+          logEvent={logEvent}
+          onReload={reloadUpdates}
+          uploader={uploader}
+          onOpenPhotos={openViewer}
+          recipients={updateRecipients(
+            { name: job.customer.display_name, phone: job.customer.phone, email: job.customer.email },
+            contacts.filter((c) => jobContactIds.includes(c.id)),
+          )}
+          baseUrl={typeof window === 'undefined' ? '' : window.location.origin}
+        />
       )}
 
       {tab === 'estimate' && (
@@ -304,8 +406,54 @@ function JobInner({ id, staff, token }) {
         <h2>Invoice</h2>
         <p className="muted">Invoicing and payments arrive in the next update.</p>
       </div>
-
         </>
+      )}
+
+      {tab === 'history' && (
+        <div className="card">
+          <h2>History</h2>
+          {events.map((e) => (
+            <div key={e.id} className="list-item">
+              <div className="title">{eventLabel(e)}</div>
+              <div className="meta">{fmtDateTime(e.at)} · {actorName(e, 'system')}</div>
+            </div>
+          ))}
+          {events.length === 0 && <p className="muted">No history yet.</p>}
+        </div>
+      )}
+
+      <input
+        ref={roomInput}
+        type="file"
+        accept="image/*"
+        multiple
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const files = [...e.target.files];
+          e.target.value = '';
+          const t = roomTarget.current;
+          if (files.length && t) uploader.upload(files, { kind: 'during', sketchId: t.sketchId, roomKey: t.roomKey });
+        }}
+      />
+
+      {viewer && viewerList.length > 0 && (
+        <PhotoViewer
+          list={viewerList}
+          startId={viewer.startId}
+          jobId={id}
+          fileBase={`job-${job.job_number}`}
+          authorName={authorName}
+          logEvent={logEvent}
+          onChanged={reloadPhotos}
+          onAppend={(newId, afterId) => setViewer((v) => {
+            if (!v) return v;
+            const at = v.ids.indexOf(afterId);
+            const ids = [...v.ids];
+            ids.splice(at < 0 ? ids.length : at + 1, 0, newId);
+            return { ...v, ids };
+          })}
+          onClose={() => setViewer(null)}
+        />
       )}
     </>
   );

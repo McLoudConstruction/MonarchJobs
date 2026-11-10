@@ -1129,3 +1129,90 @@ a.stat-tile:hover{ border-color: var(--accent); }
 .popup-head h2{ margin: 0; }
 .popup-x{ background: transparent; border: 0; font-size: 26px; line-height: 1; color: var(--ink-soft); cursor: pointer; padding: 0 4px; }
 .popup-x:hover{ color: var(--ink); }
+
+/* ---------------------------------------------------------------------------
+   Job documentation (Push 7g): photos, sketch, updates
+   --------------------------------------------------------------------------- */
+.tab-count{ display: inline-block; margin-left: 6px; min-width: 18px; padding: 1px 6px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); color: var(--ink-soft); font-size: 11px; font-weight: 700; line-height: 1.4; text-align: center; }
+.tabs button.on .tab-count{ background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* two-way switch (Internal notes / Progress updates) */
+.seg{ display: inline-flex; margin-bottom: 14px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; max-width: 100%; }
+.seg button{ padding: 9px 14px; border: none; border-right: 1px solid var(--line); background: var(--card-bg); color: var(--ink-soft); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.seg button:last-child{ border-right: none; }
+.seg button.on{ background: var(--accent); color: #fff; }
+
+/* filter chips */
+.chips{ display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
+.chips button{ padding: 6px 12px; border: 1px solid var(--line); border-radius: 18px; background: var(--card-bg); color: var(--ink-soft); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.chips button.on{ background: var(--accent); border-color: var(--accent); color: #fff; }
+.chip-n{ margin-left: 6px; opacity: 0.75; font-weight: 700; }
+
+/* photo grid */
+.ph-day h3{ margin: 14px 0 8px; }
+.ph-grid{ display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; }
+.ph-thumb{ position: relative; display: block; padding: 0; aspect-ratio: 1 / 1; border: 2px solid transparent; border-radius: 8px; overflow: hidden; background: var(--panel); cursor: pointer; }
+.ph-thumb img{ width: 100%; height: 100%; object-fit: cover; display: block; }
+.ph-thumb.picked{ border-color: var(--accent); }
+.ph-wait{ display: block; width: 100%; height: 100%; background: linear-gradient(90deg, var(--panel), var(--card-bg), var(--panel)); }
+.ph-kind{ position: absolute; left: 4px; top: 4px; padding: 2px 6px; border-radius: 10px; background: rgba(25,24,26,0.72); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.ph-kind.k-before{ background: rgba(46,94,120,0.9); }
+.ph-kind.k-after{ background: rgba(58,107,69,0.92); }
+.ph-kind.k-damage{ background: rgba(161,63,63,0.92); }
+.ph-check{ position: absolute; right: 6px; top: 6px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; line-height: 24px; text-align: center; }
+.ph-cap{ position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 6px 4px; background: linear-gradient(to top, rgba(0,0,0,0.7), transparent); color: #fff; font-size: 11px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* full-screen photo viewer and markup */
+.pv-overlay{ position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; background: rgba(12,12,12,0.96); color: #fff; }
+.pv-overlay.pv-markup{ z-index: 1100; }
+.pv-top{ display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; font-size: 13px; }
+.pv-stage{ position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.pv-img{ max-width: 100%; max-height: 100%; object-fit: contain; }
+.pv-canvas{ max-width: 100%; max-height: 100%; touch-action: none; background: #000; cursor: crosshair; }
+.pv-nav{ position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 64px; border: none; border-radius: 8px; background: rgba(255,255,255,0.14); color: #fff; font-size: 34px; line-height: 1; cursor: pointer; z-index: 2; }
+.pv-nav.left{ left: 6px; }
+.pv-nav.right{ right: 6px; }
+.pv-panel{ max-height: 46vh; overflow-y: auto; padding: 10px 14px 16px; background: var(--card-bg); color: var(--ink); border-top: 1px solid var(--line); }
+.pv-tools{ display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 12px 8px; }
+.pv-tools > button{ padding: 7px 12px; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; background: transparent; color: #fff; font: inherit; font-size: 13px; cursor: pointer; }
+.pv-tools > button.on{ background: #fff; color: #111; }
+.pv-tools > button:disabled{ opacity: 0.4; }
+.pv-text{ display: flex; gap: 8px; padding: 0 12px 8px; }
+.pv-text input{ flex: 1; min-width: 0; }
+
+/* sketch */
+.sketch-card{ padding-bottom: 16px; }
+.sketch-picker{ display: flex; flex-wrap: wrap; gap: 6px; }
+.sketch-picker button{ padding: 7px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card-bg); color: var(--ink-soft); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.sketch-picker button.on{ background: var(--accent); border-color: var(--accent); color: #fff; }
+.sketch-picker button.add{ border-style: dashed; }
+.sketch-save{ font-size: 12px; color: var(--ink-soft); }
+.sketch-save.saved{ color: var(--money); }
+.sketch:focus{ outline: none; }
+.sketch-bar{ display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.sketch-tools{ display: flex; flex-wrap: wrap; gap: 4px; }
+.sketch-tools button{ padding: 8px 11px; border: 1px solid var(--line); border-radius: 6px; background: var(--card-bg); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.sketch-tools button.on{ background: var(--accent); border-color: var(--accent); color: #fff; }
+.sketch-tools button:disabled{ opacity: 0.4; cursor: not-allowed; }
+.sketch-stage{ position: relative; width: 100%; height: min(62vh, 560px); min-height: 320px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
+.sketch-canvas{ display: block; touch-action: none; user-select: none; -webkit-user-select: none; cursor: default; }
+.sketch-canvas.tool-room, .sketch-canvas.tool-pen, .sketch-canvas.tool-text{ cursor: crosshair; }
+.sketch-canvas.tool-pan{ cursor: grab; }
+.sketch-summary{ margin: 8px 0; font-size: 13px; font-weight: 600; }
+.sketch-summary .muted{ font-weight: 400; }
+.sketch-panel{ display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.sketch-panel.col{ flex-direction: column; align-items: stretch; }
+.sketch-panel .field{ margin-bottom: 0; }
+.sketch-presets{ display: flex; flex-wrap: wrap; gap: 5px; }
+.sketch-presets button{ padding: 5px 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--card-bg); color: var(--ink-soft); font: inherit; font-size: 12px; cursor: pointer; }
+.sketch-colors{ display: inline-flex; gap: 6px; align-items: center; }
+.sketch-colors button{ width: 26px; height: 26px; padding: 0; border: 2px solid var(--line); border-radius: 50%; cursor: pointer; }
+.sketch-colors button.on{ border-color: var(--ink); box-shadow: 0 0 0 2px var(--card-bg) inset; }
+.pv-tools .sketch-colors button{ border-color: rgba(255,255,255,0.4); }
+.pv-tools .sketch-colors button.on{ border-color: #fff; }
+
+/* updates */
+.update-item{ padding: 12px 0; }
+.update-body{ white-space: pre-wrap; margin: 8px 0; line-height: 1.45; }
+.update-item .ph-grid{ grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); max-width: 480px; margin-top: 8px; }
+.ph-chosen .ph-grid{ grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); max-width: 480px; }
