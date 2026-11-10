@@ -98,7 +98,7 @@ export default function UsersSection({ currentUserId, token }) {
           <div className="field">
             <label htmlFor="nu-pw">Temporary password</label>
             <input id="nu-pw" type="text" autoComplete="off" value={form.password} onChange={set('password')} required />
-            <div className="note">At least {MIN_PASSWORD_LENGTH} characters. Give it to them directly; they can change it with Forgot password on the sign-in page.</div>
+            <div className="note">At least {MIN_PASSWORD_LENGTH} characters. Give it to them directly. They will be asked to choose their own password the first time they sign in.</div>
           </div>
           {formError && <div className="msg err">{formError}</div>}
           <div style={{ display: 'flex', gap: 8 }}>

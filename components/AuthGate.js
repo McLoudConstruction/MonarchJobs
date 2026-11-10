@@ -4,6 +4,8 @@ import { useAuth } from '@/lib/useAuth';
 import AppShell from '@/components/AppShell';
 import SetupNotice from '@/components/SetupNotice';
 import NameGate from '@/components/NameGate';
+import PasswordGate from '@/components/PasswordGate';
+import { needsPasswordChange } from '@/lib/newUser';
 import { hasRealName } from '@/lib/userDisplay';
 
 // Constants so the hook's dependency does not change on every render.
@@ -29,6 +31,11 @@ export default function AuthGate({ ownerOnly = false, officeOnly = false, childr
         </div>
       </div>
     );
+  }
+
+  // Temporary password from Add user: choose a real one first.
+  if (needsPasswordChange(auth.user)) {
+    return <PasswordGate onSaved={auth.reload} signOut={auth.signOut} />;
   }
 
   // Everyone must have a name saved before using the app.

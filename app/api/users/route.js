@@ -22,7 +22,7 @@ export async function POST(request) {
     email,
     password,
     email_confirm: true, // no confirmation email: they can sign in right away
-    user_metadata: { full_name },
+    user_metadata: { full_name, must_change_password: true },
   });
   if (error || !data?.user) {
     const msg = error?.message || 'Could not create the user.';

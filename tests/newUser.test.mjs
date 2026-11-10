@@ -26,3 +26,12 @@ test('validateName trims and rejects blanks and emails', () => {
   assert.ok(validateName('').error);
   assert.ok(validateName('sam@x.com').error);
 });
+
+import { needsPasswordChange } from '../lib/newUser.js';
+
+test('needsPasswordChange only when the flag is true', () => {
+  assert.equal(needsPasswordChange({ user_metadata: { must_change_password: true } }), true);
+  assert.equal(needsPasswordChange({ user_metadata: { must_change_password: false } }), false);
+  assert.equal(needsPasswordChange({ user_metadata: {} }), false);
+  assert.equal(needsPasswordChange(null), false);
+});
