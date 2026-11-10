@@ -8,9 +8,11 @@
   --panel: #f5f4f2;
   --panel-line: #e4e2dc;
   --heading: #2a2722;
-  --gold: #9b773d;
-  --rust: #8a3d14;
-  --rust-dim: #6e3010;
+  --gold: #0b7a73; /* secondary accent (headings, brand word): the teal accent, darkened for reading on light */
+  --rust: #54e9de;
+  --rust-dim: #3ccfc4;
+  --accent-text: #0b7a73; /* accent used as text/links on light backgrounds (the bright accent is too pale to read) */
+  --accent-ink: #0b2b29; /* text on top of an accent fill */
   --money: #3a6b45;
   --ink: #2a2722;
   --ink-soft: #6b6560;
@@ -92,9 +94,11 @@
   --panel: #242427;
   --panel-line: #333336;
   --heading: #f0ede8;
-  --gold: #c9a065;
-  --rust: #c9713f;
-  --rust-dim: #e08a5c;
+  --gold: #54e9de;
+  --rust: #54e9de;
+  --rust-dim: #7af0e7;
+  --accent-text: #54e9de;
+  --accent-ink: #0b2b29;
   --money: #6fbf7c;
   --ink: #e8e5e0;
   --ink-soft: #9a968f;
@@ -214,7 +218,7 @@ a { color: inherit; text-decoration: none; }
    Attention") gets its heading accent in rust instead of the default
    gold — no boxed/colored card needed to signal urgency. */
 .dash-section h3.dash-section-heading-rust{
-  color: var(--rust); border-left-color: var(--rust);
+  color: var(--accent-text); border-left-color: var(--rust);
 }
 .weather-ribbon{
   padding-top: 16px;
@@ -223,7 +227,7 @@ a { color: inherit; text-decoration: none; }
 
 .topbar-actions{ display:flex; gap: 10px; align-items:center; }
 .topbar .btn{ color: var(--header-text); border-color: var(--header-line); }
-.topbar .btn:hover{ border-color: var(--header-accent, var(--accent)); color: var(--header-accent, var(--accent)); }
+.topbar .btn:hover{ border-color: var(--header-accent, var(--accent-text)); color: var(--header-accent, var(--accent-text)); }
 
 .btn{
   font-family: inherit;
@@ -240,13 +244,13 @@ a { color: inherit; text-decoration: none; }
   gap: 6px;
   transition: background-color 0.12s, border-color 0.12s, color 0.12s;
 }
-.btn:hover{ border-color: var(--accent); color: var(--accent); }
+.btn:hover{ border-color: var(--accent); color: var(--accent-text); }
 .btn-primary{
   background: var(--accent);
-  color: #ffffff;
+  color: var(--accent-ink);
   border-color: var(--accent);
 }
-.btn-primary:hover{ background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }
+.btn-primary:hover{ background: var(--accent-hover); border-color: var(--accent-hover); color: var(--accent-ink); }
 .btn-danger{
   background: #a13f3f;
   color: #ffffff;
@@ -315,7 +319,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   transition: color 0.12s, border-color 0.12s;
 }
 .stage-tab:hover{ color: var(--ink); }
-.stage-tab.active{ background: transparent; color: var(--accent); border-color: var(--accent); font-weight: 700; }
+.stage-tab.active{ background: transparent; color: var(--accent-text); border-color: var(--accent); font-weight: 700; }
 /* The tab for the stage this job is currently in gets a small dot, so
    "where is this project right now" is visible even while browsing another
    stage. The thin divider separates tab groups: home | project stages | always-on. */
@@ -373,7 +377,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 }
 .tab-section-btn:last-child{ border-right: none; }
 .tab-section-btn:hover{ color: var(--ink); background: var(--card-bg); }
-.tab-section-btn.active{ background: var(--accent); color: #fff; }
+.tab-section-btn.active{ background: var(--accent); color: var(--accent-ink); }
 
 .badge{
   display: inline-block;
@@ -390,7 +394,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .badge-proposal_delivered{ background: #a17c3f; }
 .badge-approved{ background: #7d5a2e; }
 .badge-scheduled{ background: #8a5a3f; }
-.badge-active{ background: #8a3d14; }
+.badge-active{ background: var(--accent); color: var(--accent-ink); }
 .badge-completed{ background: #6e3010; }
 .badge-invoiced{ background: #49402a; }
 .badge-paid{ background: #3a6b45; }
@@ -411,7 +415,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 [data-theme="dark"] .badge-proposal_delivered{ background: #b58a4a; }
 [data-theme="dark"] .badge-approved{ background: #a3763f; }
 [data-theme="dark"] .badge-scheduled{ background: #b06f4a; }
-[data-theme="dark"] .badge-active{ background: #c9713f; }
+[data-theme="dark"] .badge-active{ background: var(--accent); color: var(--accent-ink); }
 [data-theme="dark"] .badge-completed{ background: #a15229; }
 [data-theme="dark"] .badge-invoiced{ background: #7a7568; }
 [data-theme="dark"] .badge-paid{ background: #4f9160; }
@@ -567,7 +571,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; color: var(--header-text); flex-shrink: 0;
 }
-.theme-toggle-btn:hover{ border-color: var(--header-accent, var(--accent)); color: var(--header-accent, var(--accent)); }
+.theme-toggle-btn:hover{ border-color: var(--header-accent, var(--accent-text)); color: var(--header-accent, var(--accent-text)); }
 
 .signout-link{
   background: transparent; border: none; width: 100%; text-align: left; cursor: pointer; font-family: inherit;
@@ -713,7 +717,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
   cursor: pointer; font-family: inherit; text-decoration: none;
 }
 .more-sheet-link:active{ background: var(--panel); }
-.more-sheet-link.active{ color: var(--accent); }
+.more-sheet-link.active{ color: var(--accent-text); }
 .more-sheet-icon{ width: 22px; height: 22px; flex-shrink: 0; opacity: 0.85; }
 .more-sheet-link.active .more-sheet-icon{ opacity: 1; }
 .more-sheet-dot{ width: 8px; height: 8px; border-radius: 50%; background: var(--rust); margin-left: -6px; }
@@ -836,7 +840,7 @@ input:focus, textarea:focus, select:focus{ outline: none; border-color: var(--ru
 .area-nav-link:hover{ background: var(--line); }
 .area-nav-link.active{
   background: color-mix(in srgb, var(--accent) 16%, transparent);
-  color: var(--accent); font-weight: 600; box-shadow: inset 2px 0 0 var(--accent);
+  color: var(--accent-text); font-weight: 600; box-shadow: inset 2px 0 0 var(--accent);
 }
 
 /* Scrollbars follow the chosen theme (not the operating system's). */
@@ -900,8 +904,8 @@ button.primary, button.secondary, button.danger{
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   transition: background-color 0.12s, border-color 0.12s, color 0.12s;
 }
-button.secondary:hover{ border-color: var(--accent); color: var(--accent); }
-button.primary{ background: var(--accent); color: #fff; border-color: var(--accent); }
+button.secondary:hover{ border-color: var(--accent); color: var(--accent-text); }
+button.primary{ background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 button.primary:hover{ background: var(--accent-hover); border-color: var(--accent-hover); }
 button.danger{ background: transparent; color: var(--danger); border-color: var(--danger); }
 button.danger:hover{ background: #a13f3f; color: #fff; border-color: #a13f3f; }
@@ -916,7 +920,7 @@ button:disabled, .btn:disabled{ opacity: 0.5; cursor: not-allowed; }
   color: var(--ink-soft); font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
 }
 .tabs button:hover{ color: var(--ink); }
-.tabs button.on{ color: var(--accent); border-bottom-color: var(--accent); font-weight: 700; }
+.tabs button.on{ color: var(--accent-text); border-bottom-color: var(--accent); font-weight: 700; }
 
 /* status badges (McLoud badge shape, white text on a colour) */
 .badge{ display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; padding: 4px 10px; border-radius: 20px; color: #fff; }
@@ -928,14 +932,14 @@ button:disabled, .btn:disabled{ opacity: 0.5; cursor: not-allowed; }
 .badge.s-quoted{ background: #a17c3f; }
 .badge.s-accepted{ background: #3a6b45; }
 .badge.s-booked{ background: #8a5a3f; }
-.badge.s-on_the_way, .badge.s-in_progress{ background: #8a3d14; }
+.badge.s-on_the_way, .badge.s-in_progress{ background: var(--accent); color: var(--accent-ink); }
 .badge.s-completed, .badge.s-closed{ background: #3a6b45; }
 .badge.s-cancelled, .badge.s-lost{ background: #6b6560; }
 [data-theme="dark"] .badge.s-new{ background: #8a8563; }
 [data-theme="dark"] .badge.s-quoted{ background: #b58a4a; }
 [data-theme="dark"] .badge.s-accepted, [data-theme="dark"] .badge.s-completed, [data-theme="dark"] .badge.s-closed, [data-theme="dark"] .badge.live{ background: #4f9160; }
 [data-theme="dark"] .badge.s-booked{ background: #b06f4a; }
-[data-theme="dark"] .badge.s-on_the_way, [data-theme="dark"] .badge.s-in_progress{ background: #c9713f; }
+[data-theme="dark"] .badge.s-on_the_way, [data-theme="dark"] .badge.s-in_progress{ background: var(--accent); color: var(--accent-ink); }
 [data-theme="dark"] .badge.s-cancelled, [data-theme="dark"] .badge.s-lost{ background: #8a8580; }
 
 /* messages and banners */
@@ -980,7 +984,7 @@ table.table td{ text-align: left; padding: 8px 10px; border-bottom: 1px solid va
 .field-actions{ margin-top: 10px; padding: 12px; background: var(--panel); border: 1px solid var(--panel-line); border-radius: 8px; }
 .field-actions button.primary.big{ width: 100%; }
 .minute-grid{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.nav-count{ display: inline-block; margin-left: 6px; min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; text-align: center; line-height: 18px; }
+.nav-count{ display: inline-block; margin-left: 6px; min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 700; text-align: center; line-height: 18px; }
 .sig-pad{ border: 2px dashed var(--panel-line); border-radius: 8px; background: #fff; touch-action: none; position: relative; }
 .sig-pad canvas{ display: block; width: 100%; touch-action: none; cursor: crosshair; }
 .sig-pad .sig-hint{ position: absolute; left: 12px; top: 8px; color: #6b7686; font-size: 13px; pointer-events: none; }
@@ -1094,9 +1098,9 @@ a.stat-tile:hover{ border-color: var(--accent); }
   width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; flex: none;
   border: 1.5px solid currentColor; font-size: 12px; font-weight: 700;
 }
-.wizard-steps li.current .wizard-num{ background: var(--accent); border-color: var(--accent); color: #fff; }
+.wizard-steps li.current .wizard-num{ background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .wizard-recap{ background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; margin-bottom: 10px; font-size: 13.5px; }
-.wizard-recap .linklike{ margin-left: 10px; background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; }
+.wizard-recap .linklike{ margin-left: 10px; background: none; border: 0; padding: 0; color: var(--accent-text); cursor: pointer; font: inherit; text-decoration: underline; }
 .wizard-body{ flex: 1; min-height: 0; overflow-y: auto; }
 .wizard-two{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
 @media (max-width: 900px){ .wizard-two{ grid-template-columns: 1fr; } }
@@ -1134,18 +1138,18 @@ a.stat-tile:hover{ border-color: var(--accent); }
    Job documentation (Push 7g): photos, sketch, updates
    --------------------------------------------------------------------------- */
 .tab-count{ display: inline-block; margin-left: 6px; min-width: 18px; padding: 1px 6px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); color: var(--ink-soft); font-size: 11px; font-weight: 700; line-height: 1.4; text-align: center; }
-.tabs button.on .tab-count{ background: var(--accent); border-color: var(--accent); color: #fff; }
+.tabs button.on .tab-count{ background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 
 /* two-way switch (Internal notes / Progress updates) */
 .seg{ display: inline-flex; margin-bottom: 14px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; max-width: 100%; }
 .seg button{ padding: 9px 14px; border: none; border-right: 1px solid var(--line); background: var(--card-bg); color: var(--ink-soft); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .seg button:last-child{ border-right: none; }
-.seg button.on{ background: var(--accent); color: #fff; }
+.seg button.on{ background: var(--accent); color: var(--accent-ink); }
 
 /* filter chips */
 .chips{ display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
 .chips button{ padding: 6px 12px; border: 1px solid var(--line); border-radius: 18px; background: var(--card-bg); color: var(--ink-soft); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
-.chips button.on{ background: var(--accent); border-color: var(--accent); color: #fff; }
+.chips button.on{ background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .chip-n{ margin-left: 6px; opacity: 0.75; font-weight: 700; }
 
 /* photo grid */
@@ -1159,7 +1163,7 @@ a.stat-tile:hover{ border-color: var(--accent); }
 .ph-kind.k-before{ background: rgba(46,94,120,0.9); }
 .ph-kind.k-after{ background: rgba(58,107,69,0.92); }
 .ph-kind.k-damage{ background: rgba(161,63,63,0.92); }
-.ph-check{ position: absolute; right: 6px; top: 6px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; line-height: 24px; text-align: center; }
+.ph-check{ position: absolute; right: 6px; top: 6px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-weight: 700; line-height: 24px; text-align: center; }
 .ph-cap{ position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 6px 4px; background: linear-gradient(to top, rgba(0,0,0,0.7), transparent); color: #fff; font-size: 11px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* full-screen photo viewer and markup */
@@ -1184,7 +1188,7 @@ a.stat-tile:hover{ border-color: var(--accent); }
 .sketch-card{ padding-bottom: 16px; }
 .sketch-picker{ display: flex; flex-wrap: wrap; gap: 6px; }
 .sketch-picker button{ padding: 7px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card-bg); color: var(--ink-soft); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
-.sketch-picker button.on{ background: var(--accent); border-color: var(--accent); color: #fff; }
+.sketch-picker button.on{ background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .sketch-picker button.add{ border-style: dashed; }
 .sketch-save{ font-size: 12px; color: var(--ink-soft); }
 .sketch-save.saved{ color: var(--money); }
@@ -1192,7 +1196,7 @@ a.stat-tile:hover{ border-color: var(--accent); }
 .sketch-bar{ display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .sketch-tools{ display: flex; flex-wrap: wrap; gap: 4px; }
 .sketch-tools button{ padding: 8px 11px; border: 1px solid var(--line); border-radius: 6px; background: var(--card-bg); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
-.sketch-tools button.on{ background: var(--accent); border-color: var(--accent); color: #fff; }
+.sketch-tools button.on{ background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .sketch-tools button:disabled{ opacity: 0.4; cursor: not-allowed; }
 .sketch-stage{ position: relative; width: 100%; height: min(62vh, 560px); min-height: 320px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
 .sketch-canvas{ display: block; touch-action: none; user-select: none; -webkit-user-select: none; cursor: default; }
@@ -1390,7 +1394,7 @@ a.stat-tile:hover{ border-color: var(--accent); }
   padding: 8px 14px; border-radius: 6px; border: 1px solid #4a4636; background: transparent;
   color: #d8d3c0; font-size: 12.5px; font-weight: 600; cursor: pointer;
 }
-.markup-tool-btn.active{ background: var(--rust); border-color: var(--rust); color: #fff; }
+.markup-tool-btn.active{ background: var(--rust); border-color: var(--rust); color: var(--accent-ink); }
 .markup-colors{ display: flex; gap: 8px; }
 .markup-swatch{
   width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer;
