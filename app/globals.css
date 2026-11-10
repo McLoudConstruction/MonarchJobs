@@ -1032,12 +1032,12 @@ a.stat-tile:hover{ border-color: var(--accent); }
 /* ---------- Desktop sidebar nav (replaces the top bar on computers) ---------- */
 .side{
   width: 212px; flex-shrink: 0; box-sizing: border-box; display: flex; flex-direction: column;
-  padding: 16px 10px 12px; background: var(--header-bg); border-right: 1px solid var(--header-line);
+  padding: 16px 10px 12px; background: #0a1929; border-right: 1px solid #16304a;
   color: var(--header-text); position: relative; z-index: 60;
 }
 .side-brand{ padding: 2px 10px 14px; }
 .side-brand .brand{ font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; font-size: 14px; color: var(--header-text); }
-.side-brand .brand span{ color: var(--gold); }
+.side-brand .brand span{ color: #54e9de; }
 /* Logo: width and height always scale together (height: auto), so the proportions never change.
    Sidebar: fills the brand area (about 180px wide). Phone top bar: fixed height, width follows. */
 .side-brand{ padding: 4px 8px 16px; }
@@ -1052,7 +1052,7 @@ a.stat-tile:hover{ border-color: var(--accent); }
   font-size: 14px; font-weight: 500; color: var(--header-text); opacity: 0.74; text-decoration: none;
 }
 .side-link:hover{ opacity: 1; background: rgba(255,255,255,0.08); }
-.side-link.active{ opacity: 1; color: #f3dca3; background: rgba(201,161,74,0.16); font-weight: 600; }
+.side-link.active{ opacity: 1; color: #54e9de; background: rgba(84,233,222,0.14); font-weight: 600; }
 .side-icon{ width: 18px; height: 18px; flex-shrink: 0; }
 .side-link .nav-count{ margin-left: auto; }
 .side-spacer{ flex: 1; }
