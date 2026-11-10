@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import AuthGate from '@/components/AuthGate';
 import LeadForm, { pickLeadFields } from '@/components/LeadForm';
 import EstimateCard from '@/components/EstimateCard';
+import PopupModal from '@/components/PopupModal';
 import AppointmentPicker, { defaultAppointment } from '@/components/AppointmentPicker';
 import { getSupabase } from '@/lib/supabaseClient';
 import { fromLocalInput, fmtDateTime, LEAD_STATUS, JOB_TYPES, leadDisplayName, addressLine } from '@/lib/format';
@@ -48,6 +49,7 @@ function LeadInner({ id, staff, token }) {
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState('overview');
+  const [woOpen, setWoOpen] = useState(false);
 
   // keep the open tab across refreshes and back/forward (#overview, #details ...)
   useEffect(() => {
@@ -178,6 +180,7 @@ function LeadInner({ id, staff, token }) {
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <h1>{name} <span className={`badge s-${lead.status}`}>{LEAD_STATUS[lead.status]}</span></h1>
         <div className="row">
+          {open && <button className="primary" onClick={() => { setMsg(null); setWoOpen(true); }}>Create work order</button>}
           {open && <button className="danger" onClick={markLost}>Mark lost</button>}
           {lead.status === 'lost' && <button className="secondary" onClick={reopen}>Reopen</button>}
           {staff.role === 'owner' && lead.status !== 'booked' && <button className="danger" disabled={busy} onClick={deleteLead}>Delete lead</button>}
@@ -265,24 +268,6 @@ function LeadInner({ id, staff, token }) {
             {lead.notes && <div className="field"><label>Internal notes</label><div style={{ whiteSpace: 'pre-wrap' }}>{lead.notes}</div></div>}
           </div>
 
-          {open && (
-            <div className="card">
-              <h2>Create work order</h2>
-              <p className="hint">
-                Pick the start time and how long it will take. Creating the work order turns this lead into a job with its first visit,
-                and the estimate moves onto the job.
-              </p>
-              {!estApproved && (
-                <div className="banner">
-                  {estimate ? 'The customer has not approved the estimate yet.' : 'There is no estimate yet.'} You can still create the work order, for example if they approved by phone.
-                </div>
-              )}
-              <AppointmentPicker value={appt} onChange={setAppt} staffList={staffList} onConflicts={setConflicts} />
-              <button className="primary big" style={{ marginTop: 14 }} disabled={busy} onClick={createWorkOrder}>
-                {busy ? 'Creating...' : 'Create work order'}
-              </button>
-            </div>
-          )}
         </div>
       )}
 
@@ -327,6 +312,23 @@ function LeadInner({ id, staff, token }) {
           </div>
         </div>
       )}
+      <PopupModal open={woOpen} onClose={() => { if (!busy) setWoOpen(false); }} title="Create work order">
+        <p className="hint">
+          Pick the start time and how long it will take. Creating the work order turns this lead into a job with its first visit,
+          and the estimate moves onto the job.
+        </p>
+        {!estApproved && (
+          <div className="banner">
+            {estimate ? 'The customer has not approved the estimate yet.' : 'There is no estimate yet.'} You can still create the work order, for example if they approved by phone.
+          </div>
+        )}
+        {msg?.err && <div className="msg err">{msg.text}</div>}
+        <AppointmentPicker value={appt} onChange={setAppt} staffList={staffList} onConflicts={setConflicts} />
+        <div className="row" style={{ marginTop: 14 }}>
+          <button className="primary" disabled={busy} onClick={createWorkOrder}>{busy ? 'Creating...' : 'Create work order'}</button>
+          <button className="secondary" disabled={busy} onClick={() => setWoOpen(false)}>Cancel</button>
+        </div>
+      </PopupModal>
     </>
   );
 }
