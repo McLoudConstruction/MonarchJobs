@@ -6,6 +6,7 @@ import AuthGate from '@/components/AuthGate';
 import { getSupabase } from '@/lib/supabaseClient';
 import { fmtDateTime, LEAD_STATUS, JOB_TYPES, leadDisplayName } from '@/lib/format';
 import { displayPhone, formatPhone, digitsOnly } from '@/lib/phone';
+import { PRIORITIES, RESTORATION_TYPES } from '@/lib/leadIntake';
 
 const TABS = [
   ['open', 'Open'],
@@ -23,7 +24,7 @@ function LeadsInner() {
   const load = useCallback(async () => {
     const sb = getSupabase();
     let query = sb.from('leads')
-      .select('id,status,source,name,first_name,last_name,company_name,phone,email,address,job_type,service_requested,created_at,accepted_at,job_id,preferred_times')
+      .select('id,status,source,name,first_name,last_name,company_name,phone,email,address,job_type,restoration_type,priority,service_requested,created_at,accepted_at,job_id,preferred_times')
       .order(tab === 'accepted' ? 'accepted_at' : 'created_at', { ascending: tab === 'accepted' })
       .limit(200);
     query = tab === 'open' ? query.in('status', ['new', 'quoted']) : query.eq('status', tab);
@@ -70,7 +71,8 @@ function LeadsInner() {
             <div className="title">
               {leadDisplayName(l) || displayPhone(l.phone) || l.email || 'Unnamed lead'}{' '}
               <span className={`badge s-${l.status}`}>{LEAD_STATUS[l.status]}</span>{' '}
-              <span className="badge off">{JOB_TYPES[l.job_type]}</span>
+              <span className="badge off">{l.restoration_type ? RESTORATION_TYPES[l.restoration_type].label : JOB_TYPES[l.job_type]}</span>{' '}
+              {l.priority && l.priority !== 'standard' && ['new', 'quoted'].includes(l.status) && <span className={`badge prio-${l.priority}`}>{PRIORITIES[l.priority]}</span>}
             </div>
             <div className="meta">{[displayPhone(l.phone), l.email, l.address].filter(Boolean).join(' · ')}</div>
             {l.service_requested && <div>{l.service_requested}</div>}

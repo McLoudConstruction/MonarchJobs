@@ -11,6 +11,7 @@ import AppointmentPicker, { defaultAppointment } from '@/components/AppointmentP
 import { getSupabase } from '@/lib/supabaseClient';
 import { fromLocalInput, fmtDateTime, LEAD_STATUS, JOB_TYPES, leadDisplayName, addressLine } from '@/lib/format';
 import { displayPhone, telHref } from '@/lib/phone';
+import { kindOf, finishLead, intakeHighlights, PRIORITIES, RESTORATION_TYPES } from '@/lib/leadIntake';
 import { staffName, displayNameFor } from '@/lib/userDisplay';
 
 const WORK_ORDER_ERRORS = {
@@ -102,11 +103,13 @@ function LeadInner({ id, staff, token }) {
   };
 
   const open = !['booked', 'lost'].includes(lead.status);
+  const kind = kindOf(lead);
+  const highlights = intakeHighlights(kind, lead);
   const change = (patch) => { setForm((f) => ({ ...f, ...patch })); setDirty(true); };
 
   async function save() {
     setMsg(null);
-    const { error } = await getSupabase().from('leads').update(pickLeadFields(form)).eq('id', id);
+    const { error } = await getSupabase().from('leads').update(pickLeadFields(finishLead(form, kind))).eq('id', id);
     if (error) { setMsg({ err: true, text: error.message }); return false; }
     setDirty(false);
     return true;
@@ -178,7 +181,10 @@ function LeadInner({ id, staff, token }) {
   return (
     <>
       <div className="row" style={{ justifyContent: 'space-between' }}>
-        <h1>{name} <span className={`badge s-${lead.status}`}>{LEAD_STATUS[lead.status]}</span></h1>
+        <h1>
+          {name} <span className={`badge s-${lead.status}`}>{LEAD_STATUS[lead.status]}</span>
+          {lead.priority && lead.priority !== 'standard' && <> <span className={`badge prio-${lead.priority}`}>{PRIORITIES[lead.priority]}</span></>}
+        </h1>
         <div className="row">
           {open && <button className="primary" onClick={() => { setMsg(null); setWoOpen(true); }}>Create work order</button>}
           {open && <button className="danger" onClick={markLost}>Mark lost</button>}
@@ -198,6 +204,9 @@ function LeadInner({ id, staff, token }) {
         </div>
       )}
       {lead.status === 'booked' && <div className="banner ok">A work order was created from this lead. Further changes happen on the job.</div>}
+      {kind === 'carpet' && lead.intake?.restoration_review && (
+        <div className="banner warn">The caller mentioned water damage or mold. Review this lead with restoration before booking.</div>
+      )}
 
       <div className="tabs" role="tablist">
         {LEAD_TABS.map(([k, label]) => (
@@ -256,7 +265,7 @@ function LeadInner({ id, staff, token }) {
                 {(lead.gate_code || lead.warnings) && <div className="meta">{[lead.gate_code && `Gate ${lead.gate_code}`, lead.warnings].filter(Boolean).join(' · ')}</div>}
               </div>
               <div className="field"><label>Job</label>
-                <div className="title">{JOB_TYPES[lead.job_type] || lead.job_type || '-'}</div>
+                <div className="title">{lead.restoration_type ? `Restoration · ${RESTORATION_TYPES[lead.restoration_type].label}` : kind === 'carpet' ? 'Carpet' : JOB_TYPES[lead.job_type] || lead.job_type || '-'}</div>
                 {lead.service_requested && <div className="meta">{lead.service_requested}</div>}
               </div>
               <div className="field"><label>Estimate</label>
@@ -264,6 +273,11 @@ function LeadInner({ id, staff, token }) {
                 <div className="meta"><button type="button" className="linklike" onClick={() => openTab('estimate')}>{estimate ? 'Open estimate' : 'Create estimate'}</button></div>
               </div>
             </div>
+            {highlights.length > 0 && (
+              <div className="grid2">
+                {highlights.map(([label, text]) => <div key={label} className="field"><label>{label}</label><div>{text}</div></div>)}
+              </div>
+            )}
             {lead.loss_summary && <div className="field"><label>Loss summary</label><div>{lead.loss_summary}</div></div>}
             {lead.notes && <div className="field"><label>Internal notes</label><div style={{ whiteSpace: 'pre-wrap' }}>{lead.notes}</div></div>}
           </div>
@@ -275,7 +289,7 @@ function LeadInner({ id, staff, token }) {
         <div className="lead-tab">
           <form onSubmit={onSave}>
             <fieldset disabled={!open} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-              <LeadForm value={form} onChange={change} />
+              <LeadForm value={form} onChange={change} kind={kind} />
             </fieldset>
             {open && <div className="row" style={{ marginBottom: 20 }}>
               <button className="primary">Save changes</button>

@@ -1,13 +1,15 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AuthGate from '@/components/AuthGate';
 import LeadWizard from '@/components/LeadWizard';
+import LeadKindPicker from '@/components/LeadKindPicker';
 import { BLANK_LEAD, pickLeadFields } from '@/components/LeadForm';
 import { defaultAppointment } from '@/components/AppointmentPicker';
 import { getSupabase } from '@/lib/supabaseClient';
 import { fromLocalInput } from '@/lib/format';
+import { JOB_TYPE_FOR_KIND, RESTORATION_TYPES, finishLead } from '@/lib/leadIntake';
 
 const BOOK_ERRORS = {
   TECH_DOUBLE_BOOKED: 'That tech is already booked then. Tick "Book anyway" or pick another time or tech.',
@@ -16,10 +18,28 @@ const BOOK_ERRORS = {
 };
 const friendly = (m) => BOOK_ERRORS[Object.keys(BOOK_ERRORS).find((k) => (m || '').includes(k))] || m;
 
+// Keeps ?kind=restoration&type=extraction in the address bar so a refresh stays on the same screen.
+function rememberChoice(kind, type, customerId) {
+  const q = new URLSearchParams();
+  if (customerId) q.set('customer', customerId);
+  if (kind) q.set('kind', kind);
+  if (type) q.set('type', type);
+  const s = q.toString();
+  window.history.replaceState(null, '', `/leads/new${s ? `?${s}` : ''}`);
+}
+
 function NewLead({ staff }) {
   const router = useRouter();
-  const customerId = useSearchParams().get('customer');
-  const [form, setForm] = useState(BLANK_LEAD);
+  const params = useSearchParams();
+  const startKind = params.get('kind');
+  const startType = params.get('type');
+  const [customerId, setCustomerId] = useState(params.get('customer'));
+  const [kind, setKind] = useState(startKind === 'restoration' || startKind === 'carpet' ? startKind : '');
+  const [form, setForm] = useState(() => ({
+    ...BLANK_LEAD,
+    restoration_type: RESTORATION_TYPES[startType] ? startType : null,
+    job_type: JOB_TYPE_FOR_KIND[startKind] || BLANK_LEAD.job_type,
+  }));
   const [customer, setCustomer] = useState(null);
   const [staffList, setStaffList] = useState([]);
   const [appt, setAppt] = useState(defaultAppointment);
@@ -27,13 +47,13 @@ function NewLead({ staff }) {
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
 
-  // Starting from an existing customer fills in who they are and their most recent address.
-  useEffect(() => {
-    if (!customerId) return;
+  // Starting from an existing customer (from their page, or picked from the match hint) fills in who
+  // they are and their most recent address.
+  const loadCustomer = useCallback((id) => {
     const sb = getSupabase();
     Promise.all([
-      sb.from('customers').select('*').eq('id', customerId).maybeSingle(),
-      sb.from('addresses').select('*').eq('customer_id', customerId).order('created_at', { ascending: false }).limit(1),
+      sb.from('customers').select('*').eq('id', id).maybeSingle(),
+      sb.from('addresses').select('*').eq('customer_id', id).order('created_at', { ascending: false }).limit(1),
     ]).then(([c, a]) => {
       if (!c.data) return;
       setCustomer(c.data);
@@ -45,7 +65,9 @@ function NewLead({ staff }) {
         ...(addr ? { street: addr.street, unit: addr.unit, city: addr.city, state: addr.state, zip: addr.zip, gate_code: addr.gate_code, warnings: addr.warnings } : {}),
       }));
     });
-  }, [customerId]);
+  }, []);
+
+  useEffect(() => { if (customerId) loadCustomer(customerId); }, [customerId, loadCustomer]);
 
   // techs for the schedule step
   useEffect(() => {
@@ -53,13 +75,35 @@ function NewLead({ staff }) {
       .then(({ data }) => setStaffList(data || []));
   }, []);
 
+  function pickKind(k) {
+    setKind(k);
+    setForm((f) => ({ ...f, job_type: JOB_TYPE_FOR_KIND[k], restoration_type: k === 'restoration' ? f.restoration_type : null }));
+    rememberChoice(k, null, customerId);
+  }
+  function pickType(t) {
+    setForm((f) => ({ ...f, restoration_type: t }));
+    rememberChoice('restoration', t, customerId);
+  }
+  // Back to the first screen. Nothing typed so far is lost.
+  function restart() {
+    setKind('');
+    setForm((f) => ({ ...f, restoration_type: null }));
+    rememberChoice(null, null, customerId);
+  }
+  // A carpet caller who mentions water damage: same person and address, restoration questions.
+  function switchToRestoration() {
+    setKind('restoration');
+    setForm((f) => ({ ...f, job_type: JOB_TYPE_FOR_KIND.restoration, restoration_type: null }));
+    rememberChoice('restoration', null, customerId);
+  }
+
   const hasContact = () => [form.first_name, form.last_name, form.company_name, form.phone, form.email].some((x) => (x || '').trim());
 
   // Saves the lead and returns its id, or null (with a message) if it failed.
   async function insertLead() {
     if (!hasContact()) { setMsg('Enter at least a name, phone or email.'); return null; }
     const { data, error } = await getSupabase().from('leads')
-      .insert({ ...pickLeadFields(form), customer_id: customer?.id ?? null, created_by: staff.id })
+      .insert({ ...pickLeadFields(finishLead(form, kind)), customer_id: customer?.id ?? null, created_by: staff.id })
       .select('id').single();
     if (error) { setMsg(error.message); return null; }
     return data.id;
@@ -95,24 +139,42 @@ function NewLead({ staff }) {
     router.push(`/jobs/${jobId}`);
   }
 
-  return (
-    <>
-      <LeadWizard
-        subtitle={customer ? `for existing customer ${customer.display_name}` : ''}
-        value={form}
-        onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
-        appt={appt}
-        onApptChange={setAppt}
-        staffList={staffList}
-        conflicts={conflicts}
-        onConflicts={setConflicts}
-        onSave={save}
-        onSaveAndBook={saveAndBook}
-        busy={busy}
-        msg={msg}
-        setMsg={setMsg}
+  const subtitle = customer ? `for existing customer ${customer.display_name}` : '';
+  const needsPicker = !kind || (kind === 'restoration' && !form.restoration_type);
+
+  if (needsPicker) {
+    return (
+      <LeadKindPicker
+        kind={kind}
+        subtitle={subtitle}
+        onPickKind={pickKind}
+        onPickType={pickType}
+        onBack={restart}
       />
-    </>
+    );
+  }
+
+  return (
+    <LeadWizard
+      kind={kind}
+      subtitle={subtitle}
+      value={form}
+      onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
+      appt={appt}
+      onApptChange={setAppt}
+      staffList={staffList}
+      conflicts={conflicts}
+      onConflicts={setConflicts}
+      onSave={save}
+      onSaveAndBook={saveAndBook}
+      busy={busy}
+      msg={msg}
+      setMsg={setMsg}
+      linkedCustomerId={customer?.id}
+      onUseCustomer={(id) => { setCustomerId(id); rememberChoice(kind, form.restoration_type, id); }}
+      onRestart={restart}
+      onSwitchToRestoration={switchToRestoration}
+    />
   );
 }
 

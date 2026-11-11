@@ -3,18 +3,21 @@
 import AddressFields from '@/components/AddressFields';
 import PhoneInput from '@/components/PhoneInput';
 import { JOB_TYPES, CUSTOMER_TYPES } from '@/lib/format';
+import { ContactExtra, AddressExtra, RestorationLoss, RestorationSafety, RestorationInsurance, CarpetService, CarpetCondition, CarpetTiming, TypeCard } from '@/components/LeadIntake';
 
 // Columns a lead form reads and writes. name and address are filled in by the database from these.
 export const LEAD_FIELDS = [
   'source', 'customer_type', 'first_name', 'last_name', 'company_name', 'phone', 'email',
   'street', 'unit', 'city', 'state', 'zip', 'gate_code', 'warnings',
   'job_type', 'service_requested', 'loss_summary', 'po_number', 'notes',
+  'restoration_type', 'priority', 'intake',
 ];
 
 export const BLANK_LEAD = {
   source: 'phone', customer_type: 'residential', first_name: '', last_name: '', company_name: '', phone: '', email: '',
   street: '', unit: '', city: '', state: 'MO', zip: '', gate_code: '', warnings: '',
   job_type: 'floor_cleaning', service_requested: '', loss_summary: '', po_number: '', notes: '',
+  restoration_type: null, priority: null, intake: {},
 };
 
 export function pickLeadFields(obj) {
@@ -23,7 +26,7 @@ export function pickLeadFields(obj) {
 
 // The three groups of fields, exported so the new-lead wizard can show them one step at a time.
 // The lead page still shows them all together through LeadForm below.
-export function ContactSection({ value, onChange, autoFocusName = false }) {
+export function ContactSection({ value, onChange, autoFocusName = false, extra = null }) {
   const set = (k) => (e) => onChange({ [k]: e.target.value });
   return (
     <div className="card">
@@ -45,12 +48,13 @@ export function ContactSection({ value, onChange, autoFocusName = false }) {
             <option value="referral">Referral</option><option value="manual">Other</option>
           </select>
         </div>
+        {extra}
       </div>
     </div>
   );
 }
 
-export function AddressSection({ value, onChange }) {
+export function AddressSection({ value, onChange, after = null }) {
   const set = (k) => (e) => onChange({ [k]: e.target.value });
   return (
     <div className="card">
@@ -61,6 +65,7 @@ export function AddressSection({ value, onChange }) {
         extra={<div className="field"><label>Gate code</label><input value={value.gate_code} onChange={set('gate_code')} /></div>}
       />
       <div className="field"><label>Warnings (pets, hazards)</label><input value={value.warnings} onChange={set('warnings')} /></div>
+      {after}
     </div>
   );
 }
@@ -99,13 +104,31 @@ export function ServiceSection({ value, onChange, wide = false }) {
   );
 }
 
+// The Stage 1 sections for a kind, in the order the new-lead steps ask them.
+export function IntakeSections({ kind, value, onChange }) {
+  if (kind === 'restoration') {
+    return (<><TypeCard value={value} onChange={onChange} /><RestorationLoss value={value} onChange={onChange} /><RestorationSafety value={value} onChange={onChange} /><RestorationInsurance value={value} onChange={onChange} /></>);
+  }
+  return (<><CarpetService value={value} onChange={onChange} /><CarpetCondition value={value} onChange={onChange} /><CarpetTiming value={value} onChange={onChange} /></>);
+}
+
 // Everything the office collects before a time is chosen. The parent supplies the <form> and buttons.
-export default function LeadForm({ value, onChange }) {
+// kind is 'restoration' or 'carpet' for leads made through the new-lead picker; older leads show the plain form.
+export default function LeadForm({ value, onChange, kind = '' }) {
+  if (!kind) {
+    return (
+      <div className="lead-form">
+        <ContactSection value={value} onChange={onChange} />
+        <AddressSection value={value} onChange={onChange} />
+        <ServiceSection value={value} onChange={onChange} />
+      </div>
+    );
+  }
   return (
     <div className="lead-form">
-      <ContactSection value={value} onChange={onChange} />
-      <AddressSection value={value} onChange={onChange} />
-      <ServiceSection value={value} onChange={onChange} />
+      <ContactSection value={value} onChange={onChange} extra={<ContactExtra kind={kind} value={value} onChange={onChange} />} />
+      <AddressSection value={value} onChange={onChange} after={<AddressExtra kind={kind} value={value} onChange={onChange} />} />
+      <IntakeSections kind={kind} value={value} onChange={onChange} />
     </div>
   );
 }
