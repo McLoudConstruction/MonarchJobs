@@ -129,3 +129,15 @@ test('door types: every door type is a door family member and draws', () => {
   assert.equal(o.oh, 80 / 12);
   assert.ok(Math.abs(cleanObjects([{ ...o, w: 32 / 12 }], (x) => x)[0].w - 32 / 12) < 1e-4); // 32" survives storage
 });
+
+import { wallSpan } from '../lib/sketchObjects.js';
+test('missing wall: a whole wall or a stretch of one becomes a wall object in feet', () => {
+  const hit = nearestWall(plan, 6, 0.2, 1); // the top wall of a 12 x 10 room
+  const whole = wallSpan(hit, 0, hit.len);
+  assert.deepEqual([whole.x, whole.y, whole.w, whole.r], [6, 0, 12, 0]);
+  const part = wallSpan(hit, 7, 3); // dragged right to left
+  assert.deepEqual([part.x, part.w], [5, 4]);
+  assert.equal(isInches('missing'), false);
+  assert.equal(OBJECT_TYPES.missing.mode, 'wall');
+  assert.equal(makeObject('missing', part.x, part.y, { w: part.w }).w, 4);
+});

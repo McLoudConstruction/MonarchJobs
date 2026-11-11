@@ -11,23 +11,25 @@ import {
 } from '@/lib/sketch';
 import { drawPlan, areaStyle, WATER_LINE } from '@/lib/sketchDraw';
 import { OBJECT_TYPES, OBJECT_GROUPS, MAX_OBJECTS, makeObject, objectCounts, isInches, inchesText, parseInches } from '@/lib/objectTypes';
-import { placeObject, hitObject } from '@/lib/sketchObjects';
+import { placeObject, hitObject, nearestWall, wallSpan } from '@/lib/sketchObjects';
 import { jpegToPdf } from '@/lib/pdfImage';
 
 const TOOLS = [
   ['select', 'Select', 'V'],
   ['pan', 'Pan', 'Space'],
-  ['room', 'Draw room', 'R'],
+  ['room', 'Room', 'R'],
   ['break', 'Wall break', 'B'],
-  ['corner', 'Add corner', 'C'],
+  ['corner', 'Corner', 'C'],
+  ['missing', 'Missing wall', 'M'],
   ['area', 'Affected areas', 'W'],
   ['object', 'Objects', 'O'],
   ['pen', 'Pen', 'P'],
   ['text', 'Text', 'T'],
 ];
-const KEYS = { v: 'select', r: 'room', b: 'break', c: 'corner', w: 'area', o: 'object', p: 'pen', t: 'text' };
+const KEYS = { v: 'select', r: 'room', b: 'break', c: 'corner', m: 'missing', w: 'area', o: 'object', p: 'pen', t: 'text' };
 const HINTS = {
-  select: 'Click a room to select it, then drag its corners or walls. Hold Alt (or turn on Angles) to move a corner in any direction. Hold Ctrl and drag a corner or wall to start a new room there. Double-click a corner, or press Delete with it selected, to remove it.',
+  select: 'Click a room to select it. Drag a wall to slide it along its neighbours, or drag a corner to make an angle. Hold Ctrl and drag a corner or wall to start a new room there. Double-click a corner, or press Delete with it selected, to remove it.',
+  missing: 'Click a wall to mark all of it as missing (open to the next space), or drag along a wall to mark just that stretch. Click a missing wall with Select to change or delete it.',
   pan: 'Drag to move around. Pinch or scroll to zoom. From any tool, hold Space and drag to pan, then let go to carry on.',
   room: 'Drag on the sketch to draw a room. It snaps to the corners and walls of rooms already there.',
   break: 'Hover a wall and click to cut it in two. Switch to Select (V), then drag either side of the cut in or out.',
@@ -140,7 +142,6 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   objTypeRef.current = objType;
   const [popup, setPopup] = useState(null); // { x, y }: where the editor for the selected item floats
   const [full, setFull] = useState(false);
-  const [freeAngle, setFreeAngle] = useState(false);
   const [textDraft, setTextDraft] = useState(null); // { x, y, value }
   const [exportOpen, setExportOpen] = useState(false);
   const [canUndo, setCanUndo] = useState(false);
@@ -161,8 +162,6 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   popupRef.current = popup;
   const fullRef = useRef(false);
   fullRef.current = full;
-  const freeRef = useRef(false);
-  freeRef.current = freeAngle;
 
   // what is affected in each room; worked out when the plan changes, not while dragging
   const totalsFor = (plan) => {
@@ -183,7 +182,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       W: sizeRef.current.W, H: sizeRef.current.H, selection: selRef.current, counts: countsRef.current, surface: surfaceRef.current,
       affected: totalsRef.current.totals.rooms, draft: d?.draft || null, hover: d ? null : hoverRef.current,
       pending: toolRef.current === 'corner' ? lastCornerRef.current : null,
-      ghost: toolRef.current === 'object' && !d ? ghostRef.current : null,
+      ghost: d?.ghost || ((toolRef.current === 'object' || toolRef.current === 'missing') && !d ? ghostRef.current : null),
     });
   }, []);
   const schedule = useCallback(() => {
@@ -316,22 +315,6 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     else commit({ ...p, marks: p.marks.filter((m) => m.id !== s.id) });
     setSel(null);
     setPopup(null);
-  }
-
-  function addRoom() {
-    const p = planRef.current;
-    if (p.rooms.length >= MAX_ROOMS) return;
-    const { W, H } = sizeRef.current;
-    const c = toWorld(viewRef.current, W / 2, H / 2);
-    // nudge so a new room never lands exactly on top of another
-    const same = (rm) => { const b = roomBox(rm); return b.x === snap(c.x - 5 + n) && b.y === snap(c.y - 5 + n); };
-    let n = 0;
-    while (p.rooms.some(same) && n < 20) n += 1;
-    const room = newRoom('', c.x - 5 + n, c.y - 5 + n);
-    commit({ ...p, rooms: [...p.rooms, room] });
-    setSel({ kind: 'room', id: room.id });
-    setTool('select');
-    setPopup({ x: W / 2, y: H / 2 });
   }
 
   function duplicateRoom() {
@@ -490,6 +473,16 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       schedule();
       return;
     }
+    if (t === 'missing') { // press on a wall, then drag along it for part of the wall, or just click for all of it
+      const hit = nearestWall(plan, w.x, w.y, Math.max(0.8, 14 / viewRef.current.scale));
+      if (hit && plan.objects.length < MAX_OBJECTS) {
+        const s0 = Math.round(hit.s / 0.25) * 0.25;
+        dragRef.current = { mode: 'missing', hit, s0, s1: s0, moved: false, ghost: null };
+        ghostRef.current = null;
+        schedule();
+      } else dragRef.current = null;
+      return;
+    }
     if (t === 'object') { // click to place; the tool stays on so several can go in a row
       if (plan.objects.length < MAX_OBJECTS) {
         const type = objTypeRef.current;
@@ -562,6 +555,14 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     if (!pointers.current.has(e.pointerId)) {
       // no button down: show where a break or corner would go
       const t = toolRef.current;
+      if (t === 'missing') { // preview the wall a click would mark as missing
+        const p = local(e);
+        const w = toWorld(v, p.x, p.y);
+        const hit = nearestWall(planRef.current, w.x, w.y, Math.max(0.8, 14 / v.scale));
+        if (hit) { const sp = wallSpan(hit, 0, hit.len); ghostRef.current = makeObject('missing', sp.x, sp.y, { r: sp.r, w: sp.w }); } else ghostRef.current = null;
+        schedule();
+        return;
+      }
       if (t === 'object') {
         const p = local(e);
         const w = toWorld(v, p.x, p.y);
@@ -612,7 +613,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     if (pointers.current.size > 1) return;
 
     const w = toWorld(v, p.x, p.y);
-    const free = e.altKey || freeRef.current;
+    const free = e.altKey;
     const tolFt = 10 / v.scale;
     if (d.mode === 'pan') {
       viewRef.current = { ...v, ox: d.ox + (p.x - d.sx), oy: d.oy + (p.y - d.sy) };
@@ -632,12 +633,12 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     } else if (d.mode === 'vertex') {
       d.moved = true;
       const room = d.plan.rooms.find((r) => r.id === d.id);
-      const q = free ? { x: snap(w.x), y: snap(w.y) } : snapCorner(planRef.current, w.x, w.y, tolFt, { id: d.id, i: d.i });
+      const q = snapCorner(planRef.current, w.x, w.y, tolFt, { id: d.id, i: d.i }); // a corner always moves freely, so it makes an angle
       const base = planRef.current.rooms.find((r) => r.id === d.id) || room;
-      d.plan = { ...d.plan, rooms: d.plan.rooms.map((r) => (r.id === d.id ? { ...r, pts: moveVertex(base.pts, d.i, q.x, q.y, { free }) } : r)) };
+      d.plan = { ...d.plan, rooms: d.plan.rooms.map((r) => (r.id === d.id ? { ...r, pts: moveVertex(base.pts, d.i, q.x, q.y, { free: true }) } : r)) };
     } else if (d.mode === 'edge') {
       d.moved = true;
-      // a wall always slides its ends along the walls beside it, with or without Angles / Alt: only corners move freely
+      // a wall always slides its ends along the walls beside it; only corners move freely
       d.plan = { ...d.plan, rooms: d.plan.rooms.map((r) => (r.id === d.id ? { ...r, pts: moveEdgeSnapped(d.orig, d.i, w.x - d.wx, w.y - d.wy, { free: false }) } : r)) };
     } else if (d.mode === 'avertex') {
       d.moved = true;
@@ -655,6 +656,13 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       const nx = snap(d.orig.x + (w.x - d.wx), 0.25);
       const ny = snap(d.orig.y + (w.y - d.wy), 0.25);
       d.plan = { ...d.plan, sources: d.plan.sources.map((x) => (x.id === d.id ? { ...x, x: nx, y: ny } : x)) };
+    } else if (d.mode === 'missing') {
+      const h = d.hit;
+      const s = Math.max(0, Math.min(h.len, Math.round(((w.x - h.a[0]) * h.ux + (w.y - h.a[1]) * h.uy) / 0.25) * 0.25));
+      d.s1 = s;
+      d.moved = Math.abs(d.s1 - d.s0) >= 0.5;
+      const sp = d.moved ? wallSpan(h, d.s0, d.s1) : wallSpan(h, 0, h.len);
+      d.ghost = makeObject('missing', sp.x, sp.y, { r: sp.r, w: sp.w });
     } else if (d.mode === 'move-obj') {
       d.moved = true;
       const o = d.plan.objects.find((x) => x.id === d.id);
@@ -696,6 +704,17 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     // a plain click on something (no drag) opens its editor next to the click
     if (p && ['move-room', 'vertex', 'edge', 'move-mark', 'avertex', 'move-area', 'move-pin', 'move-obj'].includes(d.mode) && !d.moved) openPopup(p.x, p.y);
 
+    if (d.mode === 'missing') {
+      const h = d.hit;
+      const sp = d.moved ? wallSpan(h, d.s0, d.s1) : wallSpan(h, 0, h.len);
+      if (sp.w >= 0.5) {
+        const obj = makeObject('missing', sp.x, sp.y, { r: sp.r, w: sp.w });
+        commit({ ...plan, objects: [...plan.objects, obj] });
+        setSel({ kind: 'object', id: obj.id });
+      }
+      schedule();
+      return;
+    }
     if (d.mode === 'room') {
       const dr = d.draft;
       if (dr && dr.w >= MIN_ROOM && dr.h >= MIN_ROOM && plan.rooms.length < MAX_ROOMS) {
@@ -1019,8 +1038,6 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
                 {label}
               </button>
             )))}
-            <button type="button" onClick={addRoom} disabled={plan.rooms.length >= MAX_ROOMS}>+ Room</button>
-            <button type="button" className={freeAngle ? 'on' : ''} aria-pressed={freeAngle} title="Angles: move corners in any direction instead of keeping square walls square (or hold Alt). Walls always slide along their neighbours." onClick={() => setFreeAngle(!freeAngle)}>Angles</button>
             <select className="sketch-view" value={surfaceView} onChange={(e) => setSurfaceView(e.target.value)} aria-label="Surface to show" title="Which surface to show">
               {SURFACE_VIEWS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
             </select>
@@ -1224,13 +1241,14 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
                   <div className="field"><label htmlFor="sk-obj-label">Label</label>
                     <input id="sk-obj-label" key={`${obj.id}-l-${obj.label}`} defaultValue={obj.label} maxLength={40} placeholder={ot.label} onBlur={(e) => e.target.value !== obj.label && patchObject(obj.id, { label: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
                   </div>
-                  {isWall && (
+                  {isWall && ot.feet && feet('sk-obj-w', 'Length', obj.w, 'w', 0.5, 100)}
+                  {isWall && !ot.feet && (
                     <div className="grid2">
                       {inches('sk-obj-w', 'Width', obj.w, 'w', 6, 400)}
                       {inches('sk-obj-oh', 'Height', obj.oh ?? ot.oh, 'oh', 12, 240)}
                     </div>
                   )}
-                  {isWall && ot.h != null && inches('sk-obj-h', 'Sill height', obj.h ?? ot.h, 'h', 0, 120)}
+                  {isWall && !ot.feet && ot.h != null && inches('sk-obj-h', 'Sill height', obj.h ?? ot.h, 'h', 0, 120)}
                   {!isWall && ot.mode !== 'wallpoint' && (
                     <div className="grid2">
                       {feet('sk-obj-w', ot.mode === 'box' ? 'Length' : 'Size', obj.w, 'w')}
@@ -1243,7 +1261,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
                   </div>
                   <div className="row">
                     {ot.mode === 'box' && <button type="button" className="secondary small" onClick={() => patchObject(obj.id, { r: (obj.r + 90) % 360 })}>Rotate</button>}
-                    {(isWall || ot.mode === 'wallpoint' || ot.kind === 'stairs') && <button type="button" className="secondary small" onClick={() => patchObject(obj.id, { f: !obj.f })}>{ot.kind === 'stairs' ? 'Flip direction' : isWall ? 'Flip side' : 'Flip'}</button>}
+                    {((isWall && !ot.feet) || ot.mode === 'wallpoint' || ot.kind === 'stairs') && <button type="button" className="secondary small" onClick={() => patchObject(obj.id, { f: !obj.f })}>{ot.kind === 'stairs' ? 'Flip direction' : isWall ? 'Flip side' : 'Flip'}</button>}
                     {['door', 'dutch', 'pocket', 'barn'].includes(ot.kind) && <button type="button" className="secondary small" onClick={() => patchObject(obj.id, { m: !obj.m })}>{ot.kind === 'door' || ot.kind === 'dutch' ? 'Flip hinge' : 'Flip end'}</button>}
                     <button type="button" className="secondary small" onClick={() => duplicateObject(obj)}>Duplicate</button>
                     <button type="button" className="danger small" onClick={removeSelected}>Delete</button>
