@@ -15,6 +15,7 @@ export default function SketchTab({ jobId, sketches, photos, isOffice, logEvent,
   const [loadErr, setLoadErr] = useState('');
   const [save, setSave] = useState({ state: 'idle', text: '' });
   const [adding, setAdding] = useState(false);
+  const [headSlot, setHeadSlot] = useState(null); // where the sketch puts its export and full screen icons
   const [newName, setNewName] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -150,7 +151,7 @@ export default function SketchTab({ jobId, sketches, photos, isOffice, logEvent,
           ))}
           <button type="button" className="add" onClick={() => setAdding(true)}>+ Add sketch</button>
         </div>
-        <span className={`sketch-save ${save.state}`} aria-live="polite">{save.state === 'saved' || save.state === 'dirty' || save.state === 'saving' ? save.text : ''}</span>
+        <span className="sketch-head-right"><span className={`sketch-save ${save.state}`} aria-live="polite">{save.state === 'saved' || save.state === 'dirty' || save.state === 'saving' ? save.text : ''}</span><span ref={setHeadSlot} /></span>
       </div>
 
       {adding && (
@@ -176,6 +177,7 @@ export default function SketchTab({ jobId, sketches, photos, isOffice, logEvent,
             key={loaded.id}
             plan={loaded.plan}
             exportName={loaded.name}
+            headSlot={headSlot}
             photoCounts={counts}
             onChange={(plan) => queueSave(loaded.id, plan)}
             onAddRoomPhoto={(room) => onAddRoomPhoto(loaded.id, room)}

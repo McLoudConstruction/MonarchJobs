@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AREA_KINDS, MARK_COLORS, MAX_MARKS, MAX_ROOMS, MAX_AREAS, MAX_SOURCES, MIN_ROOM, MAX_ROOM, ROOM_PRESETS, SURFACES, WALL_HEIGHTS, WATER_CATS,
   addCornerCut, affectedTotals, carveRooms, cleanSurfaces, cleanWater, dropStraightPoints, edgeLength, fitView, hitMarkAt, hitRoom, hitSource,
@@ -9,6 +10,7 @@ import {
   simplifyStroke, snap, snapOnEdge, surfaceText, tidyPts, toScreen, toWorld, totalArea, translatePts, fmtFeet,
 } from '@/lib/sketch';
 import { drawPlan, areaStyle, WATER_LINE } from '@/lib/sketchDraw';
+import { jpegToPdf } from '@/lib/pdfImage';
 
 const TOOLS = [
   ['select', 'Select', 'V'],
@@ -82,10 +84,20 @@ const FullIcon = ({ on }) => (
   </svg>
 );
 
+const Ico = ({ children }) => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>
+);
+const UploadIcon = () => <Ico><path d="M8 10.5V2.5M5 5.5l3-3 3 3M2.5 10v3h11v-3" /></Ico>;
+const UndoIcon = () => <Ico><path d="M5.5 3L2.5 6l3 3M2.8 6H9a4 4 0 0 1 0 8H6" /></Ico>;
+const RedoIcon = () => <Ico><path d="M10.5 3l3 3-3 3M13.2 6H7a4 4 0 0 0 0 8h3" /></Ico>;
+const PlusIcon = () => <Ico><path d="M8 3v10M3 8h10" /></Ico>;
+const MinusIcon = () => <Ico><path d="M3 8h10" /></Ico>;
+const FitIcon = () => <Ico><rect x="3.5" y="3.5" width="9" height="9" rx="1" /><path d="M1.5 5V1.5H5M11 1.5h3.5V5M14.5 11v3.5H11M5 14.5H1.5V11" /></Ico>;
+
 // The drawing board. Works in feet. The parent owns saving: onChange gets the whole new plan after
 // each finished change. The plan prop is read once (the parent remounts this with a new key to
 // switch sketches).
-export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts = {}, onAddRoomPhoto, onViewRoomPhotos, exportName = 'sketch' }) {
+export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts = {}, onAddRoomPhoto, onViewRoomPhotos, exportName = 'sketch', headSlot = null }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const rootRef = useRef(null);
@@ -118,6 +130,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   const [full, setFull] = useState(false);
   const [freeAngle, setFreeAngle] = useState(false);
   const [textDraft, setTextDraft] = useState(null); // { x, y, value }
+  const [exportOpen, setExportOpen] = useState(false);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [, bump] = useState(0);
@@ -785,31 +798,47 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   }
 
   // ---- export ------------------------------------------------------------
-  function exportPng() {
+  function renderExport() {
     const plan = planRef.current;
     const b = planBounds(plan);
-    if (!b) return;
+    if (!b) return null;
     const W = 1600;
     const H = Math.round(clampN(1600 * ((b.maxY - b.minY + 4) / Math.max(b.maxX - b.minX + 4, 4)), 500, 2400));
     const out = document.createElement('canvas');
     out.width = W; out.height = H;
     const ctx = out.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, W, H);
     const view = fitView(b, W, H, 60);
     drawPlan(ctx, plan, view, { W, H, counts: {}, affected: totalsFor(plan).rooms, surface: 'all', grid: true });
-    out.toBlob((blob) => {
-      if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${exportName.replace(/[^a-z0-9-_]+/gi, '-').replace(/^-+|-+$/g, '') || 'sketch'}.png`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
-    }, 'image/png');
+    return out;
   }
-
+  function download(blob, ext) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${exportName.replace(/[^a-z0-9-_]+/gi, '-').replace(/^-+|-+$/g, '') || 'sketch'}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+  function exportAs(kind) {
+    setExportOpen(false);
+    const out = renderExport();
+    if (!out) return;
+    if (kind === 'png') {
+      out.toBlob((blob) => { if (blob) download(blob, 'png'); }, 'image/png');
+      return;
+    }
+    out.toBlob(async (blob) => {
+      if (!blob) return;
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      download(new Blob([jpegToPdf(bytes, out.width, out.height, exportName)], { type: 'application/pdf' }), 'pdf');
+    }, 'image/jpeg', 0.92);
+  }
   const plan = planRef.current;
+  const hasContent = !!(plan.rooms.length || plan.marks.length || plan.areas.length || plan.sources.length);
   const total = totalArea(plan);
   const totals = totalsFor(plan);
   const room = selected && sel.kind === 'room' ? selected : null;
@@ -843,46 +872,17 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
 
   const closeBtn = <button type="button" className="sk-x" aria-label="Close" onClick={closePopup}>{'\u00d7'}</button>;
 
+  const headBtns = (
+    <span className="sketch-head-tools">
+      <button type="button" className="sk-icon" onClick={() => setExportOpen(true)} disabled={!hasContent} aria-label="Export" title="Export"><UploadIcon /></button>
+      <button type="button" className="sk-icon" onClick={full ? exitFull : enterFull} aria-label={full ? 'Exit full screen' : 'Full screen'} title={full ? 'Exit full screen (Esc)' : 'Full screen'}><FullIcon on={full} /></button>
+    </span>
+  );
+
   return (
     <div className={`sketch${full ? ' sketch-full' : ''}`} ref={rootRef} tabIndex={-1}>
-      <div className="sketch-bar">
-        <div className="sketch-tools" role="toolbar" aria-label="Sketch tools">
-          {TOOLS.map(([k, label, key]) => (k === 'area' ? (
-            <div key={k} className="sketch-menu">
-              <button type="button" className={tool === 'area' ? 'on' : ''} aria-haspopup="menu" aria-expanded={menuOpen} title={`${label} (${key})`} onClick={() => setMenuOpen(!menuOpen)}>
-                {label}<span className="sk-caret" aria-hidden="true" /><span className="sk-key">{key}</span>
-              </button>
-              {menuOpen && (
-                <div className="sketch-menu-list" role="menu">
-                  {KIND_ORDER.map((kind) => (
-                    <button key={kind} type="button" role="menuitem" className={tool === 'area' && areaKind === kind ? 'on' : ''} onClick={() => pickKind(kind)}>
-                      <span className="sk-dot" style={{ background: kindDot(kind) }} />{AREA_KINDS[kind]}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            <button key={k} type="button" className={tool === k ? 'on' : ''} aria-pressed={tool === k} title={`${label} (${key})`} onClick={() => { setTool(k); setTextDraft(null); }}>
-              {label}<span className="sk-key">{key}</span>
-            </button>
-          )))}
-          <button type="button" onClick={addRoom} disabled={plan.rooms.length >= MAX_ROOMS}>+ Room</button>
-        </div>
-        <div className="sketch-tools">
-          <button type="button" className={freeAngle ? 'on' : ''} aria-pressed={freeAngle} title="Angles: move corners in any direction instead of keeping square walls square (or hold Alt). Walls always slide along their neighbours." onClick={() => setFreeAngle(!freeAngle)}>Angles</button>
-          <button type="button" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">Undo</button>
-          <button type="button" onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)">Redo</button>
-          <button type="button" onClick={() => zoomCenter(1 / 1.3)} aria-label="Zoom out">-</button>
-          <button type="button" onClick={() => zoomCenter(1.3)} aria-label="Zoom in">+</button>
-          <button type="button" onClick={fit}>Fit</button>
-          <select className="sketch-view" value={surfaceView} onChange={(e) => setSurfaceView(e.target.value)} aria-label="Surface to show" title="Which surface to show">
-            {SURFACE_VIEWS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-          </select>
-          <button type="button" onClick={exportPng} disabled={!plan.rooms.length && !plan.marks.length && !plan.areas.length && !plan.sources.length}>Save PNG</button>
-          <button type="button" className="sk-icon" onClick={full ? exitFull : enterFull} aria-label={full ? 'Exit full screen' : 'Full screen'} title={full ? 'Exit full screen (Esc)' : 'Full screen'}><FullIcon on={full} /></button>
-        </div>
-      </div>
+      {(full || !headSlot) && <div className="sketch-head-inline">{headBtns}</div>}
+      {!full && headSlot && createPortal(headBtns, headSlot)}
 
       {tool === 'area' && (
         <div className="sketch-strip" aria-label="Affected area options">
@@ -911,6 +911,43 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       )}
 
       <div className="sketch-stage" ref={wrapRef}>
+        <div className="sketch-over sketch-over-tl">
+          <div className="sketch-tools" role="toolbar" aria-label="Sketch tools">
+            {TOOLS.map(([k, label, key]) => (k === 'area' ? (
+              <div key={k} className="sketch-menu">
+                <button type="button" className={tool === 'area' ? 'on' : ''} aria-haspopup="menu" aria-expanded={menuOpen} title={`${label} (${key})`} onClick={() => setMenuOpen(!menuOpen)}>
+                  {label}<span className="sk-caret" aria-hidden="true" />
+                </button>
+                {menuOpen && (
+                  <div className="sketch-menu-list" role="menu">
+                    {KIND_ORDER.map((kind) => (
+                      <button key={kind} type="button" role="menuitem" className={tool === 'area' && areaKind === kind ? 'on' : ''} onClick={() => pickKind(kind)}>
+                        <span className="sk-dot" style={{ background: kindDot(kind) }} />{AREA_KINDS[kind]}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button key={k} type="button" className={tool === k ? 'on' : ''} aria-pressed={tool === k} title={`${label} (${key})`} onClick={() => { setTool(k); setTextDraft(null); }}>
+                {label}
+              </button>
+            )))}
+            <button type="button" onClick={addRoom} disabled={plan.rooms.length >= MAX_ROOMS}>+ Room</button>
+            <button type="button" className={freeAngle ? 'on' : ''} aria-pressed={freeAngle} title="Angles: move corners in any direction instead of keeping square walls square (or hold Alt). Walls always slide along their neighbours." onClick={() => setFreeAngle(!freeAngle)}>Angles</button>
+            <select className="sketch-view" value={surfaceView} onChange={(e) => setSurfaceView(e.target.value)} aria-label="Surface to show" title="Which surface to show">
+              {SURFACE_VIEWS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="sketch-over sketch-over-tr" role="toolbar" aria-label="Undo and zoom">
+          <button type="button" className="sk-icon" onClick={undo} disabled={!canUndo} aria-label="Undo" title="Undo (Ctrl+Z)"><UndoIcon /></button>
+          <button type="button" className="sk-icon" onClick={redo} disabled={!canRedo} aria-label="Redo" title="Redo (Ctrl+Y)"><RedoIcon /></button>
+          <button type="button" className="sk-icon" onClick={() => zoomCenter(1.3)} aria-label="Zoom in" title="Zoom in"><PlusIcon /></button>
+          <button type="button" className="sk-icon" onClick={() => zoomCenter(1 / 1.3)} aria-label="Zoom out" title="Zoom out"><MinusIcon /></button>
+          <button type="button" className="sk-icon" onClick={fit} aria-label="Fit to screen" title="Fit to screen"><FitIcon /></button>
+        </div>
+
         <canvas
           ref={canvasRef}
           className={`sketch-canvas tool-${tool}`}
@@ -1044,6 +1081,15 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
         )}
       </div>
 
+      {exportOpen && (
+        <div className="sketch-modal" role="presentation" onPointerDown={(e) => { if (e.target === e.currentTarget) setExportOpen(false); }}>
+          <div className="sketch-modal-card" role="dialog" aria-label="Export sketch">
+            <div className="sketch-pop-head"><strong>Export sketch</strong><button type="button" className="sk-x" aria-label="Close" onClick={() => setExportOpen(false)}>{'\u00d7'}</button></div>
+            <button type="button" className="secondary" onClick={() => exportAs('png')}>Export as PNG</button>
+            <button type="button" className="secondary" onClick={() => exportAs('pdf')}>Export as PDF</button>
+          </div>
+        </div>
+      )}
       <div className="sketch-summary">
         {plan.rooms.length} room{plan.rooms.length === 1 ? '' : 's'}{plan.rooms.length > 0 && <> · {total.toLocaleString()} sq ft total</>}
         {['water', 'growth', 'smoke'].filter((kd) => totals.total[kd]).map((kd) => (
