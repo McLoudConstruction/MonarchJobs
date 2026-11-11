@@ -132,6 +132,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   const [surfaceView, setSurfaceView] = useState('all'); // which surface to show: all, floor, wall, ceiling
   const [menuOpen, setMenuOpen] = useState(false);
   const [objMenu, setObjMenu] = useState(false);
+  const [objMenuPos, setObjMenuPos] = useState(null); // where the wide Objects menu sits, in screen pixels
   const [objType, setObjType] = useState('door'); // what the Objects tool places
   const ghostRef = useRef(null); // Objects tool: the preview under the pointer
   const objTypeRef = useRef('door');
@@ -966,11 +967,20 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
           <div className="sketch-tools" role="toolbar" aria-label="Sketch tools">
             {TOOLS.map(([k, label, key]) => (k === 'object' ? (
               <div key={k} className="sketch-menu">
-                <button type="button" className={tool === 'object' ? 'on' : ''} aria-haspopup="menu" aria-expanded={objMenu} title={`${label} (${key})`} onClick={() => { setMenuOpen(false); setObjMenu(!objMenu); }}>
+                <button type="button" className={tool === 'object' ? 'on' : ''} aria-haspopup="menu" aria-expanded={objMenu} title={`${label} (${key})`} onClick={(e) => {
+                  setMenuOpen(false);
+                  if (objMenu) { setObjMenu(false); return; }
+                  const b = e.currentTarget.getBoundingClientRect();
+                  const st = wrapRef.current.getBoundingClientRect();
+                  const width = Math.min(1000, st.width - 16);
+                  const left = clampN(b.left, st.left + 8, st.right - width - 8);
+                  setObjMenuPos({ left, top: b.bottom + 4, width, maxHeight: Math.max(160, st.bottom - b.bottom - 12) });
+                  setObjMenu(true);
+                }}>
                   {label}<span className="sk-caret" aria-hidden="true" />
                 </button>
                 {objMenu && (
-                  <div className="sketch-menu-list sk-objects" role="menu">
+                  <div className="sketch-menu-list sk-objects" role="menu" style={objMenuPos ? { position: 'fixed', ...objMenuPos } : undefined}>
                     {OBJECT_GROUPS.map((g) => (
                       <div key={g} className="sk-obj-group">
                         <div className="sk-obj-head">{g}</div>

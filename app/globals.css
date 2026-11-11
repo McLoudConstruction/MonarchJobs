@@ -1505,3 +1505,8 @@ a.stat-tile:hover{ border-color: var(--accent); }
 .sketch-over-tl .sketch-strip .chips button{ padding: 3px 8px; font-size: 12px; }
 .sketch-over .sketch-tools button{ padding: 3px 5px; }
 .sketch-over .sk-info{ pointer-events: none; }
+.sketch-over .sketch-tools .sketch-menu-list.sk-objects{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 0 14px; align-items: start; min-width: 0; max-width: none; padding: 4px 10px 8px; overflow: auto; }
+.sk-obj-grid{ gap: 3px; }
+.sketch-over .sketch-tools .sketch-menu-list.sk-objects button{ padding: 3px 7px; font-size: 11.5px; }
+.sk-obj-head{ margin: 6px 2px 3px; }
+@media (max-width: 760px){ .sketch-over .sketch-tools .sketch-menu-list.sk-objects{ grid-template-columns: repeat(2, 1fr); } }
