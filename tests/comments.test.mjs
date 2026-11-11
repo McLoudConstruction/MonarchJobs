@@ -86,3 +86,14 @@ test('timeAgo', () => {
   assert.equal(timeAgo('2026-05-30T12:00:00Z', now), '2 d ago');
   assert.equal(timeAgo('', now), '');
 });
+
+import { canDeleteComment, activity, logEntry, withLog } from '../lib/sketchComments.js';
+test('only the author can delete; log keeps who did what', () => {
+  const c = { by: { id: 'u1', name: 'Jo' }, at: '2026-01-01T00:00:00.000Z' };
+  assert.ok(canDeleteComment(c, 'u1')); assert.ok(!canDeleteComment(c, 'u2')); assert.ok(!canDeleteComment(c, null));
+  assert.equal(activity(c)[0].text, 'Jo added the comment'); // older comments without a log
+  const c2 = withLog({ ...c, log: [] }, logEntry('resolved', { id: 'u2', name: 'Sam' }, '2026-01-02T00:00:00.000Z'));
+  assert.deepEqual(activity(c2), [{ text: 'Sam resolved it', at: '2026-01-02T00:00:00.000Z' }]);
+  const [clean] = cleanComments([{ x: 1, y: 1, text: 'a', log: [{ a: 'resolved', by: { id: 'u2', name: 'Sam' }, at: '2026-01-02T00:00:00Z' }, { a: 'bogus' }] }], uid);
+  assert.equal(clean.log.length, 1);
+});

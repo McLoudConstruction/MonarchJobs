@@ -14,7 +14,7 @@ import { drawPlan, areaStyle, WATER_LINE } from '@/lib/sketchDraw';
 import { OBJECT_TYPES, OBJECT_GROUPS, MAX_OBJECTS, makeObject, objectCounts, isInches, inchesText, parseInches } from '@/lib/objectTypes';
 import { placeObject, hitObject, nearestWall, wallSpan } from '@/lib/sketchObjects';
 import { jpegToPdf } from '@/lib/pdfImage';
-import { hitComment, tagsFromText, segments, timeAgo, MAX_COMMENTS, MAX_REPLIES } from '@/lib/sketchComments';
+import { hitComment, tagsFromText, segments, timeAgo, logEntry, withLog, canDeleteComment, activity, MAX_COMMENTS, MAX_REPLIES } from '@/lib/sketchComments';
 import MentionBox from '@/components/job/MentionBox';
 
 const TOOLS = [
@@ -323,7 +323,12 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     else if (s.kind === 'area') commit({ ...p, areas: p.areas.filter((a) => a.id !== s.id) });
     else if (s.kind === 'source') commit({ ...p, sources: p.sources.filter((q) => q.id !== s.id) });
     else if (s.kind === 'object') commit({ ...p, objects: p.objects.filter((o) => o.id !== s.id) });
-    else if (s.kind === 'comment') commit({ ...p, comments: p.comments.filter((c) => c.id !== s.id) });
+    else if (s.kind === 'comment') {
+      const c = p.comments.find((x) => x.id === s.id);
+      if (!c || !canDeleteComment(c, meRef.current.id)) return; // only the author can delete
+      commit({ ...p, comments: p.comments.filter((x) => x.id !== s.id) });
+      onComment?.({ action: 'deleted', tags: [] });
+    }
     else commit({ ...p, marks: p.marks.filter((m) => m.id !== s.id) });
     setSel(null);
     setPopup(null);
@@ -791,6 +796,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
           }
         }
       }
+      if (d.mode === 'move-comment') next = { ...next, comments: next.comments.map((c) => (c.id === d.id ? withLog(c, logEntry('moved', meRef.current)) : c)) };
       commit(normalizePlan(next));
     }
     schedule();
@@ -838,6 +844,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     if (!text) return;
     const tags = tagsFromText(text, peopleRef.current);
     const c = { id: makeId(), x: d.x, y: d.y, text, tags, done: false, replies: [], ...stamp() };
+    c.log = [logEntry('created', meRef.current, c.at)];
     commit({ ...planRef.current, comments: [...planRef.current.comments, c] });
     setCmDraft(null);
     setReplyText('');
@@ -851,9 +858,14 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     if (!text || c.replies.length >= MAX_REPLIES) return;
     const tags = tagsFromText(text, peopleRef.current);
     const r = { id: makeId(), text, tags, ...stamp() };
-    commit({ ...planRef.current, comments: planRef.current.comments.map((x) => (x.id === c.id ? { ...x, replies: [...x.replies, r] } : x)) });
+    commit({ ...planRef.current, comments: planRef.current.comments.map((x) => (x.id === c.id ? withLog({ ...x, replies: [...x.replies, r] }, logEntry('replied', meRef.current)) : x)) });
     setReplyText('');
     onComment?.({ action: 'reply', tags: tags.map((t) => t.name) });
+  }
+  function toggleDone(c) {
+    const a = c.done ? 'reopened' : 'resolved';
+    commit({ ...planRef.current, comments: planRef.current.comments.map((x) => (x.id === c.id ? withLog({ ...x, done: !c.done }, logEntry(a, meRef.current)) : x)) });
+    onComment?.({ action: a, tags: [] });
   }
   function patchComment(id, patch) {
     commit({ ...planRef.current, comments: planRef.current.comments.map((c) => (c.id === id ? { ...c, ...patch } : c)) });
@@ -1358,9 +1370,13 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
                 <MentionBox id="sk-cm-reply" rows={2} people={people} value={replyText} onChange={setReplyText} onSubmit={() => postReply(cm)} placeholder="Reply. Type @ to tag" />
                 <div className="row">
                   <button type="button" className="primary small" disabled={!replyText.trim()} onClick={() => postReply(cm)}>Reply</button>
-                  <button type="button" className="secondary small" onClick={() => patchComment(cm.id, { done: !cm.done })}>{cm.done ? 'Reopen' : 'Resolve'}</button>
-                  <button type="button" className="danger small" onClick={removeSelected}>Delete</button>
+                  <button type="button" className="secondary small" onClick={() => toggleDone(cm)}>{cm.done ? 'Reopen' : 'Resolve'}</button>
+                  {canDeleteComment(cm, me.id) && <button type="button" className="danger small" onClick={removeSelected}>Delete</button>}
                 </div>
+                <details className="cm-log">
+                  <summary>Activity</summary>
+                  <ul>{activity(cm).map((l, i) => <li key={i}><span>{l.text}</span> <span className="cm-meta">{l.at ? new Date(l.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}</span></li>)}</ul>
+                </details>
               </>
             )}
 
