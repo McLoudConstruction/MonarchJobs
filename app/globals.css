@@ -1487,3 +1487,21 @@ a.stat-tile:hover{ border-color: var(--accent); }
 .sketch-modal-card{ display: flex; flex-direction: column; gap: 8px; width: min(300px, calc(100vw - 32px)); padding: 14px; background: var(--card-bg); color: var(--ink); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
 .sketch-modal-card button.secondary{ padding: 10px 12px; font-weight: 600; cursor: pointer; }
 @media (max-width: 640px){ .sketch-over .sketch-tools{ flex-wrap: wrap; } }
+
+/* sketch: objects menu */
+.sketch-over .sketch-tools .sketch-menu-list.sk-objects{ min-width: 300px; max-width: min(380px, 80vw); max-height: min(60vh, 440px); overflow: auto; display: block; padding: 6px 8px 8px; }
+.sk-obj-head{ margin: 8px 2px 4px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); }
+.sk-obj-grid{ display: flex; flex-wrap: wrap; gap: 4px; }
+.sketch-over .sketch-tools .sketch-menu-list.sk-objects button{ display: inline-flex; padding: 5px 9px; font-size: 12px; border: 1px solid var(--line); background: var(--card-bg); border-radius: 6px; }
+.sketch-over .sketch-tools .sketch-menu-list.sk-objects button.on{ background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.sketch-over .sketch-tools .sketch-menu-list.sk-objects button:hover{ background: var(--panel); }
+.sketch-over .sketch-tools{ flex-wrap: wrap; }
+.sketch-over .sketch-tools button, .sketch-over .sketch-view{ white-space: nowrap; }
+.sketch-over{ pointer-events: none; }
+.sketch-over > *{ pointer-events: auto; }
+.sketch-over-tl{ flex-direction: column; align-items: flex-start; gap: 4px; }
+.sketch-over-tl .sketch-strip{ margin: 0; padding: 5px 8px; gap: 5px 10px; font-size: 12px; background: rgba(246,245,241,0.9); border-radius: 6px; max-width: 100%; box-sizing: border-box; }
+[data-theme="dark"] .sketch-over-tl .sketch-strip{ background: rgba(30,36,42,0.9); }
+.sketch-over-tl .sketch-strip .chips button{ padding: 3px 8px; font-size: 12px; }
+.sketch-over .sketch-tools button{ padding: 3px 5px; }
+.sketch-over .sk-info{ pointer-events: none; }

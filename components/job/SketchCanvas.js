@@ -10,6 +10,8 @@ import {
   simplifyStroke, snap, snapOnEdge, surfaceText, tidyPts, toScreen, toWorld, totalArea, translatePts, fmtFeet,
 } from '@/lib/sketch';
 import { drawPlan, areaStyle, WATER_LINE } from '@/lib/sketchDraw';
+import { OBJECT_TYPES, OBJECT_GROUPS, MAX_OBJECTS, makeObject, objectCounts } from '@/lib/objectTypes';
+import { placeObject, hitObject } from '@/lib/sketchObjects';
 import { jpegToPdf } from '@/lib/pdfImage';
 
 const TOOLS = [
@@ -19,10 +21,11 @@ const TOOLS = [
   ['break', 'Wall break', 'B'],
   ['corner', 'Add corner', 'C'],
   ['area', 'Affected areas', 'W'],
+  ['object', 'Objects', 'O'],
   ['pen', 'Pen', 'P'],
   ['text', 'Text', 'T'],
 ];
-const KEYS = { v: 'select', r: 'room', b: 'break', c: 'corner', w: 'area', p: 'pen', t: 'text' };
+const KEYS = { v: 'select', r: 'room', b: 'break', c: 'corner', w: 'area', o: 'object', p: 'pen', t: 'text' };
 const HINTS = {
   select: 'Click a room to select it, then drag its corners or walls. Hold Alt (or turn on Angles) to move a corner in any direction. Hold Ctrl and drag a corner or wall to start a new room there. Double-click a corner, or press Delete with it selected, to remove it.',
   pan: 'Drag to move around. Pinch or scroll to zoom. From any tool, hold Space and drag to pan, then let go to carry on.',
@@ -30,6 +33,7 @@ const HINTS = {
   break: 'Hover a wall and click to cut it in two. Switch to Select (V), then drag either side of the cut in or out.',
   corner: 'Hover a wall and click to add a corner. To cut off a corner of a room, click one wall, then click the wall next to it. The tool stays on, so keep clicking. Esc starts over.',
   area: 'Pick what to mark and which surfaces it is on, then draw around it. It is cleaned up when you let go.',
+  object: 'Pick an object, then click to place it. Doors, windows and outlets snap to the wall; cabinets and fixtures sit flush against it. Hold Alt to place freely. Esc stops. Click one with Select to edit it.',
   pen: 'Draw freehand: doors, arrows, anything. Tap a line with Select to remove it.',
   text: 'Tap where the note should go, then type it.',
 };
@@ -127,6 +131,11 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   const [wallHeight, setWallHeight] = useState(2);
   const [surfaceView, setSurfaceView] = useState('all'); // which surface to show: all, floor, wall, ceiling
   const [menuOpen, setMenuOpen] = useState(false);
+  const [objMenu, setObjMenu] = useState(false);
+  const [objType, setObjType] = useState('door'); // what the Objects tool places
+  const ghostRef = useRef(null); // Objects tool: the preview under the pointer
+  const objTypeRef = useRef('door');
+  objTypeRef.current = objType;
   const [popup, setPopup] = useState(null); // { x, y }: where the editor for the selected item floats
   const [full, setFull] = useState(false);
   const [freeAngle, setFreeAngle] = useState(false);
@@ -172,6 +181,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       W: sizeRef.current.W, H: sizeRef.current.H, selection: selRef.current, counts: countsRef.current, surface: surfaceRef.current,
       affected: totalsRef.current.totals.rooms, draft: d?.draft || null, hover: d ? null : hoverRef.current,
       pending: toolRef.current === 'corner' ? lastCornerRef.current : null,
+      ghost: toolRef.current === 'object' && !d ? ghostRef.current : null,
     });
   }, []);
   const schedule = useCallback(() => {
@@ -182,7 +192,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   useEffect(() => { countsRef.current = photoCounts; schedule(); }, [photoCounts, schedule]);
   useEffect(() => { schedule(); setDimErr(''); }, [sel, schedule]);
   useEffect(() => { schedule(); }, [surfaceView, schedule]);
-  useEffect(() => { hoverRef.current = null; lastCornerRef.current = null; setPopup(null); setMenuOpen(false); schedule(); }, [tool, schedule]);
+  useEffect(() => { hoverRef.current = null; lastCornerRef.current = null; setPopup(null); setMenuOpen(false); setObjMenu(false); ghostRef.current = null; schedule(); }, [tool, schedule]);
 
   // size the canvas to its box, keep it crisp on high-density screens, and fit the drawing once
   const fittedRef = useRef(false);
@@ -227,7 +237,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
 
   const findSel = (plan, s) => {
     if (!s) return null;
-    const list = s.kind === 'room' ? plan.rooms : s.kind === 'area' ? plan.areas : s.kind === 'source' ? plan.sources : plan.marks;
+    const list = s.kind === 'room' ? plan.rooms : s.kind === 'area' ? plan.areas : s.kind === 'source' ? plan.sources : s.kind === 'object' ? plan.objects : plan.marks;
     return list.find((x) => x.id === s.id) || null;
   };
 
@@ -272,6 +282,16 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   function patchSource(id, patch) {
     commit({ ...planRef.current, sources: planRef.current.sources.map((q) => (q.id === id ? { ...q, ...patch } : q)) });
   }
+  function patchObject(id, patch) {
+    commit({ ...planRef.current, objects: planRef.current.objects.map((o) => (o.id === id ? { ...o, ...patch } : o)) });
+  }
+  function duplicateObject(o) {
+    const p = planRef.current;
+    if (p.objects.length >= MAX_OBJECTS) return;
+    const copy = makeObject(o.t, o.x + 1, o.y + 1, { r: o.r, w: o.w, d: o.d, label: o.label, note: o.note, h: o.h, f: o.f, m: o.m });
+    commit({ ...p, objects: [...p.objects, copy] });
+    setSel({ kind: 'object', id: copy.id });
+  }
   // the editor floats near the item that was clicked; closing it first saves a field that is still being typed in
   function openPopup(x, y) { setPopup({ x, y }); }
   function closePopup() {
@@ -290,6 +310,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     if (s.kind === 'room') commit({ ...p, rooms: p.rooms.filter((r) => r.id !== s.id) });
     else if (s.kind === 'area') commit({ ...p, areas: p.areas.filter((a) => a.id !== s.id) });
     else if (s.kind === 'source') commit({ ...p, sources: p.sources.filter((q) => q.id !== s.id) });
+    else if (s.kind === 'object') commit({ ...p, objects: p.objects.filter((o) => o.id !== s.id) });
     else commit({ ...p, marks: p.marks.filter((m) => m.id !== s.id) });
     setSel(null);
     setPopup(null);
@@ -387,7 +408,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     const p = local(e);
     pointers.current.set(e.pointerId, p);
     if (popupRef.current) closePopup();
-    setMenuOpen(false);
+    setMenuOpen(false); setObjMenu(false);
 
     if (pointers.current.size === 2) { // second finger: pinch and pan, drop whatever was being drawn
       const [a, b] = [...pointers.current.values()];
@@ -467,6 +488,17 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       schedule();
       return;
     }
+    if (t === 'object') { // click to place; the tool stays on so several can go in a row
+      if (plan.objects.length < MAX_OBJECTS) {
+        const type = objTypeRef.current;
+        const pos = placeObject(plan, type, w.x, w.y, { free: e.altKey });
+        const obj = makeObject(type, pos.x, pos.y, { r: pos.r });
+        commit({ ...plan, objects: [...plan.objects, obj] });
+        setSel({ kind: 'object', id: obj.id });
+      }
+      dragRef.current = null;
+      return;
+    }
     if (t === 'text') { dragRef.current = { mode: 'text', sx: p.x, sy: p.y, wx: w.x, wy: w.y }; return; }
 
     // select tool. The selected shape's own corners and walls come first.
@@ -494,7 +526,8 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     }
     const filter = surfaceRef.current;
     const pin = hitSource(plan, w.x, w.y, tolFt * 0.9, filter);
-    const mark = pin ? null : hitMarkAt(plan, w.x, w.y, tolFt * 0.6);
+    const obj = pin ? null : hitObject(plan, w.x, w.y, tolFt, filter);
+    const mark = pin || obj ? null : hitMarkAt(plan, w.x, w.y, tolFt * 0.6);
     const picked = pickArea(plan, w.x, w.y, edgeTol * 1.4, filter);
     const room = hitRoom(plan, w.x, w.y);
     // an affected area is picked by its edge, or anywhere on it when no room is under it, so a wet room can still be selected
@@ -503,6 +536,9 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     if (pin) {
       setSel({ kind: 'source', id: pin.id });
       dragRef.current = { mode: 'move-pin', id: pin.id, wx: w.x, wy: w.y, orig: { x: pin.x, y: pin.y }, plan, moved: false };
+    } else if (obj) {
+      setSel({ kind: 'object', id: obj.id });
+      dragRef.current = { mode: 'move-obj', id: obj.id, wx: w.x, wy: w.y, orig: { x: obj.x, y: obj.y, r: obj.r }, plan, moved: false };
     } else if (mark) {
       setSel({ kind: 'mark', id: mark.id });
       dragRef.current = { mode: 'move-mark', id: mark.id, wx: w.x, wy: w.y, orig: mark, plan, moved: false };
@@ -524,6 +560,15 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     if (!pointers.current.has(e.pointerId)) {
       // no button down: show where a break or corner would go
       const t = toolRef.current;
+      if (t === 'object') {
+        const p = local(e);
+        const w = toWorld(v, p.x, p.y);
+        const type = objTypeRef.current;
+        const pos = placeObject(planRef.current, type, w.x, w.y, { free: e.altKey });
+        ghostRef.current = makeObject(type, pos.x, pos.y, { r: pos.r });
+        schedule();
+        return;
+      }
       if (t === 'break' || t === 'corner') {
         const p = local(e);
         const w = toWorld(v, p.x, p.y);
@@ -608,6 +653,13 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       const nx = snap(d.orig.x + (w.x - d.wx), 0.25);
       const ny = snap(d.orig.y + (w.y - d.wy), 0.25);
       d.plan = { ...d.plan, sources: d.plan.sources.map((x) => (x.id === d.id ? { ...x, x: nx, y: ny } : x)) };
+    } else if (d.mode === 'move-obj') {
+      d.moved = true;
+      const o = d.plan.objects.find((x) => x.id === d.id);
+      if (o) {
+        const pos = placeObject(d.plan, o.t, d.orig.x + (w.x - d.wx), d.orig.y + (w.y - d.wy), { w: o.w, d: o.d, r: d.orig.r, free });
+        d.plan = { ...d.plan, objects: d.plan.objects.map((x) => (x.id === d.id ? { ...x, x: pos.x, y: pos.y, r: pos.r } : x)) };
+      }
     } else if (d.mode === 'move-mark') {
       d.moved = true;
       const dx = w.x - d.wx; const dy = w.y - d.wy;
@@ -640,7 +692,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     dragRef.current = null;
     const plan = planRef.current;
     // a plain click on something (no drag) opens its editor next to the click
-    if (p && ['move-room', 'vertex', 'edge', 'move-mark', 'avertex', 'move-area', 'move-pin'].includes(d.mode) && !d.moved) openPopup(p.x, p.y);
+    if (p && ['move-room', 'vertex', 'edge', 'move-mark', 'avertex', 'move-area', 'move-pin', 'move-obj'].includes(d.mode) && !d.moved) openPopup(p.x, p.y);
 
     if (d.mode === 'room') {
       const dr = d.draft;
@@ -677,7 +729,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       }
     } else if (d.mode === 'text') {
       if (p && Math.hypot(p.x - d.sx, p.y - d.sy) < 8) setTextDraft({ x: snap(d.wx, 0.25), y: snap(d.wy, 0.25), value: '' });
-    } else if (['move-room', 'vertex', 'edge', 'move-mark', 'avertex', 'move-area', 'move-pin'].includes(d.mode) && d.moved && d.plan) {
+    } else if (['move-room', 'vertex', 'edge', 'move-mark', 'avertex', 'move-area', 'move-pin', 'move-obj'].includes(d.mode) && d.moved && d.plan) {
       let next = d.plan;
       if (d.mode === 'vertex' || d.mode === 'edge') {
         // a corner or wall that now lines up with its neighbours leaves a stray point: drop it
@@ -855,11 +907,12 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     }, 'image/jpeg', 0.92);
   }
   const plan = planRef.current;
-  const hasContent = !!(plan.rooms.length || plan.marks.length || plan.areas.length || plan.sources.length);
+  const hasContent = !!(plan.rooms.length || plan.marks.length || plan.areas.length || plan.sources.length || plan.objects.length);
   const total = totalArea(plan);
   const totals = totalsFor(plan);
   const room = selected && sel.kind === 'room' ? selected : null;
   const mark = selected && sel.kind === 'mark' ? selected : null;
+  const obj = selected && sel.kind === 'object' ? selected : null;
   const area = selected && sel.kind === 'area' ? selected : null;
   const pin = selected && sel.kind === 'source' ? selected : null;
   const roomPhotos = room ? photoCounts[room.id] || 0 : 0;
@@ -880,6 +933,13 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     ? { left: 8, right: 8, bottom: 8 }
     : { left: clampN(textPos.x, 8, Math.max(8, stageW - 280 - 8)), top: clampN(textPos.y + 10, 8, Math.max(8, stageH - 110)), width: 280 };
 
+  function pickObject(id) {
+    setObjType(id);
+    objTypeRef.current = id;
+    setTool('object');
+    setTextDraft(null);
+    setObjMenu(false);
+  }
   function pickKind(kind) {
     setAreaKind(kind);
     setTool('area');
@@ -901,45 +961,32 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       {(full || !headSlot) && <div className="sketch-head-inline">{headBtns}</div>}
       {!full && headSlot && createPortal(headBtns, headSlot)}
 
-      {tool === 'area' && (
-        <div className="sketch-strip" aria-label="Affected area options">
-          <span className="sk-strip-kind"><span className="sk-dot" style={{ background: kindDot(areaKind) }} /><strong>{AREA_KINDS[areaKind]}</strong></span>
-          {areaKind === 'water' && <CatChips value={waterCat} onChange={setWaterCat} />}
-          {areaKind === 'growth' && (
-            <div className="chips" role="group" aria-label="Where growth goes" title="Auto: a line snaps to the nearest wall, a loop to the nearest ceiling. Hold Alt while drawing to skip the snap.">
-              <button type="button" className={growthAuto ? 'on' : ''} aria-pressed={growthAuto} onClick={() => setGrowthAuto(true)}>Auto</button>
-              <button type="button" className={growthAuto ? '' : 'on'} aria-pressed={!growthAuto} onClick={() => setGrowthAuto(false)}>Manual</button>
-            </div>
-          )}
-          {areaKind !== 'source' && !(areaKind === 'growth' && growthAuto) && <SurfaceChips value={surfaces} onChange={setSurfaces} />}
-          {areaKind !== 'source' && (areaKind === 'growth' && growthAuto ? true : surfaces.includes('wall')) && (<><span className="muted">up the wall</span><HeightChips value={wallHeight} onChange={setWallHeight} /></>)}
-          {areaKind === 'growth' && growthAuto && <span className="muted">Draw a line along a wall or a loop for the ceiling.</span>}
-          {areaKind !== 'source' && (
-            <div className="chips" role="group" aria-label="Line cleanup">
-              {[['smooth', 'Rounded'], ['straight', 'Straight']].map(([m, label]) => (
-                <button key={m} type="button" className={areaMode === m ? 'on' : ''} aria-pressed={areaMode === m} onClick={() => setAreaMode(m)}>{label}</button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-      {(tool === 'pen' || tool === 'text') && (
-        <div className="sketch-strip">
-          <span className="muted">Color</span>
-          <div className="sketch-colors">
-            {MARK_COLORS.map((col) => (
-              <button key={col} type="button" className={color === col ? 'on' : ''} style={{ background: col }} aria-label={`Color ${col}`} onClick={() => setColor(col)} />
-            ))}
-          </div>
-        </div>
-      )}
-
       <div className="sketch-stage" ref={wrapRef}>
         <div className="sketch-over sketch-over-tl">
           <div className="sketch-tools" role="toolbar" aria-label="Sketch tools">
-            {TOOLS.map(([k, label, key]) => (k === 'area' ? (
+            {TOOLS.map(([k, label, key]) => (k === 'object' ? (
               <div key={k} className="sketch-menu">
-                <button type="button" className={tool === 'area' ? 'on' : ''} aria-haspopup="menu" aria-expanded={menuOpen} title={`${label} (${key})`} onClick={() => setMenuOpen(!menuOpen)}>
+                <button type="button" className={tool === 'object' ? 'on' : ''} aria-haspopup="menu" aria-expanded={objMenu} title={`${label} (${key})`} onClick={() => { setMenuOpen(false); setObjMenu(!objMenu); }}>
+                  {label}<span className="sk-caret" aria-hidden="true" />
+                </button>
+                {objMenu && (
+                  <div className="sketch-menu-list sk-objects" role="menu">
+                    {OBJECT_GROUPS.map((g) => (
+                      <div key={g} className="sk-obj-group">
+                        <div className="sk-obj-head">{g}</div>
+                        <div className="sk-obj-grid">
+                          {Object.entries(OBJECT_TYPES).filter(([, t]) => t.group === g).map(([id, t]) => (
+                            <button key={id} type="button" role="menuitem" className={tool === 'object' && objType === id ? 'on' : ''} onClick={() => pickObject(id)}>{t.label}</button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : k === 'area' ? (
+              <div key={k} className="sketch-menu">
+                <button type="button" className={tool === 'area' ? 'on' : ''} aria-haspopup="menu" aria-expanded={menuOpen} title={`${label} (${key})`} onClick={() => { setObjMenu(false); setMenuOpen(!menuOpen); }}>
                   {label}<span className="sk-caret" aria-hidden="true" />
                 </button>
                 {menuOpen && (
@@ -963,6 +1010,45 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
               {SURFACE_VIEWS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
             </select>
           </div>
+          {tool === 'area' && (
+            <div className="sketch-strip" aria-label="Affected area options">
+              <span className="sk-strip-kind"><span className="sk-dot" style={{ background: kindDot(areaKind) }} /><strong>{AREA_KINDS[areaKind]}</strong></span>
+              {areaKind === 'water' && <CatChips value={waterCat} onChange={setWaterCat} />}
+              {areaKind === 'growth' && (
+                <div className="chips" role="group" aria-label="Where growth goes" title="Auto: a line snaps to the nearest wall, a loop to the nearest ceiling. Hold Alt while drawing to skip the snap.">
+                  <button type="button" className={growthAuto ? 'on' : ''} aria-pressed={growthAuto} onClick={() => setGrowthAuto(true)}>Auto</button>
+                  <button type="button" className={growthAuto ? '' : 'on'} aria-pressed={!growthAuto} onClick={() => setGrowthAuto(false)}>Manual</button>
+                </div>
+              )}
+              {areaKind !== 'source' && !(areaKind === 'growth' && growthAuto) && <SurfaceChips value={surfaces} onChange={setSurfaces} />}
+              {areaKind !== 'source' && (areaKind === 'growth' && growthAuto ? true : surfaces.includes('wall')) && (<><span className="muted">up the wall</span><HeightChips value={wallHeight} onChange={setWallHeight} /></>)}
+              {areaKind === 'growth' && growthAuto && <span className="muted">Draw a line along a wall or a loop for the ceiling.</span>}
+              {areaKind !== 'source' && (
+                <div className="chips" role="group" aria-label="Line cleanup">
+                  {[['smooth', 'Rounded'], ['straight', 'Straight']].map(([m, label]) => (
+                    <button key={m} type="button" className={areaMode === m ? 'on' : ''} aria-pressed={areaMode === m} onClick={() => setAreaMode(m)}>{label}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {tool === 'object' && (
+            <div className="sketch-strip sk-info" aria-label="Object options">
+              <strong>{OBJECT_TYPES[objType].label}</strong>
+              <span className="muted">{OBJECT_TYPES[objType].mode === 'wall' || OBJECT_TYPES[objType].mode === 'wallpoint' ? 'click a wall' : 'click to place'} · Alt: free</span>
+            </div>
+          )}
+          {(tool === 'pen' || tool === 'text') && (
+            <div className="sketch-strip">
+              <span className="muted">Color</span>
+              <div className="sketch-colors">
+                {MARK_COLORS.map((col) => (
+                  <button key={col} type="button" className={color === col ? 'on' : ''} style={{ background: col }} aria-label={`Color ${col}`} onClick={() => setColor(col)} />
+                ))}
+              </div>
+            </div>
+          )}
+
         </div>
         <div className="sketch-over sketch-over-tr" role="toolbar" aria-label="Undo and zoom">
           <button type="button" className="sk-icon" onClick={undo} disabled={!canUndo} aria-label="Undo" title="Undo (Ctrl+Z)"><UndoIcon /></button>
@@ -980,7 +1066,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
           onPointerUp={onUp}
           onPointerCancel={onCancel}
           onDoubleClick={onDoubleClick}
-          onPointerLeave={() => { if (hoverRef.current) { hoverRef.current = null; schedule(); } }}
+          onPointerLeave={() => { if (hoverRef.current || ghostRef.current) { hoverRef.current = null; ghostRef.current = null; schedule(); } }}
           onContextMenu={(e) => e.preventDefault()}
           aria-label="Sketch drawing area"
         />
@@ -1083,6 +1169,43 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
               </>
             )}
 
+            {obj && (() => {
+              const ot = OBJECT_TYPES[obj.t];
+              const isWall = ot.mode === 'wall';
+              const feet = (id, label, value, key, min = 0.1, max = 100) => (
+                <div className="field" key={key}><label htmlFor={id}>{label}</label>
+                  <input id={id} key={`${obj.id}-${key}-${value}`} inputMode="decimal" defaultValue={fmtFeet(value)}
+                    onBlur={(e) => { const ft = parseFeet(e.target.value); if (Number.isFinite(ft) && ft >= min && ft <= max) { if (Math.abs(ft - value) > 1e-6) patchObject(obj.id, { [key]: Math.round(ft * 100) / 100 }); } else e.target.value = fmtFeet(value); }}
+                    onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
+                </div>
+              );
+              return (
+                <>
+                  <div className="sketch-pop-head"><strong>{ot.label}</strong>{closeBtn}</div>
+                  <div className="field"><label htmlFor="sk-obj-label">Label</label>
+                    <input id="sk-obj-label" key={`${obj.id}-l-${obj.label}`} defaultValue={obj.label} maxLength={40} placeholder={ot.label} onBlur={(e) => e.target.value !== obj.label && patchObject(obj.id, { label: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
+                  </div>
+                  {ot.mode !== 'wallpoint' && (
+                    <div className="grid2">
+                      {feet('sk-obj-w', isWall ? 'Width' : ot.mode === 'box' ? 'Length' : 'Size', obj.w, 'w')}
+                      {ot.mode === 'box' && feet('sk-obj-d', 'Depth', obj.d, 'd')}
+                    </div>
+                  )}
+                  {ot.h != null && feet('sk-obj-h', ot.kind === 'window' ? 'Sill height' : 'Height off floor', obj.h ?? ot.h, 'h', 0, 30)}
+                  <div className="field"><label htmlFor="sk-obj-note">Note</label>
+                    <input id="sk-obj-note" key={`${obj.id}-n-${obj.note}`} defaultValue={obj.note} maxLength={80} placeholder="Brand, material, size..." onBlur={(e) => e.target.value !== obj.note && patchObject(obj.id, { note: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
+                  </div>
+                  <div className="row">
+                    {ot.mode === 'box' && <button type="button" className="secondary small" onClick={() => patchObject(obj.id, { r: (obj.r + 90) % 360 })}>Rotate</button>}
+                    {(isWall || ot.mode === 'wallpoint' || ot.kind === 'stairs') && <button type="button" className="secondary small" onClick={() => patchObject(obj.id, { f: !obj.f })}>{ot.kind === 'stairs' ? 'Flip direction' : isWall ? 'Flip side' : 'Flip'}</button>}
+                    {ot.kind === 'door' && <button type="button" className="secondary small" onClick={() => patchObject(obj.id, { m: !obj.m })}>Flip hinge</button>}
+                    <button type="button" className="secondary small" onClick={() => duplicateObject(obj)}>Duplicate</button>
+                    <button type="button" className="danger small" onClick={removeSelected}>Delete</button>
+                  </div>
+                </>
+              );
+            })()}
+
             {mark && (
               <>
                 <div className="sketch-pop-head"><strong>{mark.type === 'text' ? 'Note' : 'Pen line'}</strong>{closeBtn}</div>
@@ -1117,6 +1240,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
         {['water', 'growth', 'smoke'].filter((kd) => totals.total[kd]).map((kd) => (
           <span key={kd}> · <strong style={{ color: kindDot(kd) }}>{AREA_KINDS[kd]} {surfaceText(totals.total[kd])} sq ft</strong></span>
         ))}
+        {plan.objects.length > 0 && <> · <span title={objectCounts(plan).map((c) => `${c.count} ${c.label.toLowerCase()}`).join(', ')}>{plan.objects.length} object{plan.objects.length === 1 ? '' : 's'}</span></>}
         {plan.sources.length > 0 && <> · <strong style={{ color: kindDot('source') }}>{plan.sources.length} source{plan.sources.length === 1 ? '' : 's'} of loss</strong></>}
         <span className="muted"> · {tool === 'area' ? AREA_HINTS[areaKind] : HINTS[tool]}</span>
       </div>
