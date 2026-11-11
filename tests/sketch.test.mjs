@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {
   emptyPlan, normalizePlan, newRoom, snap, parseFeet, fmtFeet, roomArea, totalArea, hitRoom,
   hitMarkAt, simplifyStroke, planBounds, fitView, toWorld, toScreen, roomPhotoCounts, distToSegment,
-  rectPts, polyArea, isRect, roomBox, nearestVertex, nearestEdge, nearestAnchor, insertBreak, insertCorner,
-  removeVertex, tidyPts, moveVertex, moveEdge, setEdgeLength, resizeRect, simplifyRDP, cleanWater, waterOutline,
+  rectPts, polyArea, isRect, roomBox, nearestVertex, nearestEdge, nearestAnchor, insertBreak, insertCorner, addCornerCut,
+  removeVertex, dropStraightPoints, tidyPts, moveVertex, moveEdge, moveEdgeSnapped, setEdgeLength, resizeRect, simplifyRDP, cleanWater, waterOutline,
   carveRooms, subtractRect, wetAreas, totalWet, hitWater, newWater, labelPoint,
   MAX_ROOMS, MAX_ROOM, MIN_ROOM,
 } from '../lib/sketch.js';
@@ -185,6 +185,142 @@ test('moving a wall keeps neighbouring walls square; walls of an L keep their co
   assert.deepEqual([free[0], free[1]], [[3, -2], [13, -2]]);
 });
 
+test('dragging an angled wall slides its ends along the neighbouring walls, which keep their direction', () => {
+  // a room with its top-left corner cut off: level top, plumb left, 45 degree wall between them
+  const pts = [[3, 0], [15, 0], [15, 14], [0, 14], [0, 3]];
+  const diag = 4; // from (0, 3) to (3, 0)
+  const moved = moveEdge(pts, diag, 1.5, 1.5);
+  assert.deepEqual(moved[4], [0, 6]);  // still on the left wall
+  assert.deepEqual(moved[0], [6, 0]);  // still on the top wall
+  assert.deepEqual([moved[1], moved[2], moved[3]], [pts[1], pts[2], pts[3]]);
+  // only the part across the wall counts, and pulling it back out grows the room again
+  assert.deepEqual(moveEdge(pts, diag, 1.5, 1.5), moveEdge(pts, diag, 3, 0));
+  const out = moveEdge(pts, diag, -1, -1);
+  assert.deepEqual([out[4], out[0]], [[0, 1], [1, 0]]);
+  // snapped to half-foot steps across the wall; neighbours still level and plumb
+  const snapped = moveEdgeSnapped(pts, diag, 1.2, 1.2);
+  assert.equal(snapped[0][1], 0);
+  assert.equal(snapped[4][0], 0);
+  // free moves carry the two ends along as before
+  const free = moveEdge(pts, diag, 1, 0, { free: true });
+  assert.deepEqual([free[4], free[0]], [[1, 3], [4, 0]]);
+});
+
+test('a diagonal made with wall breaks slides along the real walls behind the breaks', () => {
+  // cut the corner of a room the way it is done in the app: break the top and left walls, drop the corner
+  let r = { id: 'a', label: '', notes: '', pts: rectPts(0, 0, 15, 14) };
+  r = insertBreak(r, 0, 3, 0);
+  r = insertBreak(r, r.pts.length - 1, 0, 3);
+  r = removeVertex(r, r.pts.findIndex((p) => p[0] === 0 && p[1] === 0));
+  const diag = r.pts.findIndex((p, k) => {
+    const q = r.pts[(k + 1) % r.pts.length];
+    return p[0] === 0 && p[1] === 3 && q[0] === 3 && q[1] === 0;
+  });
+  assert.ok(diag >= 0);
+  const moved = moveEdge(r.pts, diag, 1.5, 1.5);
+  // every edge stays level, plumb, or the 45 degree diagonal: nothing tilted
+  moved.forEach((p, k) => {
+    const q = moved[(k + 1) % moved.length];
+    const dx = Math.abs(q[0] - p[0]); const dy = Math.abs(q[1] - p[1]);
+    assert.ok(dx < 1e-6 || dy < 1e-6 || Math.abs(dx - dy) < 1e-6, `edge ${k} is tilted: ${JSON.stringify([p, q])}`);
+  });
+  assert.ok(moved.some((p) => p[0] === 0 && p[1] === 6));
+  assert.ok(moved.some((p) => p[0] === 6 && p[1] === 0));
+  assert.equal(polyArea(moved), 15 * 14 - 0.5 * 6 * 6);
+});
+
+test('a point left dead straight after an edit is dropped; breaks and real corners are kept', () => {
+  // a square with its corner cut across: the point halfway along the diagonal is not a corner
+  const cut = [[0, 0], [10, 0], [10, 10], [3, 10], [1.5, 8.5], [0, 7]];
+  assert.deepEqual(dropStraightPoints(cut, [4]), [[0, 0], [10, 0], [10, 10], [3, 10], [0, 7]]);
+  // only the points asked about are looked at
+  assert.deepEqual(dropStraightPoints(cut, [0, 1]), cut);
+  // real corners stay
+  assert.deepEqual(dropStraightPoints(cut, [3, 5]), cut);
+  // a wall break (two points in one spot) stays
+  const brk = [[0, 0], [5, 0], [5, 0], [10, 0], [10, 10], [0, 10]];
+  assert.deepEqual(dropStraightPoints(brk, [1, 2]), brk);
+  // a point that doubles back is a spike, not a straight line
+  const spike = [[0, 0], [10, 0], [4, 0], [10, 10], [0, 10]];
+  assert.deepEqual(dropStraightPoints(spike, [2]), spike);
+  // a triangle keeps its three points
+  assert.equal(dropStraightPoints([[0, 0], [5, 0], [10, 0]], [1]).length, 3);
+  // indices wrap around the ends of the list
+  assert.deepEqual(dropStraightPoints([[0, 0], [5, 0], [10, 0], [10, 10], [0, 10]], [-4]).length, 4);
+});
+
+test('the full story: square, wall breaks, step, delete the middle points, then drag the angle', () => {
+  let r = { id: 'a', label: '', notes: '', pts: rectPts(0, 0, 10, 10) };
+  r = insertBreak(r, 2, 3, 10);                 // bottom wall, 3 ft from the left
+  r = insertBreak(r, r.pts.length - 1, 0, 7);   // left wall, 7 ft down
+  const corner = r.pts.findIndex((p) => p[0] === 0 && p[1] === 10);
+  r = { ...r, pts: moveVertex(r.pts, corner, 3, 7) }; // pull the corner in: a 3 ft step
+  assert.equal(polyArea(r.pts), 91);
+  while (r.pts.some((p) => p[0] === 3 && p[1] === 7)) r = removeVertex(r, r.pts.findIndex((p) => p[0] === 3 && p[1] === 7));
+  assert.deepEqual(r.pts, [[0, 0], [10, 0], [10, 10], [3, 10], [0, 7]]); // one straight angle, no middle point
+  const diag = 3; // from (3, 10) to (0, 7)
+  for (const [dx, dy, want] of [[1, -1, [[5, 10], [0, 5]]], [2, -2, [[7, 10], [0, 3]]], [-1, 1, [[1, 10], [0, 9]]]]) {
+    const m = moveEdgeSnapped(r.pts, diag, dx, dy);
+    assert.deepEqual([m[3], m[4]], want);
+    assert.deepEqual([m[0], m[1], m[2]], [[0, 0], [10, 0], [10, 10]]); // untouched
+    // the walls either side stay level and plumb: the ends only slide along them
+    assert.equal(m[3][1], 10);
+    assert.equal(m[4][0], 0);
+  }
+  // an in-between drag still lands on tidy numbers, never on a tilted neighbour
+  const odd = moveEdgeSnapped(r.pts, diag, 0.8, -1.3);
+  assert.equal(odd[3][1], 10);
+  assert.equal(odd[4][0], 0);
+  assert.equal(odd[3][0] % 0.5, 0);
+  // selecting an end instead moves that corner itself (Alt held = free: the neighbours are not kept square)
+  assert.deepEqual(moveVertex(r.pts, 3, 4, 9, { free: true })[3], [4, 9]);
+});
+
+test('dragging an angled wall next to a wall break never leaves a stray point behind', () => {
+  // breaks on the bottom (x = 5) and left (y = 7) walls, the old corner pulled in to (2, 7)
+  const pts = [[0, 0], [10, 0], [10, 10], [5, 10], [5, 10], [2, 7], [0, 7], [0, 7]];
+  const m = moveEdgeSnapped(pts, 4, 1, -1);
+  assert.deepEqual(m.slice(0, 3), pts.slice(0, 3));
+  assert.deepEqual([m[3], m[4]], [[7, 10], [7, 10]]); // both halves of the break stay together on the bottom wall
+  assert.deepEqual(m[5], [4, 7]);                      // the other end slides along the level 2 ft wall
+  assert.deepEqual(m.slice(6), pts.slice(6));
+});
+
+test('Add corner: a click adds a corner, and a second click on the next wall cuts the corner off', () => {
+  const sq = { id: 'a', label: '', notes: '', pts: rectPts(0, 0, 10, 10) };
+  const one = addCornerCut(sq, 2, 3.1, 10);           // bottom wall, about 3 ft in from the left
+  assert.deepEqual(one.point, [3, 10]);
+  assert.equal(one.cut, false);
+  assert.equal(one.room.pts.length, 5);               // a plain corner point, as before
+  const two = addCornerCut(one.room, 4, 0, 7.2, one.point); // left wall: cuts the corner between them
+  assert.equal(two.cut, true);
+  assert.deepEqual(two.room.pts, [[0, 0], [10, 0], [10, 10], [3, 10], [0, 7]]);
+  assert.equal(polyArea(two.room.pts), 100 - 0.5 * 3 * 3);
+  // the other order works too, and on the other pair of walls
+  const b1 = addCornerCut(sq, 3, 0, 6);               // left wall, 4 ft up from the bottom corner
+  const b2 = addCornerCut(b1.room, 2, 4, 10, b1.point); // bottom wall
+  assert.equal(b2.cut, true);
+  assert.equal(b2.room.pts.length, 5);
+  assert.equal(polyArea(b2.room.pts), 100 - 0.5 * 4 * 4);
+  // walls that are not next to each other, the same wall, or no earlier click: just a new corner
+  assert.equal(addCornerCut(one.room, 0, 5, 0, one.point).cut, false); // top wall: opposite side
+  assert.equal(addCornerCut(one.room, 2, 6, 10, one.point).cut, false); // same wall as the first click
+  assert.equal(addCornerCut(one.room, 4, 0, 7).cut, false);
+  // a click right on an existing corner adds nothing
+  assert.equal(addCornerCut(one.room, 4, 0, 10, one.point).point, null);
+});
+
+test('sliding a wall never runs a neighbour down to nothing', () => {
+  const pts = [[3, 0], [15, 0], [15, 14], [0, 14], [0, 3]];
+  const far = moveEdge(pts, 4, 50, 50); // way past the far corners
+  assert.ok(far[0][0] > 3 && far[0][0] < 15 && far[0][1] === 0);
+  assert.ok(far[4][1] > 3 && far[4][1] < 14 && far[4][0] === 0);
+  assert.ok(polyArea(far) > 0);
+  // a wall whose neighbours are parallel to it just moves across
+  const slab = [[0, 0], [10, 0], [10, 5], [0, 5]];
+  assert.deepEqual(moveEdge(slab, 0, 0, 2), [[0, 2], [10, 2], [10, 5], [0, 5]]);
+});
+
 test('typing a wall length moves the far end and keeps the room square', () => {
   const pts = rectPts(0, 0, 10, 8);
   assert.deepEqual(setEdgeLength(pts, 0, 14), rectPts(0, 0, 14, 8));
@@ -362,6 +498,12 @@ test('drawPlan renders rooms, labels, marks, selection and a draft without throw
   drawPlan(ctx, plan, view, { W: 400, H: 300, selection: { kind: 'mark', id: plan.marks[1].id }, draft: { type: 'pen', color: '#000000', pts: [[0, 0], [1, 1]] } });
   drawPlan(ctx, plan, view, { W: 400, H: 300, selection: { kind: 'room', id: 'k', vi: 2, ei: 1 }, wet: wetAreas(plan), hover: { x: 3, y: 0, kind: 'break' } });
   drawPlan(ctx, plan, view, { W: 400, H: 300, selection: { kind: 'water', id: 'w' }, draft: { type: 'water', cat: 2, pts: [[0, 0], [3, 1]] } });
+  // hovering the top wall of the kitchen (12 ft) at 3 ft: 3' on one side and 9' on the other, with the cut preview
+  const kit = plan.rooms[0];
+  const hctx = fakeCtx();
+  drawPlan(hctx, plan, view, { W: 400, H: 300, hover: { x: 3, y: 0, kind: 'corner', a: kit.pts[0], b: kit.pts[1], pts: kit.pts, from: { x: 0, y: 4 } }, pending: { x: 0, y: 4 } });
+  const hoverText = hctx.calls.filter((c) => c[0] === 'fillText').map((c) => c[1]);
+  assert.ok(hoverText.includes("3'") && hoverText.includes("9'"), `split lengths missing: ${hoverText}`);
   drawPlan(ctx, emptyPlan(), view, { W: 400, H: 300 });
   const text = ctx.calls.filter((c) => c[0] === 'fillText').map((c) => c[1]);
   assert.ok(text.includes('Kitchen'));
