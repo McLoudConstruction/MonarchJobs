@@ -12,7 +12,7 @@ import { drawPlan, WATER_LINE } from '@/lib/sketchDraw';
 
 const TOOLS = [
   ['select', 'Select', 'V'],
-  ['pan', 'Move view', 'H'],
+  ['pan', 'Pan', 'Space'],
   ['room', 'Draw room', 'R'],
   ['break', 'Wall break', 'B'],
   ['corner', 'Add corner', 'C'],
@@ -20,10 +20,10 @@ const TOOLS = [
   ['pen', 'Pen', 'P'],
   ['text', 'Text', 'T'],
 ];
-const KEYS = { v: 'select', h: 'pan', r: 'room', b: 'break', c: 'corner', w: 'water', p: 'pen', t: 'text' };
+const KEYS = { v: 'select', r: 'room', b: 'break', c: 'corner', w: 'water', p: 'pen', t: 'text' };
 const HINTS = {
   select: 'Click a room to select it, then drag its corners or walls. Hold Alt (or turn on Angles) to move a corner in any direction. Hold Ctrl and drag a corner or wall to start a new room there. Double-click a corner, or press Delete with it selected, to remove it.',
-  pan: 'Drag to move around. Pinch or scroll to zoom.',
+  pan: 'Drag to move around. Pinch or scroll to zoom. From any tool, hold Space and drag to pan, then let go to carry on.',
   room: 'Drag on the sketch to draw a room. It snaps to the corners and walls of rooms already there.',
   break: 'Hover a wall and click to cut it in two. Switch to Select (V), then drag either side of the cut in or out.',
   corner: 'Hover a wall and click to add a corner. To cut off a corner of a room, click one wall, then click the wall next to it. The tool stays on, so keep clicking. Esc starts over.',
@@ -49,6 +49,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   const viewRef = useRef({ scale: 14, ox: 40, oy: 40 });
   const dragRef = useRef(null);      // gesture in progress: { mode, plan?, draft?, ... }
   const hoverRef = useRef(null);
+  const spaceRef = useRef(null); // while Space is held: { back } the tool to return to
   const lastCornerRef = useRef(null); // Add corner: the point the last click added, { roomId, x, y }
   const pointers = useRef(new Map());
   const undoRef = useRef([]);
@@ -600,7 +601,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   }
 
   // ---- keyboard shortcuts ------------------------------------------------
-  // V select, H move view, R room, B wall break, C corner, W water, P pen, T text.
+  // V select, Space (hold) pan, R room, B wall break, C corner, W water, P pen, T text.
   // Delete removes the selection (or the selected corner), Ctrl+Z / Ctrl+Y undo and redo, Esc cancels.
   const keyRef = useRef(null);
   keyRef.current = (e) => {
@@ -609,6 +610,12 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     const inside = root && root.contains(e.target);
     // from outside the sketch only when nothing else (a photo viewer, a dialog) is on top
     if (!inside && (e.target !== document.body || document.querySelector('.pv-overlay, .popup-overlay, .camera-overlay, .markup-overlay'))) return;
+    if (e.code === 'Space' || e.key === ' ') { // hold Space to pan from any tool
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      e.preventDefault(); // no page scroll, and no click on a focused tool button
+      if (!e.repeat && !spaceRef.current && !dragRef.current && !textDraft) { spaceRef.current = { back: toolRef.current }; setTool('pan'); }
+      return;
+    }
     const k = e.key.toLowerCase();
     if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
     if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); redo(); return; }
@@ -627,8 +634,12 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   };
   useEffect(() => {
     const h = (e) => keyRef.current?.(e);
+    const release = () => { const s = spaceRef.current; if (s) { spaceRef.current = null; setTool(s.back); } };
+    const up = (e) => { if (e.code === 'Space' || e.key === ' ') { if (spaceRef.current) e.preventDefault(); release(); } };
     window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', release);
+    return () => { window.removeEventListener('keydown', h); window.removeEventListener('keyup', up); window.removeEventListener('blur', release); };
   }, []);
 
   // ---- dimension entry ---------------------------------------------------
