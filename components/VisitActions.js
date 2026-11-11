@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { apiFetch } from '@/lib/useAuth';
 
-// Big, thumb-friendly Start / Finish buttons for a visit ("On the way" is the popup on the job header). Calls the server, which checks the tech owns the visit.
+// Compact Start / Finish buttons on a visit row, for desktop. Phones use the action bar at the bottom of
+// the screen instead (VisitDock). "On the way" is the popup on the job header. The server checks the tech owns the visit.
 export default function VisitActions({ visit, token, onDone }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -23,17 +24,14 @@ export default function VisitActions({ visit, token, onDone }) {
   if (visit.status === 'finished' || visit.status === 'cancelled') return null;
 
   return (
-    <div className="field-actions">
-      {msg && <div className="msg err">{msg}</div>}
+    <span className="visit-actions desktop-only">
+      {msg && <span className="msg err" style={{ margin: 0, padding: '4px 8px' }}>{msg}</span>}
       {(visit.status === 'scheduled' || visit.status === 'on_the_way') && (
-        <>
-          {visit.status === 'on_the_way' && <div className="muted" style={{ marginBottom: 8 }}>On the way, {visit.minutes_out} min out.</div>}
-          <button className="primary big" disabled={busy} onClick={() => act('started')}>Start job</button>
-        </>
+        <button type="button" className="primary small" disabled={busy} onClick={() => act('started')}>Start job</button>
       )}
       {visit.status === 'started' && (
-        <button className="primary big" disabled={busy} onClick={() => { if (window.confirm('Finish this job?')) act('finished'); }}>Finish job</button>
+        <button type="button" className="primary small" disabled={busy} onClick={() => { if (window.confirm('Finish this job?')) act('finished'); }}>Finish job</button>
       )}
-    </div>
+    </span>
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
 import WeekGrid from '@/components/WeekGrid';
+import DateTimeField from '@/components/DateTimeField';
 import { DURATION_CHOICES, fmtDuration, fmtDateTime, fromLocalInput, toLocalInput } from '@/lib/format';
 import { weekStartMonday } from '@/lib/weekGrid';
 import { staffName } from '@/lib/userDisplay';
@@ -68,7 +69,7 @@ export default function AppointmentPicker({ value, onChange, staffList, excludeV
       <div className="grid2">
         <div className="field">
           <label>Start</label>
-          <input type="datetime-local" step="900" value={value.start} onChange={(e) => set({ start: e.target.value })} required />
+          <DateTimeField value={value.start} onChange={(v) => set({ start: v })} />
         </div>
         <div className="field">
           <label>Length</label>

@@ -7,6 +7,8 @@ import AuthGate from '@/components/AuthGate';
 import VisitForm from '@/components/VisitForm';
 import VisitActions from '@/components/VisitActions';
 import OnTheWayModal from '@/components/OnTheWayModal';
+import AssignJobModal from '@/components/AssignJobModal';
+import VisitDock from '@/components/VisitDock';
 import EstimateCard from '@/components/EstimateCard';
 import PhotosTab from '@/components/job/PhotosTab';
 import SketchTab from '@/components/job/SketchTab';
@@ -64,6 +66,7 @@ function JobInner({ id, staff, token }) {
   const roomInput = useRef(null);
   const roomTarget = useRef(null);
   const [otwOpen, setOtwOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
 
   // keep the open tab across refreshes and back/forward (#overview, #photos, #sketch ...)
   useEffect(() => {
@@ -77,7 +80,7 @@ function JobInner({ id, staff, token }) {
   const load = useCallback(async () => {
     const sb = getSupabase();
     const { data: j } = await sb.from('jobs')
-      .select('*,customer:customers(id,display_name,phone,email,customer_type),address:addresses(*)')
+      .select('*,customer:customers(id,display_name,first_name,last_name,company_name,phone,email,customer_type),address:addresses(*)')
       .eq('id', id).maybeSingle();
     setJob(j);
     if (!j) return;
@@ -204,14 +207,23 @@ function JobInner({ id, staff, token }) {
   const warnings = [job.address?.warnings, job.warning].filter(Boolean);
   // the visit "On the way" applies to: the next one still waiting, if this person may act on it
   const otwVisit = visits.find((v) => ['scheduled', 'on_the_way'].includes(v.status) && (isOffice || v.tech_id === staff.id));
+  // a visit still waiting with nobody on it: the office sees a red Assign Job button
+  const unassignedVisit = isOffice ? visits.find((v) => v.status === 'scheduled' && !v.tech_id) : null;
+  // the phone's action bar follows the visit under way, otherwise the next one waiting
+  const dockVisit = visits.find((v) => v.status === 'started' && (isOffice || v.tech_id === staff.id)) || otwVisit;
+  const contactName = [job.customer.first_name, job.customer.last_name].filter(Boolean).join(' ').trim();
   const anyFlag = visits.some((v) => flagged.has(v.id) && v.status !== 'cancelled');
 
   return (
     <>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <h1>Job #{job.job_number} <span className={`badge s-${job.status}`}>{JOB_STATUS[job.status]}</span></h1>
-        {otwVisit && <button type="button" className="primary" onClick={() => setOtwOpen(true)}>On the way</button>}
+        <div className="row" style={{ gap: 8 }}>
+          {unassignedVisit && <button type="button" className="assign-btn" onClick={() => setAssignOpen(true)}>Assign Job</button>}
+          {otwVisit && <button type="button" className="primary desktop-only" onClick={() => setOtwOpen(true)}>On the way</button>}
+        </div>
       </div>
+      <AssignJobModal open={assignOpen} visit={unassignedVisit} staffList={staffList} onClose={() => setAssignOpen(false)} onDone={load} logEvent={logEvent} />
       {otwVisit && <OnTheWayModal open={otwOpen} visit={otwVisit} token={token} onClose={() => setOtwOpen(false)} onDone={load} />}
       <p className="sub">
         {isOffice ? <Link href={`/customers/${job.customer.id}`}>{job.customer.display_name}</Link> : job.customer.display_name}
@@ -239,73 +251,85 @@ function JobInner({ id, staff, token }) {
       </div>
 
       {tab === 'overview' && (
-        <>
-      <div className="card">
-        <h2>Customer</h2>
-        <div className="title">{isOffice ? <Link href={`/customers/${job.customer.id}`}>{job.customer.display_name}</Link> : job.customer.display_name}</div>
-        <div>
-          {job.customer.phone && <a href={telHref(job.customer.phone)}>{displayPhone(job.customer.phone)}</a>}
-          {job.customer.email && <>{job.customer.phone ? ' · ' : ''}<a href={`mailto:${job.customer.email}`}>{job.customer.email}</a></>}
-          {!job.customer.phone && !job.customer.email && <span className="muted">No phone or email on file.</span>}
-        </div>
-      </div>
-
-      <div className="card">
-        <h2>Site</h2>
-        <div className="title">{addressLine(job.address)}</div>
-        {job.address.gate_code && <div>Gate code: <strong>{job.address.gate_code}</strong></div>}
-        {job.address.access_notes && <div className="meta">{job.address.access_notes}</div>}
-      </div>
-
-      <div className="card">
-        <div className="row" style={{ justifyContent: 'space-between' }}>
-          <h2>Visits</h2>
-          {isOffice && <button className="secondary small" onClick={() => setVisitEdit({})}>Add visit</button>}
-        </div>
-        {visits.map((v) => (
-          <div key={v.id} className="list-item">
-            <div className="title">
-              {fmtDateTime(v.starts_at)} for {fmtDuration(v.duration_minutes)}{' '}
-              <span className="badge off">{VISIT_STATUS[v.status]}</span>
-              {flagged.has(v.id) && v.status !== 'cancelled' && <> <span className="badge warn">Double-booked</span></>}
+        <div className="job-overview">
+          <div className="card">
+            <h2>Customer</h2>
+            <div className="title">{isOffice ? <Link href={`/customers/${job.customer.id}`}>{job.customer.display_name}</Link> : job.customer.display_name}</div>
+            {contactName && contactName !== job.customer.display_name && <div>{contactName}</div>}
+            <div className="meta-line">
+              {job.customer.phone && <a href={telHref(job.customer.phone)}>{displayPhone(job.customer.phone)}</a>}
+              {job.customer.email && <>{job.customer.phone ? ' · ' : ''}<a href={`mailto:${job.customer.email}`}>{job.customer.email}</a></>}
+              {!job.customer.phone && !job.customer.email && <span className="muted">No phone or email on file.</span>}
             </div>
-            <div className="meta">{name(v.tech_id)}{v.minutes_out ? ` · ${v.minutes_out} min out` : ''}</div>
-            {(isOffice || v.tech_id === staff.id) && <VisitActions visit={v} token={token} onDone={load} />}
-            {isOffice && v.status === 'scheduled' && (
-              <div className="row" style={{ marginTop: 6 }}>
-                <button className="secondary small" onClick={() => setVisitEdit(v)}>Reschedule / reassign</button>
-                <button className="danger small" onClick={() => cancelVisit(v)}>Cancel visit</button>
+          </div>
+
+          <div className="card">
+            <h2>Site</h2>
+            <div className="title">{addressLine(job.address)}</div>
+            {job.address.gate_code && <div>Gate code: <strong>{job.address.gate_code}</strong></div>}
+            {job.address.access_notes && <div className="meta">{job.address.access_notes}</div>}
+          </div>
+
+          {job.loss_summary && (
+            <div className="card wide">
+              <h2>Loss summary</h2>
+              <div>{job.loss_summary}</div>
+            </div>
+          )}
+
+          <div className="card wide">
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <h2>Visits</h2>
+              {isOffice && <button className="secondary small" onClick={() => setVisitEdit({})}>Add visit</button>}
+            </div>
+            {visits.map((v) => (
+              <div key={v.id} className="visit-row">
+                <div className="visit-main">
+                  <div className="title">
+                    {fmtDateTime(v.starts_at)} for {fmtDuration(v.duration_minutes)}{' '}
+                    <span className="badge off">{VISIT_STATUS[v.status]}</span>
+                    {flagged.has(v.id) && v.status !== 'cancelled' && <> <span className="badge warn">Double-booked</span></>}
+                  </div>
+                  <div className="meta">{name(v.tech_id)}{v.minutes_out ? ` · ${v.minutes_out} min out` : ''}</div>
+                </div>
+                <div className="visit-buttons">
+                  {(isOffice || v.tech_id === staff.id) && <VisitActions visit={v} token={token} onDone={load} />}
+                  {isOffice && v.status === 'scheduled' && (
+                    <>
+                      <button className="secondary small" onClick={() => setVisitEdit(v)}>Reschedule / reassign</button>
+                      <button className="danger small" onClick={() => cancelVisit(v)}>Cancel visit</button>
+                    </>
+                  )}
+                </div>
               </div>
+            ))}
+            {visits.length === 0 && <p className="muted">No visits scheduled.</p>}
+            {visitEdit && (
+              <VisitForm
+                jobId={id}
+                visit={visitEdit.id ? visitEdit : null}
+                staffList={staffList}
+                staff={staff}
+                onDone={() => { setVisitEdit(null); load(); }}
+                onCancel={() => setVisitEdit(null)}
+                logEvent={logEvent}
+              />
             )}
           </div>
-        ))}
-        {visits.length === 0 && <p className="muted">No visits scheduled.</p>}
-        {visitEdit && (
-          <VisitForm
-            jobId={id}
-            visit={visitEdit.id ? visitEdit : null}
-            staffList={staffList}
-            staff={staff}
-            onDone={() => { setVisitEdit(null); load(); }}
-            onCancel={() => setVisitEdit(null)}
-            logEvent={logEvent}
-          />
-        )}
-      </div>
 
-      {isOffice && contacts.length > 0 && (
-        <div className="card">
-          <h2>Also notify</h2>
-          <p className="hint">Extra contacts receive this job's progress updates (and its other notifications once messaging is switched on).</p>
-          {contacts.map((c) => (
-            <label key={c.id} className="row" style={{ marginBottom: 8 }}>
-              <input type="checkbox" checked={jobContactIds.includes(c.id)} onChange={() => toggleContact(c.id)} />
-              {c.name} {c.role && <span className="badge off">{c.role}</span>} <span className="muted">{[displayPhone(c.phone), c.email].filter(Boolean).join(' · ')}</span>
-            </label>
-          ))}
+          {isOffice && contacts.length > 0 && (
+            <div className="card wide">
+              <h2>Also notify</h2>
+              <p className="hint">Extra contacts receive this job's progress updates (and its other notifications once messaging is switched on).</p>
+              {contacts.map((c) => (
+                <label key={c.id} className="row" style={{ marginBottom: 8 }}>
+                  <input type="checkbox" checked={jobContactIds.includes(c.id)} onChange={() => toggleContact(c.id)} />
+                  {c.name} {c.role && <span className="badge off">{c.role}</span>} <span className="muted">{[displayPhone(c.phone), c.email].filter(Boolean).join(' · ')}</span>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
-      )}
-        </>
       )}
 
       {tab === 'details' && (
@@ -422,6 +446,13 @@ function JobInner({ id, staff, token }) {
           ))}
           {events.length === 0 && <p className="muted">No history yet.</p>}
         </div>
+      )}
+
+      {dockVisit && (
+        <>
+          <div className="dock-spacer mobile-only" />
+          <VisitDock visit={dockVisit} token={token} onOtw={() => setOtwOpen(true)} onDone={load} />
+        </>
       )}
 
       <input

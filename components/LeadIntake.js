@@ -210,10 +210,6 @@ export function RestorationSafety({ value, onChange }) {
             <select value={priority} onChange={(e) => onChange({ priority: e.target.value })} className={`prio-select prio-${priority}`}>
               {Object.entries(L.PRIORITIES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
-            <div className="note">
-              {value.priority ? 'Set by you.' : `Suggested from the answers (${L.PRIORITIES[suggested].toLowerCase()}).`}{' '}
-              Emergency is active water, a safety hazard, or a loss under 24 hours old. Business Hours is 24 to 48 hours. Scheduled is anything older.
-            </div>
           </div>
         </div>
       </div>
