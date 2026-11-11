@@ -204,7 +204,8 @@ function JobInner({ id, staff, token }) {
     load();
   }
 
-  const warnings = [job.address?.warnings, job.warning].filter(Boolean);
+  // the address warning (pets) shows in the Site card; only the job-level warning stays a banner
+  const warnings = [job.warning].filter(Boolean);
   // the visit "On the way" applies to: the next one still waiting, if this person may act on it
   const otwVisit = visits.find((v) => ['scheduled', 'on_the_way'].includes(v.status) && (isOffice || v.tech_id === staff.id));
   // a visit still waiting with nobody on it: the office sees a red Assign Job button
@@ -267,6 +268,7 @@ function JobInner({ id, staff, token }) {
             <h2>Site</h2>
             <div className="title">{addressLine(job.address)}</div>
             {job.address.gate_code && <div>Gate code: <strong>{job.address.gate_code}</strong></div>}
+            {job.address.warnings && <div>Pets: <strong>{job.address.warnings}</strong></div>}
             {job.address.access_notes && <div className="meta">{job.address.access_notes}</div>}
           </div>
 
