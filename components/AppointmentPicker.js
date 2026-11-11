@@ -7,11 +7,15 @@ import { DURATION_CHOICES, fmtDuration, fmtDateTime, fromLocalInput, toLocalInpu
 import { weekStartMonday } from '@/lib/weekGrid';
 import { staffName } from '@/lib/userDisplay';
 
-export function defaultAppointment() {
+// Every appointment starts out 4 hours long. Emergency-type work (mitigation and extraction) starts at the
+// current time rounded to the nearest hour; everything else starts at the next full hour.
+export const DEFAULT_DURATION = 240;
+export function defaultAppointment({ nearestHour = false } = {}) {
   const d = new Date();
+  const round = nearestHour ? Math.round(d.getMinutes() / 60) : 1;
   d.setMinutes(0, 0, 0);
-  d.setHours(d.getHours() + 1);
-  return { start: toLocalInput(d), duration: 120, techId: '', override: false };
+  d.setHours(d.getHours() + round);
+  return { start: toLocalInput(d), duration: DEFAULT_DURATION, techId: '', override: false };
 }
 
 // Start time + length + tech, with the week's schedule beside it so the best slot can be seen and

@@ -20,14 +20,17 @@ test('both flows end on the schedule step', () => {
 });
 
 test('priority follows the 24 and 48 hour lines and safety hazards', () => {
-  assert.equal(suggestPriority({}), 'standard');
-  assert.equal(suggestPriority({ loss_started: 'over48' }), 'standard');
-  assert.equal(suggestPriority({ loss_started: '24to48' }), 'urgent');
+  assert.equal(suggestPriority({}), 'scheduled');
+  assert.equal(suggestPriority({ loss_started: 'over48' }), 'scheduled');
+  assert.equal(suggestPriority({ loss_started: '24to48' }), 'business_hours');
+  assert.equal(suggestPriority({ loss_started: 'justnow' }), 'emergency');
+  assert.equal(suggestPriority({ loss_started: 'over48', loss_discovered: 'justnow' }), 'emergency');
+  assert.equal(suggestPriority({ loss_started: 'over48', water_flow: 'na' }), 'scheduled');
   assert.equal(suggestPriority({ loss_started: 'under24' }), 'emergency');
   assert.equal(suggestPriority({ loss_started: '24to48', loss_discovered: 'under24' }), 'emergency');
   assert.equal(suggestPriority({ loss_started: 'over48', water_flow: 'running' }), 'emergency');
   assert.equal(suggestPriority({ loss_started: 'over48', electrical: 'hazard_on' }), 'emergency');
-  assert.equal(suggestPriority({ loss_started: 'over48', electrical: 'hazard_off' }), 'standard');
+  assert.equal(suggestPriority({ loss_started: 'over48', electrical: 'hazard_off' }), 'scheduled');
   assert.equal(suggestPriority({ loss_started: 'over48', site_hazards: ['Gas smell'] }), 'emergency');
   assert.equal(suggestPriority({ loss_started: 'over48', injuries: 'yes' }), 'emergency');
 });
@@ -68,8 +71,13 @@ test('saving a restoration lead sets job type and priority but keeps what the of
   assert.equal(out.priority, 'emergency');
   assert.equal(out.loss_summary, 'Call before arriving');
   assert.equal(out.service_requested, 'Extraction · Toilet overflow');
-  const chosen = finishLead({ restoration_type: 'mitigation', priority: 'standard', intake: { loss_started: 'under24' } }, 'restoration');
-  assert.equal(chosen.priority, 'standard');
+  const chosen = finishLead({ restoration_type: 'mitigation', priority: 'scheduled', intake: { loss_started: 'under24' } }, 'restoration');
+  assert.equal(chosen.priority, 'scheduled');
+});
+
+test('on-site contact shows name and phone together', () => {
+  const rows = intakeHighlights('restoration', { intake: { onsite_name: 'Dana', onsite_phone: '(913) 555-0101' } });
+  assert.deepEqual(rows, [['On site', 'Dana · (913) 555-0101']]);
 });
 
 test('the overview shows only answers that exist', () => {

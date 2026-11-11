@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AuthGate from '@/components/AuthGate';
 import LeadWizard from '@/components/LeadWizard';
@@ -17,6 +17,9 @@ const BOOK_ERRORS = {
   NOT_ALLOWED: 'Only the office and owner can create work orders.',
 };
 const friendly = (m) => BOOK_ERRORS[Object.keys(BOOK_ERRORS).find((k) => (m || '').includes(k))] || m;
+
+// Mitigation and extraction are urgent work: the schedule starts at the current time, rounded to the hour.
+const startsNow = (kind, type) => kind === 'restoration' && (type === 'mitigation' || type === 'extraction');
 
 // Keeps ?kind=restoration&type=extraction in the address bar so a refresh stays on the same screen.
 function rememberChoice(kind, type, customerId) {
@@ -42,7 +45,8 @@ function NewLead({ staff }) {
   }));
   const [customer, setCustomer] = useState(null);
   const [staffList, setStaffList] = useState([]);
-  const [appt, setAppt] = useState(defaultAppointment);
+  const [appt, setAppt] = useState(() => defaultAppointment({ nearestHour: startsNow(startKind, startType) }));
+  const apptTouched = useRef(false);
   const [conflicts, setConflicts] = useState([]);
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -82,6 +86,7 @@ function NewLead({ staff }) {
   }
   function pickType(t) {
     setForm((f) => ({ ...f, restoration_type: t }));
+    if (!apptTouched.current) setAppt(defaultAppointment({ nearestHour: startsNow('restoration', t) }));
     rememberChoice('restoration', t, customerId);
   }
   // Back to the first screen. Nothing typed so far is lost.
@@ -161,7 +166,8 @@ function NewLead({ staff }) {
       value={form}
       onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
       appt={appt}
-      onApptChange={setAppt}
+      onApptChange={(a) => { apptTouched.current = true; setAppt(a); }}
+      onEnterSchedule={() => { if (!apptTouched.current) setAppt(defaultAppointment({ nearestHour: startsNow(kind, form.restoration_type) })); }}
       staffList={staffList}
       conflicts={conflicts}
       onConflicts={setConflicts}

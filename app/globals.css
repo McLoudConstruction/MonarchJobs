@@ -1128,8 +1128,10 @@ a.stat-tile:hover{ border-color: var(--accent); }
 .appt-split{ display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 18px; flex: 1; min-height: 0; }
 .appt-split .appt-controls{ overflow-y: auto; }
 .appt-split .appt-controls .grid2{ grid-template-columns: 1fr; }
-.appt-split .appt-grid{ min-height: 0; overflow: auto; }
-@media (max-width: 900px){ .appt-split{ grid-template-columns: 1fr; } .wizard-schedule{ height: auto; } }
+.appt-split .appt-grid{ min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.appt-split .appt-grid .wg{ flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.appt-split .appt-grid .wg-scroll{ flex: 1; min-height: 0; overflow: auto; }
+@media (max-width: 900px){ .appt-split{ grid-template-columns: 1fr; } .wizard-schedule{ height: auto; } .appt-split .appt-grid .wg{ flex: none; } .appt-split .appt-grid .wg-scroll{ max-height: 65vh; } }
 
 /* Centered popup dialog (On the way) */
 .popup-overlay{ position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1200; display: flex; align-items: center; justify-content: center; padding: 16px; }
@@ -1565,12 +1567,18 @@ a.stat-tile:hover{ border-color: var(--accent); }
 .intake-chip:hover{ border-color: var(--accent); }
 .intake-chip.on{ background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 
-.match-hint{ display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 12px; margin-bottom: 10px; }
-.match-row{ display: inline-flex; align-items: center; gap: 10px; font-weight: 400; }
+.match-card{ background: var(--card-bg); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: 8px 14px 4px; margin-bottom: 10px; }
+.match-title{ font-size: 13px; font-weight: 700; color: var(--heading); }
+.match-sub{ font-size: 12px; color: var(--ink-soft); margin-bottom: 4px; }
+.match-row{ display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 8px 0; border-top: 1px solid var(--line); }
+.match-who{ display: flex; flex-direction: column; min-width: 0; font-size: 13.5px; }
+.match-who span{ color: var(--ink-soft); font-size: 12.5px; }
+.match-actions{ display: flex; align-items: center; gap: 12px; }
+.match-view{ font-size: 13px; color: var(--accent-text); }
 .banner.warn{ margin-top: 10px; margin-bottom: 0; }
 
 .badge.prio-emergency{ background: #b3382c; }
-.badge.prio-urgent{ background: #b8741f; }
-.badge.prio-standard{ background: #9a9488; }
+.badge.prio-business_hours{ background: #b8741f; }
+.badge.prio-scheduled{ background: #9a9488; }
 select.prio-emergency{ border-color: #b3382c; }
-select.prio-urgent{ border-color: #b8741f; }
+select.prio-business_hours{ border-color: #b8741f; }

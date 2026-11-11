@@ -72,7 +72,7 @@ function LeadsInner() {
               {leadDisplayName(l) || displayPhone(l.phone) || l.email || 'Unnamed lead'}{' '}
               <span className={`badge s-${l.status}`}>{LEAD_STATUS[l.status]}</span>{' '}
               <span className="badge off">{l.restoration_type ? RESTORATION_TYPES[l.restoration_type].label : JOB_TYPES[l.job_type]}</span>{' '}
-              {l.priority && l.priority !== 'standard' && ['new', 'quoted'].includes(l.status) && <span className={`badge prio-${l.priority}`}>{PRIORITIES[l.priority]}</span>}
+              {l.priority && l.priority !== 'scheduled' && ['new', 'quoted'].includes(l.status) && <span className={`badge prio-${l.priority}`}>{PRIORITIES[l.priority]}</span>}
             </div>
             <div className="meta">{[displayPhone(l.phone), l.email, l.address].filter(Boolean).join(' · ')}</div>
             {l.service_requested && <div>{l.service_requested}</div>}

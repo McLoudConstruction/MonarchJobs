@@ -116,14 +116,20 @@ export function CustomerMatchHint({ phone, email, linkedId, onUse }) {
   }, [phone, email, linkedId]);
   if (!matches.length) return null;
   return (
-    <div className="banner match-hint">
-      <strong>Existing customer?</strong>
-      {matches.slice(0, 2).map((m) => (
-        <span key={m.id} className="match-row">
-          {m.display_name}{m.phone ? ` · ${displayPhone(m.phone)}` : ''}
-          <button type="button" className="secondary small" onClick={() => onUse(m.id)}>Use this customer</button>
-          <Link href={`/customers/${m.id}`} target="_blank">View</Link>
-        </span>
+    <div className="match-card">
+      <div className="match-title">Existing customer?</div>
+      <div className="match-sub">This phone number or email is already on file.</div>
+      {matches.slice(0, 3).map((m) => (
+        <div key={m.id} className="match-row">
+          <div className="match-who">
+            <strong>{m.display_name}</strong>
+            <span>{[m.phone && displayPhone(m.phone), m.email].filter(Boolean).join(' · ')}</span>
+          </div>
+          <div className="match-actions">
+            <Link href={`/customers/${m.id}`} target="_blank" className="match-view">View</Link>
+            <button type="button" className="secondary small" onClick={() => onUse(m.id)}>Use this customer</button>
+          </div>
+        </div>
       ))}
     </div>
   );
@@ -195,7 +201,8 @@ export function RestorationSafety({ value, onChange }) {
       <div className="card">
         <h2>Access and site</h2>
         <div className="grid2">
-          <Text wide label="Who is on site, and who can give access?" value={i.onsite_contact} onChange={(v) => set({ onsite_contact: v })} placeholder="Name and phone" />
+          <Text label="On site, can give access" value={i.onsite_name} onChange={(v) => set({ onsite_name: v })} placeholder="Name" />
+          <div className="field"><label>Phone</label><PhoneInput value={i.onsite_phone || ''} onChange={(e) => set({ onsite_phone: e.target.value })} /></div>
           <Text wide label="Parking, lockbox, HOA or building rules, elevator" value={i.access_notes} onChange={(v) => set({ access_notes: v })} />
           <Pick wide label="Power for equipment" value={i.site_power} onChange={(v) => set({ site_power: v })} options={L.SITE_POWER} />
           <div className="field" style={{ gridColumn: '1 / -1' }}>
@@ -205,7 +212,7 @@ export function RestorationSafety({ value, onChange }) {
             </select>
             <div className="note">
               {value.priority ? 'Set by you.' : `Suggested from the answers (${L.PRIORITIES[suggested].toLowerCase()}).`}{' '}
-              Emergency is active water, a safety hazard, or a loss under 24 hours old. Urgent is 24 to 48 hours.
+              Emergency is active water, a safety hazard, or a loss under 24 hours old. Business Hours is 24 to 48 hours. Scheduled is anything older.
             </div>
           </div>
         </div>

@@ -183,7 +183,7 @@ function LeadInner({ id, staff, token }) {
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <h1>
           {name} <span className={`badge s-${lead.status}`}>{LEAD_STATUS[lead.status]}</span>
-          {lead.priority && lead.priority !== 'standard' && <> <span className={`badge prio-${lead.priority}`}>{PRIORITIES[lead.priority]}</span></>}
+          {lead.priority && lead.priority !== 'scheduled' && <> <span className={`badge prio-${lead.priority}`}>{PRIORITIES[lead.priority]}</span></>}
         </h1>
         <div className="row">
           {open && <button className="primary" onClick={() => { setMsg(null); setWoOpen(true); }}>Create work order</button>}

@@ -25,6 +25,7 @@ export default function WeekGrid({
   const [view, setView] = useState(focusTechId || 'all');
   const [dragStart, setDragStart] = useState(null); // Date while the planned appointment is being dragged
   const colRefs = useRef([]);
+  const scrollRef = useRef(null);
   const dragRef = useRef(null);
   const justDragged = useRef(false);
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
@@ -57,6 +58,19 @@ export default function WeekGrid({
     const r = e.currentTarget.getBoundingClientRect();
     onPick(timeFromFraction(day, (e.clientY - r.top) / r.height));
   }
+
+  // Open on the right part of the day: the appointment being planned if it is in this week, otherwise now.
+  // Does nothing where the page itself scrolls instead of this box.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || el.scrollHeight <= el.clientHeight + 1) return;
+    const inWeek = (d) => d >= weekStart && d < weekEnd;
+    const planned = proposed?.start ? new Date(proposed.start) : null;
+    const target = planned && inWeek(planned) ? planned : inWeek(new Date()) ? new Date() : null;
+    const f = target ? fractionFromTime(target, target) : 0;
+    el.scrollTop = Math.max(0, f * HOURS.length * HOUR_PX - HOUR_PX * 1.5);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekStart.getTime()]);
 
   const propStart = dragStart || (proposed?.start ? new Date(proposed.start) : null);
 
@@ -102,25 +116,23 @@ export default function WeekGrid({
   return (
     <div className="wg" style={{ '--wg-hour': `${HOUR_PX}px` }}>
       <div className="wg-bar">
-        <button type="button" className="secondary small" onClick={() => onWeekChange(addDays(weekStart, -7))}>Previous week</button>
+        <button type="button" className="secondary small" onClick={() => onWeekChange(addDays(weekStart, -7))}>Prev</button>
         <button type="button" className="secondary small" onClick={() => onWeekChange(weekStartMonday(new Date()))}>This week</button>
-        <button type="button" className="secondary small" onClick={() => onWeekChange(addDays(weekStart, 7))}>Next week</button>
+        <button type="button" className="secondary small" onClick={() => onWeekChange(addDays(weekStart, 7))}>Next</button>
         <span className="range">{fmtDay(days[0])} to {fmtDay(days[6])}</span>
+        <span className="wg-legend">
+          {techs.filter((t) => view === 'all' || t.id === view).map((t) => (
+            <span key={t.id}><i style={{ background: techColor(techIds, t.id) }} />{staffName(t)}</span>
+          ))}
+          <span><i style={{ background: techColor(techIds, null) }} />Unassigned</span>
+        </span>
         <span style={{ flex: 1 }} />
-        <label className="muted" style={{ fontSize: 14 }}>Show{' '}
-          <select value={view} onChange={(e) => setView(e.target.value)}>
-            <option value="all">All techs</option>
-            {techs.map((t) => <option key={t.id} value={t.id}>{staffName(t)}</option>)}
-          </select>
-        </label>
+        <select value={view} onChange={(e) => setView(e.target.value)} aria-label="Show">
+          <option value="all">All techs</option>
+          {techs.map((t) => <option key={t.id} value={t.id}>{staffName(t)}</option>)}
+        </select>
       </div>
-      <div className="wg-legend">
-        {techs.filter((t) => view === 'all' || t.id === view).map((t) => (
-          <span key={t.id}><i style={{ background: techColor(techIds, t.id) }} />{staffName(t)}</span>
-        ))}
-        <span><i style={{ background: techColor(techIds, null) }} />Unassigned</span>
-      </div>
-      <div className="wg-scroll">
+      <div className="wg-scroll" ref={scrollRef}>
         <div className="wg-inner">
           <div className="wg-head">
             <div />
@@ -167,6 +179,7 @@ export default function WeekGrid({
                       <div key={v.id} className={cls} style={style} title={title} onClick={(e) => e.stopPropagation()}>{body}</div>
                     );
                   })}
+                  {d.toDateString() === todayKey && (() => { const f = fractionFromTime(new Date(), d); return f > 0 && f < 1 ? <div className="wg-now" style={{ top: `${f * 100}%` }} /> : null; })()}
                   {showProposed && pTop < 1 && pTop + pHeight > 0 && (
                     <div className={`wg-proposed${onPick ? ' draggable' : ''}${dragStart ? ' dragging' : ''}`}
                       onPointerDown={(e) => beginDrag(e, d)} onClick={(e) => e.stopPropagation()}

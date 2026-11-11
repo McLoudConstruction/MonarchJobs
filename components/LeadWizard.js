@@ -20,7 +20,7 @@ import { KINDS, RESTORATION_TYPES, STEPS } from '@/lib/leadIntake';
 //   onSaveAndBook()  saves the lead and creates the work order from the appointment chosen
 export default function LeadWizard({
   kind, value, onChange, subtitle, appt, onApptChange, staffList, conflicts, onConflicts, onSave, onSaveAndBook,
-  busy, setMsg, msg, linkedCustomerId, onUseCustomer, onRestart, onSwitchToRestoration,
+  busy, setMsg, msg, onEnterSchedule, linkedCustomerId, onUseCustomer, onRestart, onSwitchToRestoration,
 }) {
   const steps = STEPS[kind];
   const last = steps.length - 1;
@@ -32,6 +32,7 @@ export default function LeadWizard({
   function go(n) {
     setMsg(null);
     if (n > 0 && !hasContact) { setMsg('Enter at least a name, phone or email first.'); setStep(0); return; }
+    if (n === last) onEnterSchedule?.();
     setStep(n);
     setReached((r) => Math.max(r, n));
   }

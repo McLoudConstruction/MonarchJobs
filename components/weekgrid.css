@@ -1,14 +1,15 @@
 /* Week timeline used to pick an appointment time and to browse the schedule. */
 .wg { border: 1px solid var(--border); border-radius: 8px; background: var(--card-bg); overflow: hidden; }
-.wg-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
-.wg-bar select { padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--paper); color: var(--ink); }
-.wg-bar .range { font-weight: 600; margin: 0 4px; }
-.wg-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--muted); padding: 6px 12px; border-bottom: 1px solid var(--border); }
+.wg-bar { display: flex; gap: 6px 8px; flex-wrap: wrap; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--panel); }
+.wg-bar select { padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--paper); color: var(--ink); }
+.wg-bar .range { font-weight: 600; font-size: 13px; margin: 0 4px; white-space: nowrap; }
+.wg-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-left: 6px; }
 .wg-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: baseline; }
 .wg-scroll { overflow-x: auto; }
 .wg-inner { min-width: 760px; }
 .wg-head, .wg-body { display: grid; grid-template-columns: 52px repeat(7, 1fr); }
-.wg-head > div { padding: 6px 4px; text-align: center; font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--border); background: var(--panel); color: var(--ink); border-left: 1px solid var(--border); }
+.wg-head { position: sticky; top: 0; z-index: 5; }
+.wg-head > div { padding: 4px 4px; text-align: center; font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--border); background: var(--panel); color: var(--ink); border-left: 1px solid var(--border); }
 .wg-head > div:first-child { border-left: 0; }
 .wg-head .today { background: color-mix(in srgb, var(--accent) 20%, var(--panel)); }
 .wg-head .out { display: block; font-weight: 400; font-size: 11px; color: var(--muted); }
@@ -26,3 +27,6 @@
 .wg-proposed.draggable { pointer-events: auto; cursor: grab; touch-action: none; user-select: none; }
 .wg-proposed.dragging { cursor: grabbing; background: color-mix(in srgb, var(--accent) 26%, transparent); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
 .wg-hint { padding: 6px 12px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--border); }
+
+.wg-now { position: absolute; left: 0; right: 0; height: 0; border-top: 2px solid #d64545; z-index: 2; pointer-events: none; }
+.wg-now::before { content: ''; position: absolute; left: -4px; top: -5px; width: 8px; height: 8px; border-radius: 50%; background: #d64545; }
