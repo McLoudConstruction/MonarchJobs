@@ -21,3 +21,13 @@ test('tall pictures get a portrait page', () => {
   const pdf = Buffer.from(jpegToPdf(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), 800, 1200)).toString('latin1');
   assert.match(pdf, /\/MediaBox \[0 0 612 792\]/);
 });
+
+import { fitView } from '../lib/sketch.js';
+test('fitView keeps the plan inside the inset area', () => {
+  const b = { minX: 0, minY: 0, maxX: 20, maxY: 10 };
+  const v = fitView(b, 800, 500, 20, { top: 60, right: 50 });
+  assert.ok(v.oy >= 60 + 20 - 1e-6);                       // top edge below the toolbar
+  assert.ok(v.ox + 20 * v.scale <= 800 - 50 - 20 + 1e-6);  // right edge left of the rail
+  const plain = fitView(b, 800, 500, 20);
+  assert.ok(v.scale <= plain.scale);
+});

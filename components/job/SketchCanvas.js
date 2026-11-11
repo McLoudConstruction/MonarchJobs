@@ -199,7 +199,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       c.style.height = `${H}px`;
       sizeRef.current = { W, H };
       if (!fittedRef.current) {
-        viewRef.current = fitView(planBounds(planRef.current), W, H);
+        viewRef.current = fitView(planBounds(planRef.current), W, H, 24, controlInset());
         fittedRef.current = true;
       }
       draw();
@@ -328,8 +328,20 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     schedule();
   }
   const zoomCenter = (f) => zoomAt(f, sizeRef.current.W / 2, sizeRef.current.H / 2);
+  // How far the floating toolbars reach into the drawing, so Fit uses only the space left over.
+  function controlInset() {
+    const stage = wrapRef.current;
+    if (!stage) return {};
+    const r = stage.getBoundingClientRect();
+    const tl = stage.querySelector('.sketch-over-tl')?.getBoundingClientRect();
+    const tr = stage.querySelector('.sketch-over-tr')?.getBoundingClientRect();
+    return {
+      top: tl ? Math.max(0, tl.bottom - r.top) : 0,
+      right: tr ? Math.max(0, r.right - tr.left) : 0,
+    };
+  }
   function fit() {
-    viewRef.current = fitView(planBounds(planRef.current), sizeRef.current.W, sizeRef.current.H);
+    viewRef.current = fitView(planBounds(planRef.current), sizeRef.current.W, sizeRef.current.H, 24, controlInset());
     schedule();
   }
 
