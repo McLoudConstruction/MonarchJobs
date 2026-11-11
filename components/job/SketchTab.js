@@ -9,7 +9,7 @@ const SAVE_DELAY_MS = 1200;
 
 // Sketch tab: pick or add a sketch (for example one per floor), draw on it, and it saves itself.
 // Photos can be attached to a room: they are ordinary job photos that remember sketch + room.
-export default function SketchTab({ jobId, sketches, photos, isOffice, logEvent, onReload, onAddRoomPhoto, onViewPhotos }) {
+export default function SketchTab({ jobId, sketches, photos, isOffice, staff = null, staffList = [], logEvent, onReload, onAddRoomPhoto, onViewPhotos }) {
   const [activeId, setActiveId] = useState(null);
   const [loaded, setLoaded] = useState(null); // { id, name, plan }
   const [loadErr, setLoadErr] = useState('');
@@ -178,6 +178,9 @@ export default function SketchTab({ jobId, sketches, photos, isOffice, logEvent,
             plan={loaded.plan}
             exportName={loaded.name}
             headSlot={headSlot}
+            staff={staff}
+            staffList={staffList}
+            onComment={(c) => logEvent('sketch_comment', { sketch: loaded.name, action: c.action, tagged: c.tags })}
             photoCounts={counts}
             onChange={(plan) => queueSave(loaded.id, plan)}
             onAddRoomPhoto={(room) => onAddRoomPhoto(loaded.id, room)}

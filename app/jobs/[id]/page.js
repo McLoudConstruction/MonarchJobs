@@ -362,6 +362,8 @@ function JobInner({ id, staff, token }) {
             sketches={sketches}
             photos={photos}
             isOffice={isOffice}
+            staff={staff}
+            staffList={staffList}
             logEvent={logEvent}
             onReload={reloadSketches}
             onAddRoomPhoto={addRoomPhoto}

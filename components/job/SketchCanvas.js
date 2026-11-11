@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { staffName } from '@/lib/userDisplay';
 import {
   AREA_KINDS, MARK_COLORS, MAX_MARKS, MAX_ROOMS, MAX_AREAS, MAX_SOURCES, MIN_ROOM, MAX_ROOM, ROOM_PRESETS, SURFACES, WALL_HEIGHTS, WATER_CATS,
   addCornerCut, affectedTotals, carveRooms, cleanSurfaces, cleanWater, dropStraightPoints, edgeLength, fitView, hitMarkAt, hitRoom, hitSource,
@@ -13,6 +14,8 @@ import { drawPlan, areaStyle, WATER_LINE } from '@/lib/sketchDraw';
 import { OBJECT_TYPES, OBJECT_GROUPS, MAX_OBJECTS, makeObject, objectCounts, isInches, inchesText, parseInches } from '@/lib/objectTypes';
 import { placeObject, hitObject, nearestWall, wallSpan } from '@/lib/sketchObjects';
 import { jpegToPdf } from '@/lib/pdfImage';
+import { hitComment, tagsFromText, segments, timeAgo, MAX_COMMENTS, MAX_REPLIES } from '@/lib/sketchComments';
+import MentionBox from '@/components/job/MentionBox';
 
 const TOOLS = [
   ['select', 'Select', 'V'],
@@ -23,10 +26,10 @@ const TOOLS = [
   ['missing', 'Missing wall', 'M'],
   ['area', 'Affected areas', 'W'],
   ['object', 'Objects', 'O'],
-  ['pen', 'Pen', 'P'],
   ['text', 'Text', 'T'],
+  ['comment', 'Comment', 'K'],
 ];
-const KEYS = { v: 'select', r: 'room', b: 'break', c: 'corner', m: 'missing', w: 'area', o: 'object', p: 'pen', t: 'text' };
+const KEYS = { v: 'select', r: 'room', b: 'break', c: 'corner', m: 'missing', w: 'area', o: 'object', t: 'text', k: 'comment' };
 const HINTS = {
   select: 'Click a room to select it. Drag a wall to slide it along its neighbours, or drag a corner to make an angle. Hold Ctrl and drag a corner or wall to start a new room there. Double-click a corner, or press Delete with it selected, to remove it.',
   missing: 'Click a wall to mark all of it as missing (open to the next space), or drag along a wall to mark just that stretch. Click a missing wall with Select to change or delete it.',
@@ -36,8 +39,8 @@ const HINTS = {
   corner: 'Hover a wall and click to add a corner. To cut off a corner of a room, click one wall, then click the wall next to it. The tool stays on, so keep clicking. Esc starts over.',
   area: 'Pick what to mark and which surfaces it is on, then draw around it. It is cleaned up when you let go.',
   object: 'Pick an object, then click to place it. Doors, windows and outlets snap to the wall; cabinets and fixtures sit flush against it. Hold Alt to place freely. Esc stops. Click one with Select to edit it.',
-  pen: 'Draw freehand: doors, arrows, anything. Tap a line with Select to remove it.',
   text: 'Tap where the note should go, then type it.',
+  comment: 'Tap the spot the comment is about, then type. Type @ to tag a teammate. Tap a comment pin to read, reply or resolve it.',
 };
 const AREA_HINTS = {
   water: 'Draw around where the water went. Choose the surfaces it reached.',
@@ -103,7 +106,7 @@ const FitIcon = () => <Ico><rect x="3.5" y="3.5" width="9" height="9" rx="1" /><
 // The drawing board. Works in feet. The parent owns saving: onChange gets the whole new plan after
 // each finished change. The plan prop is read once (the parent remounts this with a new key to
 // switch sketches).
-export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts = {}, onAddRoomPhoto, onViewRoomPhotos, exportName = 'sketch', headSlot = null }) {
+export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts = {}, onAddRoomPhoto, onViewRoomPhotos, exportName = 'sketch', headSlot = null, staff = null, staffList = [], onComment = null }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const rootRef = useRef(null);
@@ -143,6 +146,13 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   const [popup, setPopup] = useState(null); // { x, y }: where the editor for the selected item floats
   const [full, setFull] = useState(false);
   const [textDraft, setTextDraft] = useState(null); // { x, y, value }
+  const [cmDraft, setCmDraft] = useState(null); // a new comment being written: { x, y, value }
+  const [replyText, setReplyText] = useState('');
+  const people = (staffList || []).map((u) => ({ id: u.id, name: staffName(u), email: u.email, role: u.role })).filter((u) => u.id && u.name);
+  const me = staff ? { id: staff.id, name: staffName(staff) } : { id: null, name: 'Someone' };
+  const meRef = useRef(me); meRef.current = me;
+  const cmDraftRef = useRef(null); cmDraftRef.current = cmDraft;
+  const peopleRef = useRef(people); peopleRef.current = people;
   const [exportOpen, setExportOpen] = useState(false);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
@@ -182,6 +192,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       W: sizeRef.current.W, H: sizeRef.current.H, selection: selRef.current, counts: countsRef.current, surface: surfaceRef.current,
       affected: totalsRef.current.totals.rooms, draft: d?.draft || null, hover: d ? null : hoverRef.current,
       pending: toolRef.current === 'corner' ? lastCornerRef.current : null,
+      meId: meRef.current.id, commentDraft: cmDraftRef.current,
       ghost: d?.ghost || ((toolRef.current === 'object' || toolRef.current === 'missing') && !d ? ghostRef.current : null),
     });
   }, []);
@@ -238,7 +249,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
 
   const findSel = (plan, s) => {
     if (!s) return null;
-    const list = s.kind === 'room' ? plan.rooms : s.kind === 'area' ? plan.areas : s.kind === 'source' ? plan.sources : s.kind === 'object' ? plan.objects : plan.marks;
+    const list = s.kind === 'room' ? plan.rooms : s.kind === 'area' ? plan.areas : s.kind === 'source' ? plan.sources : s.kind === 'object' ? plan.objects : s.kind === 'comment' ? plan.comments : plan.marks;
     return list.find((x) => x.id === s.id) || null;
   };
 
@@ -312,6 +323,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     else if (s.kind === 'area') commit({ ...p, areas: p.areas.filter((a) => a.id !== s.id) });
     else if (s.kind === 'source') commit({ ...p, sources: p.sources.filter((q) => q.id !== s.id) });
     else if (s.kind === 'object') commit({ ...p, objects: p.objects.filter((o) => o.id !== s.id) });
+    else if (s.kind === 'comment') commit({ ...p, comments: p.comments.filter((c) => c.id !== s.id) });
     else commit({ ...p, marks: p.marks.filter((m) => m.id !== s.id) });
     setSel(null);
     setPopup(null);
@@ -453,11 +465,6 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       dragRef.current = null;
       return;
     }
-    if (t === 'pen') {
-      dragRef.current = { mode: 'pen', pts: [[w.x, w.y]], draft: { type: 'pen', color: colorRef.current, pts: [[w.x, w.y]] } };
-      schedule();
-      return;
-    }
     if (t === 'area') {
       const a = areaRef.current;
       if (a.kind === 'source') { // a source of loss is a pin: one tap
@@ -495,6 +502,12 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       return;
     }
     if (t === 'text') { dragRef.current = { mode: 'text', sx: p.x, sy: p.y, wx: w.x, wy: w.y }; return; }
+    if (t === 'comment') {
+      const hit = hitComment(plan, w.x, w.y, v.scale);
+      if (hit) { setCmDraft(null); setReplyText(''); setSel({ kind: 'comment', id: hit.id }); dragRef.current = { mode: 'open-comment', sx: p.x, sy: p.y }; schedule(); return; }
+      dragRef.current = { mode: 'comment', sx: p.x, sy: p.y, wx: w.x, wy: w.y };
+      return;
+    }
 
     // select tool. The selected shape's own corners and walls come first.
     const s = selRef.current;
@@ -518,6 +531,13 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     if (cur && s.kind === 'area') {
       const vi = nearestVertex(cur, w.x, w.y, tolFt);
       if (vi >= 0) { dragRef.current = { mode: 'avertex', id: cur.id, i: vi, plan, moved: false }; return; }
+    }
+    const cm = hitComment(plan, w.x, w.y, v.scale);
+    if (cm) {
+      setSel({ kind: 'comment', id: cm.id }); setReplyText('');
+      dragRef.current = { mode: 'move-comment', id: cm.id, wx: w.x, wy: w.y, orig: { x: cm.x, y: cm.y }, plan, moved: false };
+      schedule();
+      return;
     }
     const filter = surfaceRef.current;
     const pin = hitSource(plan, w.x, w.y, tolFt * 0.9, filter);
@@ -670,6 +690,9 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
         const pos = placeObject(d.plan, o.t, d.orig.x + (w.x - d.wx), d.orig.y + (w.y - d.wy), { w: o.w, d: o.d, r: d.orig.r, free });
         d.plan = { ...d.plan, objects: d.plan.objects.map((x) => (x.id === d.id ? { ...x, x: pos.x, y: pos.y, r: pos.r } : x)) };
       }
+    } else if (d.mode === 'move-comment') {
+      d.moved = true;
+      d.plan = { ...planRef.current, comments: planRef.current.comments.map((c) => (c.id === d.id ? { ...c, x: Math.round((d.orig.x + w.x - d.wx) * 100) / 100, y: Math.round((d.orig.y + w.y - d.wy) * 100) / 100 } : c)) };
     } else if (d.mode === 'move-mark') {
       d.moved = true;
       const dx = w.x - d.wx; const dy = w.y - d.wy;
@@ -702,7 +725,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     dragRef.current = null;
     const plan = planRef.current;
     // a plain click on something (no drag) opens its editor next to the click
-    if (p && ['move-room', 'vertex', 'edge', 'move-mark', 'avertex', 'move-area', 'move-pin', 'move-obj'].includes(d.mode) && !d.moved) openPopup(p.x, p.y);
+    if (p && ['move-room', 'vertex', 'edge', 'move-mark', 'avertex', 'move-area', 'move-pin', 'move-obj', 'move-comment'].includes(d.mode) && !d.moved) openPopup(p.x, p.y);
 
     if (d.mode === 'missing') {
       const h = d.hit;
@@ -748,9 +771,13 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
         commit({ ...plan, areas: [...plan.areas, area] });
         setSel({ kind: 'area', id: area.id });
       }
+    } else if (d.mode === 'open-comment') {
+      if (p) openPopup(p.x, p.y);
+    } else if (d.mode === 'comment') {
+      if (p && Math.hypot(p.x - d.sx, p.y - d.sy) < 8 && planRef.current.comments.length < MAX_COMMENTS) { setPopup(null); setSel(null); setCmDraft({ x: Math.round(d.wx * 100) / 100, y: Math.round(d.wy * 100) / 100, value: '' }); }
     } else if (d.mode === 'text') {
       if (p && Math.hypot(p.x - d.sx, p.y - d.sy) < 8) setTextDraft({ x: snap(d.wx, 0.25), y: snap(d.wy, 0.25), value: '' });
-    } else if (['move-room', 'vertex', 'edge', 'move-mark', 'avertex', 'move-area', 'move-pin', 'move-obj'].includes(d.mode) && d.moved && d.plan) {
+    } else if (['move-room', 'vertex', 'edge', 'move-mark', 'avertex', 'move-area', 'move-pin', 'move-obj', 'move-comment'].includes(d.mode) && d.moved && d.plan) {
       let next = d.plan;
       if (d.mode === 'vertex' || d.mode === 'edge') {
         // a corner or wall that now lines up with its neighbours leaves a stray point: drop it
@@ -800,6 +827,39 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     const mark = { id: makeId(), type: 'text', color, x: t.x, y: t.y, text: t.value.trim().slice(0, 60) };
     commit({ ...planRef.current, marks: [...planRef.current.marks, mark] });
     setTextDraft(null);
+  }
+
+  // ---- comments ----------------------------------------------------------
+  function stamp(extra) { return { by: { ...meRef.current }, at: new Date().toISOString(), ...extra }; }
+  function postComment(e) {
+    e?.preventDefault();
+    const d = cmDraft;
+    const text = d ? d.value.trim() : '';
+    if (!text) return;
+    const tags = tagsFromText(text, peopleRef.current);
+    const c = { id: makeId(), x: d.x, y: d.y, text, tags, done: false, replies: [], ...stamp() };
+    commit({ ...planRef.current, comments: [...planRef.current.comments, c] });
+    setCmDraft(null);
+    setReplyText('');
+    setSel({ kind: 'comment', id: c.id });
+    const at = toScreen(viewRef.current, c.x, c.y);
+    setPopup({ x: at.x, y: at.y - 15 });
+    onComment?.({ action: 'comment', tags: tags.map((t) => t.name) });
+  }
+  function postReply(c) {
+    const text = replyText.trim();
+    if (!text || c.replies.length >= MAX_REPLIES) return;
+    const tags = tagsFromText(text, peopleRef.current);
+    const r = { id: makeId(), text, tags, ...stamp() };
+    commit({ ...planRef.current, comments: planRef.current.comments.map((x) => (x.id === c.id ? { ...x, replies: [...x.replies, r] } : x)) });
+    setReplyText('');
+    onComment?.({ action: 'reply', tags: tags.map((t) => t.name) });
+  }
+  function patchComment(id, patch) {
+    commit({ ...planRef.current, comments: planRef.current.comments.map((c) => (c.id === id ? { ...c, ...patch } : c)) });
+  }
+  function renderText(text) {
+    return segments(text, peopleRef.current).map((sg, i) => (sg.tag ? <span key={i} className="cm-tag">{sg.s}</span> : <span key={i}>{sg.s}</span>));
   }
 
   // ---- full screen -------------------------------------------------------
@@ -854,6 +914,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       if (toolRef.current === 'corner' && lastCornerRef.current) { lastCornerRef.current = null; schedule(); return; } // drop the first click, stay in the tool
       if (dragRef.current) { dragRef.current = null; pointers.current.clear(); }
       if (textDraft) { setTextDraft(null); return; }
+      if (cmDraft) { setCmDraft(null); return; }
       if (toolRef.current !== 'select') { setTool('select'); hoverRef.current = null; schedule(); return; }
       if (fullRef.current) exitFull();
       return;
@@ -900,7 +961,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, W, H);
     const view = fitView(b, W, H, 60);
-    drawPlan(ctx, plan, view, { W, H, counts: {}, affected: totalsFor(plan).rooms, surface: 'all', grid: true });
+    drawPlan(ctx, plan, view, { W, H, counts: {}, affected: totalsFor(plan).rooms, surface: 'all', grid: true, comments: false });
     return out;
   }
   function download(blob, ext) {
@@ -928,7 +989,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     }, 'image/jpeg', 0.92);
   }
   const plan = planRef.current;
-  const hasContent = !!(plan.rooms.length || plan.marks.length || plan.areas.length || plan.sources.length || plan.objects.length);
+  const hasContent = !!(plan.rooms.length || plan.marks.length || plan.areas.length || plan.sources.length || plan.objects.length || plan.comments.length);
   const total = totalArea(plan);
   const totals = totalsFor(plan);
   const room = selected && sel.kind === 'room' ? selected : null;
@@ -936,6 +997,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   const obj = selected && sel.kind === 'object' ? selected : null;
   const area = selected && sel.kind === 'area' ? selected : null;
   const pin = selected && sel.kind === 'source' ? selected : null;
+  const cm = selected && sel.kind === 'comment' ? selected : null;
   const roomPhotos = room ? photoCounts[room.id] || 0 : 0;
   const rect = room ? isRect(room) : false;
   const box = room ? roomBox(room) : null;
@@ -1070,7 +1132,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
               <span className="muted">{OBJECT_TYPES[objType].mode === 'wall' || OBJECT_TYPES[objType].mode === 'wallpoint' ? 'click a wall' : 'click to place'} · Alt: free</span>
             </div>
           )}
-          {(tool === 'pen' || tool === 'text') && (
+          {tool === 'text' && (
             <div className="sketch-strip">
               <span className="muted">Color</span>
               <div className="sketch-colors">
@@ -1115,6 +1177,18 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
             </div>
           </form>
         )}
+
+        {cmDraft && (() => {
+          const pos = toScreen(viewRef.current, cmDraft.x, cmDraft.y);
+          const st = narrow ? { left: 8, right: 8, bottom: 8 } : { left: clampN(pos.x - 20, 8, Math.max(8, stageW - 300 - 8)), top: clampN(pos.y + 10, 8, Math.max(8, stageH - 190)), width: 300 };
+          return (
+            <form className="sketch-pop" style={st} onSubmit={postComment}>
+              <div className="sketch-pop-head"><strong>New comment</strong><button type="button" className="sk-x" aria-label="Close" onClick={() => setCmDraft(null)}>{'\u00d7'}</button></div>
+              <MentionBox id="sk-cm-new" autoFocus people={people} value={cmDraft.value} onChange={(v) => setCmDraft({ ...cmDraft, value: v })} onSubmit={postComment} placeholder="Write a comment. Type @ to tag a teammate" />
+              <div className="row"><button className="primary small" disabled={!cmDraft.value.trim()}>Post</button><button type="button" className="secondary small" onClick={() => setCmDraft(null)}>Cancel</button></div>
+            </form>
+          );
+        })()}
 
         {showPop && (
           <div className="sketch-pop" ref={popRef} style={popStyle} role="dialog" aria-label="Edit selection">
@@ -1269,6 +1343,26 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
                 </>
               );
             })()}
+
+            {cm && (
+              <>
+                <div className="sketch-pop-head"><strong>Comment{cm.done ? ' (resolved)' : ''}</strong>{closeBtn}</div>
+                <div className="cm-thread">
+                  {[cm, ...cm.replies].map((it, i) => (
+                    <div key={it.id} className={i ? 'cm-item' : ''}>
+                      <div className="cm-meta"><strong>{it.by.name}</strong> {timeAgo(it.at)}</div>
+                      <div className="cm-text">{renderText(it.text)}</div>
+                    </div>
+                  ))}
+                </div>
+                <MentionBox id="sk-cm-reply" rows={2} people={people} value={replyText} onChange={setReplyText} onSubmit={() => postReply(cm)} placeholder="Reply. Type @ to tag" />
+                <div className="row">
+                  <button type="button" className="primary small" disabled={!replyText.trim()} onClick={() => postReply(cm)}>Reply</button>
+                  <button type="button" className="secondary small" onClick={() => patchComment(cm.id, { done: !cm.done })}>{cm.done ? 'Reopen' : 'Resolve'}</button>
+                  <button type="button" className="danger small" onClick={removeSelected}>Delete</button>
+                </div>
+              </>
+            )}
 
             {mark && (
               <>
