@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  MARK_COLORS, MAX_MARKS, MAX_ROOMS, MAX_WATER, MIN_ROOM, MAX_ROOM, ROOM_PRESETS, WATER_CATS,
-  addCornerCut, carveRooms, cleanWater, dropStraightPoints, edgeLength, fitView, hitMarkAt, hitRoom, hitWater, insertBreak, insertCorner, isRect, makeId, moveEdgeSnapped,
-  moveVertex, nearestAnchor, nearestEdge, nearestVertex, newRoom, newWater, normalizePlan, parseFeet, planBounds,
-  polyArea, rectPts, removeVertex, resizeRect, roomAreaText, roomBox, roomSizeText, setEdgeLength,
-  simplifyStroke, snap, snapOnEdge, tidyPts, toWorld, totalArea, totalWet, translatePts, waterOutline, wetAreas, fmtFeet,
+  AREA_KINDS, MARK_COLORS, MAX_MARKS, MAX_ROOMS, MAX_AREAS, MAX_SOURCES, MIN_ROOM, MAX_ROOM, ROOM_PRESETS, SURFACES, WALL_HEIGHTS, WATER_CATS,
+  addCornerCut, affectedTotals, carveRooms, cleanSurfaces, cleanWater, dropStraightPoints, edgeLength, fitView, hitMarkAt, hitRoom, hitSource,
+  insertBreak, isRect, makeId, moveEdgeSnapped, moveVertex, nearestAnchor, nearestEdge, nearestVertex, newArea, newRoom, newSource, normalizePlan,
+  parseFeet, pickArea, planBounds, rectPts, removeVertex, resizeRect, roomAreaText, roomBox, roomSizeText, setEdgeLength,
+  simplifyStroke, snap, snapOnEdge, surfaceText, tidyPts, toScreen, toWorld, totalArea, translatePts, fmtFeet,
 } from '@/lib/sketch';
-import { drawPlan, WATER_LINE } from '@/lib/sketchDraw';
+import { drawPlan, areaStyle, WATER_LINE } from '@/lib/sketchDraw';
 
 const TOOLS = [
   ['select', 'Select', 'V'],
@@ -16,26 +16,71 @@ const TOOLS = [
   ['room', 'Draw room', 'R'],
   ['break', 'Wall break', 'B'],
   ['corner', 'Add corner', 'C'],
-  ['water', 'Water', 'W'],
+  ['area', 'Affected areas', 'W'],
   ['pen', 'Pen', 'P'],
   ['text', 'Text', 'T'],
 ];
-const KEYS = { v: 'select', r: 'room', b: 'break', c: 'corner', w: 'water', p: 'pen', t: 'text' };
+const KEYS = { v: 'select', r: 'room', b: 'break', c: 'corner', w: 'area', p: 'pen', t: 'text' };
 const HINTS = {
   select: 'Click a room to select it, then drag its corners or walls. Hold Alt (or turn on Angles) to move a corner in any direction. Hold Ctrl and drag a corner or wall to start a new room there. Double-click a corner, or press Delete with it selected, to remove it.',
   pan: 'Drag to move around. Pinch or scroll to zoom. From any tool, hold Space and drag to pan, then let go to carry on.',
   room: 'Drag on the sketch to draw a room. It snaps to the corners and walls of rooms already there.',
   break: 'Hover a wall and click to cut it in two. Switch to Select (V), then drag either side of the cut in or out.',
   corner: 'Hover a wall and click to add a corner. To cut off a corner of a room, click one wall, then click the wall next to it. The tool stays on, so keep clicking. Esc starts over.',
-  water: 'Draw around where the water went with your finger or mouse. It is cleaned up and colored when you let go.',
+  area: 'Pick what to mark and which surfaces it is on, then draw around it. It is cleaned up when you let go.',
   pen: 'Draw freehand: doors, arrows, anything. Tap a line with Select to remove it.',
   text: 'Tap where the note should go, then type it.',
 };
+const AREA_HINTS = {
+  water: 'Draw around where the water went. Choose the surfaces it reached.',
+  growth: 'Draw around the growth. Choose the surfaces it is on.',
+  smoke: 'Draw around what the smoke reached. Choose the surfaces it is on.',
+  source: 'Tap where the loss started. Choose the surface it came from.',
+};
+const SURFACE_VIEWS = [['all', 'All surfaces'], ['floor', 'Floor'], ['wall', 'Walls'], ['ceiling', 'Ceiling']];
+const KIND_ORDER = ['water', 'source', 'growth', 'smoke'];
+const kindDot = (kind) => areaStyle({ kind, cat: 2 }).line;
 const clampN = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const inField = (el) => {
   const tag = (el?.tagName || '').toLowerCase();
   return tag === 'input' || tag === 'textarea' || tag === 'select' || el?.isContentEditable;
 };
+
+function SurfaceChips({ value, onChange }) {
+  return (
+    <div className="chips" role="group" aria-label="Surfaces">
+      {Object.entries(SURFACES).map(([k, label]) => (
+        <button key={k} type="button" className={value.includes(k) ? 'on' : ''} aria-pressed={value.includes(k)}
+          onClick={() => { const next = value.includes(k) ? value.filter((x) => x !== k) : [...value, k]; if (next.length) onChange(cleanSurfaces(next)); }}>{label}</button>
+      ))}
+    </div>
+  );
+}
+function CatChips({ value, onChange }) {
+  return (
+    <div className="chips" role="group" aria-label="Water category">
+      {[1, 2, 3].map((n) => (
+        <button key={n} type="button" className={value === n ? 'on' : ''} aria-pressed={value === n} title={WATER_CATS[n]} onClick={() => onChange(n)}>
+          <span className="sk-dot" style={{ background: WATER_LINE[n] }} />Cat {n}
+        </button>
+      ))}
+    </div>
+  );
+}
+function HeightChips({ value, onChange }) {
+  return (
+    <div className="chips" role="group" aria-label="How high up the wall">
+      {WALL_HEIGHTS.map((h) => (
+        <button key={h} type="button" className={value === h ? 'on' : ''} aria-pressed={value === h} onClick={() => onChange(h)}>{h === 8 ? 'Full' : `${h}'`}</button>
+      ))}
+    </div>
+  );
+}
+const FullIcon = ({ on }) => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    {on ? <path d="M6 2v4H2M10 2v4h4M6 14v-4H2M10 14v-4h4" /> : <path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4" />}
+  </svg>
+);
 
 // The drawing board. Works in feet. The parent owns saving: onChange gets the whole new plan after
 // each finished change. The plan prop is read once (the parent remounts this with a new key to
@@ -45,7 +90,8 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   const canvasRef = useRef(null);
   const rootRef = useRef(null);
   const planRef = useRef(normalizePlan(initialPlan));
-  const wetRef = useRef({ plan: null, wet: {} });
+  const totalsRef = useRef({ plan: null, totals: { rooms: {}, total: {} } });
+  const popRef = useRef(null);
   const viewRef = useRef({ scale: 14, ox: 40, oy: 40 });
   const dragRef = useRef(null);      // gesture in progress: { mode, plan?, draft?, ... }
   const hoverRef = useRef(null);
@@ -59,10 +105,17 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   const rafRef = useRef(0);
 
   const [tool, setTool] = useState('select');
-  const [sel, setSel] = useState(null); // { kind: 'room' | 'mark' | 'water', id, vi?, ei? }
+  const [sel, setSel] = useState(null); // { kind: 'room' | 'mark' | 'area' | 'source', id, vi?, ei? }
   const [color, setColor] = useState(MARK_COLORS[0]);
+  const [areaKind, setAreaKind] = useState('water'); // what the Affected areas tool is marking
   const [waterCat, setWaterCat] = useState(1);
-  const [waterMode, setWaterMode] = useState('smooth');
+  const [areaMode, setAreaMode] = useState('smooth');
+  const [surfaces, setSurfaces] = useState(['floor']); // surfaces for the next thing drawn
+  const [wallHeight, setWallHeight] = useState(2);
+  const [surfaceView, setSurfaceView] = useState('all'); // which surface to show: all, floor, wall, ceiling
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [popup, setPopup] = useState(null); // { x, y }: where the editor for the selected item floats
+  const [full, setFull] = useState(false);
   const [freeAngle, setFreeAngle] = useState(false);
   const [textDraft, setTextDraft] = useState(null); // { x, y, value }
   const [canUndo, setCanUndo] = useState(false);
@@ -75,15 +128,21 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   toolRef.current = tool;
   const colorRef = useRef(color);
   colorRef.current = color;
-  const waterRef = useRef({ cat: 1, mode: 'smooth' });
-  waterRef.current = { cat: waterCat, mode: waterMode };
+  const areaRef = useRef({});
+  areaRef.current = { kind: areaKind, cat: waterCat, mode: areaMode, surfaces, height: wallHeight };
+  const surfaceRef = useRef('all');
+  surfaceRef.current = surfaceView;
+  const popupRef = useRef(null);
+  popupRef.current = popup;
+  const fullRef = useRef(false);
+  fullRef.current = full;
   const freeRef = useRef(false);
   freeRef.current = freeAngle;
 
-  // how much of each room is wet; worked out when the plan changes, not while dragging
-  const wetFor = (plan) => {
-    if (wetRef.current.plan !== plan) wetRef.current = { plan, wet: wetAreas(plan) };
-    return wetRef.current.wet;
+  // what is affected in each room; worked out when the plan changes, not while dragging
+  const totalsFor = (plan) => {
+    if (totalsRef.current.plan !== plan) totalsRef.current = { plan, totals: affectedTotals(plan) };
+    return totalsRef.current.totals;
   };
 
   const draw = useCallback(() => {
@@ -94,10 +153,10 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const d = dragRef.current;
     const committed = planRef.current;
-    if (wetRef.current.plan !== committed) wetRef.current = { plan: committed, wet: wetAreas(committed) };
+    if (totalsRef.current.plan !== committed) totalsRef.current = { plan: committed, totals: affectedTotals(committed) };
     drawPlan(ctx, d?.plan || committed, viewRef.current, {
-      W: sizeRef.current.W, H: sizeRef.current.H, selection: selRef.current, counts: countsRef.current,
-      wet: wetRef.current.wet, draft: d?.draft || null, hover: d ? null : hoverRef.current,
+      W: sizeRef.current.W, H: sizeRef.current.H, selection: selRef.current, counts: countsRef.current, surface: surfaceRef.current,
+      affected: totalsRef.current.totals.rooms, draft: d?.draft || null, hover: d ? null : hoverRef.current,
       pending: toolRef.current === 'corner' ? lastCornerRef.current : null,
     });
   }, []);
@@ -108,7 +167,8 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
 
   useEffect(() => { countsRef.current = photoCounts; schedule(); }, [photoCounts, schedule]);
   useEffect(() => { schedule(); setDimErr(''); }, [sel, schedule]);
-  useEffect(() => { hoverRef.current = null; lastCornerRef.current = null; schedule(); }, [tool, schedule]);
+  useEffect(() => { schedule(); }, [surfaceView, schedule]);
+  useEffect(() => { hoverRef.current = null; lastCornerRef.current = null; setPopup(null); setMenuOpen(false); schedule(); }, [tool, schedule]);
 
   // size the canvas to its box, keep it crisp on high-density screens, and fit the drawing once
   const fittedRef = useRef(false);
@@ -153,7 +213,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
 
   const findSel = (plan, s) => {
     if (!s) return null;
-    const list = s.kind === 'room' ? plan.rooms : s.kind === 'water' ? plan.water : plan.marks;
+    const list = s.kind === 'room' ? plan.rooms : s.kind === 'area' ? plan.areas : s.kind === 'source' ? plan.sources : plan.marks;
     return list.find((x) => x.id === s.id) || null;
   };
 
@@ -192,8 +252,18 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   function patchMark(id, patch) {
     commit({ ...planRef.current, marks: planRef.current.marks.map((m) => (m.id === id ? { ...m, ...patch } : m)) });
   }
-  function patchWater(id, patch) {
-    commit({ ...planRef.current, water: planRef.current.water.map((w) => (w.id === id ? { ...w, ...patch } : w)) });
+  function patchArea(id, patch) {
+    commit({ ...planRef.current, areas: planRef.current.areas.map((a) => (a.id === id ? { ...a, ...patch } : a)) });
+  }
+  function patchSource(id, patch) {
+    commit({ ...planRef.current, sources: planRef.current.sources.map((q) => (q.id === id ? { ...q, ...patch } : q)) });
+  }
+  // the editor floats near the item that was clicked; closing it first saves a field that is still being typed in
+  function openPopup(x, y) { setPopup({ x, y }); }
+  function closePopup() {
+    const ae = document.activeElement;
+    if (ae && popRef.current && popRef.current.contains(ae)) ae.blur();
+    setPopup(null);
   }
   function removeSelected() {
     const s = selRef.current;
@@ -204,9 +274,11 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       if (r && r.pts.length > 3) { patchRoom(r.id, { pts: removeVertex(r, s.vi).pts }); setSel({ kind: 'room', id: r.id }); return; }
     }
     if (s.kind === 'room') commit({ ...p, rooms: p.rooms.filter((r) => r.id !== s.id) });
-    else if (s.kind === 'water') commit({ ...p, water: p.water.filter((w) => w.id !== s.id) });
+    else if (s.kind === 'area') commit({ ...p, areas: p.areas.filter((a) => a.id !== s.id) });
+    else if (s.kind === 'source') commit({ ...p, sources: p.sources.filter((q) => q.id !== s.id) });
     else commit({ ...p, marks: p.marks.filter((m) => m.id !== s.id) });
     setSel(null);
+    setPopup(null);
   }
 
   function addRoom() {
@@ -222,6 +294,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     commit({ ...p, rooms: [...p.rooms, room] });
     setSel({ kind: 'room', id: room.id });
     setTool('select');
+    setPopup({ x: W / 2, y: H / 2 });
   }
 
   function duplicateRoom() {
@@ -287,6 +360,8 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     canvasRef.current.setPointerCapture?.(e.pointerId);
     const p = local(e);
     pointers.current.set(e.pointerId, p);
+    if (popupRef.current) closePopup();
+    setMenuOpen(false);
 
     if (pointers.current.size === 2) { // second finger: pinch and pan, drop whatever was being drawn
       const [a, b] = [...pointers.current.values()];
@@ -351,8 +426,18 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       schedule();
       return;
     }
-    if (t === 'water') {
-      dragRef.current = { mode: 'water', pts: [[w.x, w.y]], draft: { type: 'water', cat: waterRef.current.cat, pts: [[w.x, w.y]] } };
+    if (t === 'area') {
+      const a = areaRef.current;
+      if (a.kind === 'source') { // a source of loss is a pin: one tap
+        if (plan.sources.length < MAX_SOURCES) {
+          const pin = newSource(snap(w.x, 0.25), snap(w.y, 0.25), a.surfaces);
+          commit({ ...plan, sources: [...plan.sources, pin] });
+          setSel({ kind: 'source', id: pin.id });
+        }
+        dragRef.current = null;
+        return;
+      }
+      dragRef.current = { mode: 'area', pts: [[w.x, w.y]], draft: { type: 'area', kind: a.kind, cat: a.cat, pts: [[w.x, w.y]] } };
       schedule();
       return;
     }
@@ -377,23 +462,27 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
         return;
       }
     }
-    if (cur && s.kind === 'water') {
+    if (cur && s.kind === 'area') {
       const vi = nearestVertex(cur, w.x, w.y, tolFt);
-      if (vi >= 0) { dragRef.current = { mode: 'wvertex', id: cur.id, i: vi, plan, moved: false }; return; }
+      if (vi >= 0) { dragRef.current = { mode: 'avertex', id: cur.id, i: vi, plan, moved: false }; return; }
     }
-    const mark = hitMarkAt(plan, w.x, w.y, tolFt * 0.6);
-    const water = hitWater(plan, w.x, w.y);
+    const filter = surfaceRef.current;
+    const pin = hitSource(plan, w.x, w.y, tolFt * 0.9, filter);
+    const mark = pin ? null : hitMarkAt(plan, w.x, w.y, tolFt * 0.6);
+    const picked = pickArea(plan, w.x, w.y, edgeTol * 1.4, filter);
     const room = hitRoom(plan, w.x, w.y);
-    // water is picked by its edge, or anywhere on it when no room is under it, so a wet room can still be selected
-    const waterEdge = water && nearestEdge({ pts: waterOutline(water) }, w.x, w.y, edgeTol * 1.4);
-    const pickWater = water && (waterEdge || !room || (cur && s.kind === 'water' && cur.id === water.id));
-    // a pen stroke or note lying on a room wins over the room under it
-    if (mark) {
+    // an affected area is picked by its edge, or anywhere on it when no room is under it, so a wet room can still be selected
+    const area = picked && (picked.onEdge || !room || (cur && s.kind === 'area' && cur.id === picked.area.id)) ? picked.area : null;
+    // a pin, pen stroke or note lying on a room wins over the room under it
+    if (pin) {
+      setSel({ kind: 'source', id: pin.id });
+      dragRef.current = { mode: 'move-pin', id: pin.id, wx: w.x, wy: w.y, orig: { x: pin.x, y: pin.y }, plan, moved: false };
+    } else if (mark) {
       setSel({ kind: 'mark', id: mark.id });
       dragRef.current = { mode: 'move-mark', id: mark.id, wx: w.x, wy: w.y, orig: mark, plan, moved: false };
-    } else if (pickWater) {
-      setSel({ kind: 'water', id: water.id });
-      dragRef.current = { mode: 'move-water', id: water.id, wx: w.x, wy: w.y, orig: water.pts, plan, moved: false };
+    } else if (area) {
+      setSel({ kind: 'area', id: area.id });
+      dragRef.current = { mode: 'move-area', id: area.id, wx: w.x, wy: w.y, orig: area.pts, plan, moved: false };
     } else if (room) {
       setSel({ kind: 'room', id: room.id });
       dragRef.current = { mode: 'move-room', id: room.id, wx: w.x, wy: w.y, orig: room.pts, plan, moved: false };
@@ -457,9 +546,9 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     } else if (d.mode === 'room') {
       const x1 = snap(w.x); const y1 = snap(w.y);
       d.draft = { type: 'room', x: Math.min(d.x0, x1), y: Math.min(d.y0, y1), w: Math.abs(x1 - d.x0), h: Math.abs(y1 - d.y0) };
-    } else if (d.mode === 'pen' || d.mode === 'water') {
+    } else if (d.mode === 'pen' || d.mode === 'area') {
       d.pts.push([w.x, w.y]);
-      d.draft = d.mode === 'pen' ? { type: 'pen', color: colorRef.current, pts: d.pts } : { type: 'water', cat: waterRef.current.cat, pts: d.pts };
+      d.draft = d.mode === 'pen' ? { type: 'pen', color: colorRef.current, pts: d.pts } : { type: 'area', kind: areaRef.current.kind, cat: areaRef.current.cat, pts: d.pts };
     } else if (d.mode === 'move-room') {
       d.moved = true;
       // the first corner lands on the grid, so the whole room stays on it
@@ -477,17 +566,22 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       d.moved = true;
       // a wall always slides its ends along the walls beside it, with or without Angles / Alt: only corners move freely
       d.plan = { ...d.plan, rooms: d.plan.rooms.map((r) => (r.id === d.id ? { ...r, pts: moveEdgeSnapped(d.orig, d.i, w.x - d.wx, w.y - d.wy, { free: false }) } : r)) };
-    } else if (d.mode === 'wvertex') {
+    } else if (d.mode === 'avertex') {
       d.moved = true;
-      const base = planRef.current.water.find((x) => x.id === d.id);
+      const base = planRef.current.areas.find((x) => x.id === d.id);
       const q = snapCorner(planRef.current, w.x, w.y, tolFt, null);
-      d.plan = { ...d.plan, water: d.plan.water.map((x) => (x.id === d.id ? { ...x, pts: base.pts.map((pt, k) => (k === d.i ? [q.x, q.y] : pt)) } : x)) };
-    } else if (d.mode === 'move-water') {
+      d.plan = { ...d.plan, areas: d.plan.areas.map((x) => (x.id === d.id ? { ...x, pts: base.pts.map((pt, k) => (k === d.i ? [q.x, q.y] : pt)) } : x)) };
+    } else if (d.mode === 'move-area') {
       d.moved = true;
       const [x0, y0] = d.orig[0];
       const dx = snap(x0 + (w.x - d.wx)) - x0;
       const dy = snap(y0 + (w.y - d.wy)) - y0;
-      d.plan = { ...d.plan, water: d.plan.water.map((x) => (x.id === d.id ? { ...x, pts: translatePts(d.orig, dx, dy) } : x)) };
+      d.plan = { ...d.plan, areas: d.plan.areas.map((x) => (x.id === d.id ? { ...x, pts: translatePts(d.orig, dx, dy) } : x)) };
+    } else if (d.mode === 'move-pin') {
+      d.moved = true;
+      const nx = snap(d.orig.x + (w.x - d.wx), 0.25);
+      const ny = snap(d.orig.y + (w.y - d.wy), 0.25);
+      d.plan = { ...d.plan, sources: d.plan.sources.map((x) => (x.id === d.id ? { ...x, x: nx, y: ny } : x)) };
     } else if (d.mode === 'move-mark') {
       d.moved = true;
       const dx = w.x - d.wx; const dy = w.y - d.wy;
@@ -519,6 +613,8 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     }
     dragRef.current = null;
     const plan = planRef.current;
+    // a plain click on something (no drag) opens its editor next to the click
+    if (p && ['move-room', 'vertex', 'edge', 'move-mark', 'avertex', 'move-area', 'move-pin'].includes(d.mode) && !d.moved) openPopup(p.x, p.y);
 
     if (d.mode === 'room') {
       const dr = d.draft;
@@ -530,6 +626,8 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
         commit({ ...plan, rooms: [...carved, room] });
         setSel({ kind: 'room', id: room.id });
         setTool('select');
+        const c0 = toScreen(viewRef.current, dr.x + dr.w / 2, dr.y + dr.h / 2);
+        openPopup(c0.x, c0.y); // a new room: name it right away
       }
     } else if (d.mode === 'pen') {
       const v = viewRef.current;
@@ -538,17 +636,18 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
         const mark = { id: makeId(), type: 'pen', color: colorRef.current, pts };
         commit({ ...plan, marks: [...plan.marks, mark] });
       }
-    } else if (d.mode === 'water') {
+    } else if (d.mode === 'area') {
       const v = viewRef.current;
-      const pts = cleanWater(d.pts, { mode: waterRef.current.mode, eps: Math.max(0.3, 9 / v.scale) });
-      if (pts && plan.water.length < MAX_WATER) {
-        const water = newWater(pts, waterRef.current.cat, waterRef.current.mode === 'smooth');
-        commit({ ...plan, water: [...plan.water, water] });
-        setSel({ kind: 'water', id: water.id });
+      const a = areaRef.current;
+      const pts = cleanWater(d.pts, { mode: a.mode, eps: Math.max(0.3, 9 / v.scale) });
+      if (pts && plan.areas.length < MAX_AREAS) {
+        const area = newArea(pts, { kind: a.kind, cat: a.cat, smooth: a.mode === 'smooth', surfaces: a.surfaces, height: a.height });
+        commit({ ...plan, areas: [...plan.areas, area] });
+        setSel({ kind: 'area', id: area.id });
       }
     } else if (d.mode === 'text') {
       if (p && Math.hypot(p.x - d.sx, p.y - d.sy) < 8) setTextDraft({ x: snap(d.wx, 0.25), y: snap(d.wy, 0.25), value: '' });
-    } else if (['move-room', 'vertex', 'edge', 'move-mark', 'wvertex', 'move-water'].includes(d.mode) && d.moved && d.plan) {
+    } else if (['move-room', 'vertex', 'edge', 'move-mark', 'avertex', 'move-area', 'move-pin'].includes(d.mode) && d.moved && d.plan) {
       let next = d.plan;
       if (d.mode === 'vertex' || d.mode === 'edge') {
         // a corner or wall that now lines up with its neighbours leaves a stray point: drop it
@@ -600,6 +699,32 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     setTextDraft(null);
   }
 
+  // ---- full screen -------------------------------------------------------
+  // The page is covered by the sketch (works everywhere); where the browser allows it, the whole screen is used too.
+  function enterFull() {
+    setFull(true);
+    try { rootRef.current?.requestFullscreen?.()?.catch?.(() => {}); } catch { /* the covering layout is enough */ }
+  }
+  function exitFull() {
+    setFull(false);
+    try { if (document.fullscreenElement) document.exitFullscreen?.()?.catch?.(() => {}); } catch { /* already out */ }
+  }
+  useEffect(() => {
+    const onChange = () => { if (!document.fullscreenElement && fullRef.current && usedNativeRef.current) setFull(false); };
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+  const usedNativeRef = useRef(false);
+  useEffect(() => {
+    usedNativeRef.current = full && !!document.fullscreenElement;
+    if (!full) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const t = setTimeout(() => { usedNativeRef.current = !!document.fullscreenElement; fit(); }, 120); // refit to the bigger board
+    return () => { document.body.style.overflow = prev; clearTimeout(t); };
+  }, [full]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!full) { const t = setTimeout(() => fit(), 120); return () => clearTimeout(t); } return undefined; }, [full]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ---- keyboard shortcuts ------------------------------------------------
   // V select, Space (hold) pan, R room, B wall break, C corner, W water, P pen, T text.
   // Delete removes the selection (or the selected corner), Ctrl+Z / Ctrl+Y undo and redo, Esc cancels.
@@ -622,15 +747,15 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if ((e.key === 'Delete' || e.key === 'Backspace') && selRef.current) { e.preventDefault(); removeSelected(); return; }
     if (e.key === 'Escape') {
+      if (popupRef.current) { closePopup(); return; }
       if (toolRef.current === 'corner' && lastCornerRef.current) { lastCornerRef.current = null; schedule(); return; } // drop the first click, stay in the tool
       if (dragRef.current) { dragRef.current = null; pointers.current.clear(); }
-      setTextDraft(null);
-      setTool('select');
-      hoverRef.current = null;
-      schedule();
+      if (textDraft) { setTextDraft(null); return; }
+      if (toolRef.current !== 'select') { setTool('select'); hoverRef.current = null; schedule(); return; }
+      if (fullRef.current) exitFull();
       return;
     }
-    if (KEYS[k]) { e.preventDefault(); setTool(KEYS[k]); setTextDraft(null); }
+    if (KEYS[k]) { e.preventDefault(); setTool(KEYS[k]); setTextDraft(null); if (k === 'w') setAreaKind('water'); }
   };
   useEffect(() => {
     const h = (e) => keyRef.current?.(e);
@@ -670,7 +795,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     out.width = W; out.height = H;
     const ctx = out.getContext('2d');
     const view = fitView(b, W, H, 60);
-    drawPlan(ctx, plan, view, { W, H, counts: {}, wet: wetFor(plan), grid: true });
+    drawPlan(ctx, plan, view, { W, H, counts: {}, affected: totalsFor(plan).rooms, surface: 'all', grid: true });
     out.toBlob((blob) => {
       if (!blob) return;
       const url = URL.createObjectURL(blob);
@@ -686,27 +811,62 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
 
   const plan = planRef.current;
   const total = totalArea(plan);
-  const wet = wetFor(plan);
-  const wetTotal = totalWet(wet);
+  const totals = totalsFor(plan);
   const room = selected && sel.kind === 'room' ? selected : null;
   const mark = selected && sel.kind === 'mark' ? selected : null;
-  const water = selected && sel.kind === 'water' ? selected : null;
+  const area = selected && sel.kind === 'area' ? selected : null;
+  const pin = selected && sel.kind === 'source' ? selected : null;
   const roomPhotos = room ? photoCounts[room.id] || 0 : 0;
   const rect = room ? isRect(room) : false;
   const box = room ? roomBox(room) : null;
   const wallIdx = room && sel.ei != null && sel.ei < room.pts.length ? sel.ei : null;
   const wallLen = wallIdx != null ? edgeLength(room.pts, wallIdx) : 0;
-  const roomWet = room ? wet[room.id] : null;
+  const roomAffected = room ? totals.rooms[room.id] : null;
+  const showPop = !!(popup && selected);
+  const areaStat = showPop && area ? affectedTotals({ ...plan, areas: [area] }).total[area.kind] : null;
+  const { W: stageW, H: stageH } = sizeRef.current;
+  const narrow = stageW < 520;
+  const popStyle = !showPop ? null : narrow
+    ? { left: 8, right: 8, bottom: 8, maxHeight: '75%' }
+    : { left: clampN(popup.x + 14, 8, Math.max(8, stageW - 300 - 8)), top: clampN(popup.y + 14, 8, Math.max(8, stageH - 300)), width: 300, maxHeight: stageH - 16 };
+  const textPos = textDraft ? toScreen(viewRef.current, textDraft.x, textDraft.y) : null;
+  const textStyle = !textDraft ? null : narrow
+    ? { left: 8, right: 8, bottom: 8 }
+    : { left: clampN(textPos.x, 8, Math.max(8, stageW - 280 - 8)), top: clampN(textPos.y + 10, 8, Math.max(8, stageH - 110)), width: 280 };
+
+  function pickKind(kind) {
+    setAreaKind(kind);
+    setTool('area');
+    setTextDraft(null);
+    setMenuOpen(false);
+  }
+
+  const closeBtn = <button type="button" className="sk-x" aria-label="Close" onClick={closePopup}>{'\u00d7'}</button>;
 
   return (
-    <div className="sketch" ref={rootRef} tabIndex={-1}>
+    <div className={`sketch${full ? ' sketch-full' : ''}`} ref={rootRef} tabIndex={-1}>
       <div className="sketch-bar">
         <div className="sketch-tools" role="toolbar" aria-label="Sketch tools">
-          {TOOLS.map(([k, label, key]) => (
+          {TOOLS.map(([k, label, key]) => (k === 'area' ? (
+            <div key={k} className="sketch-menu">
+              <button type="button" className={tool === 'area' ? 'on' : ''} aria-haspopup="menu" aria-expanded={menuOpen} title={`${label} (${key})`} onClick={() => setMenuOpen(!menuOpen)}>
+                {label}<span className="sk-caret" aria-hidden="true" /><span className="sk-key">{key}</span>
+              </button>
+              {menuOpen && (
+                <div className="sketch-menu-list" role="menu">
+                  {KIND_ORDER.map((kind) => (
+                    <button key={kind} type="button" role="menuitem" className={tool === 'area' && areaKind === kind ? 'on' : ''} onClick={() => pickKind(kind)}>
+                      <span className="sk-dot" style={{ background: kindDot(kind) }} />{AREA_KINDS[kind]}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
             <button key={k} type="button" className={tool === k ? 'on' : ''} aria-pressed={tool === k} title={`${label} (${key})`} onClick={() => { setTool(k); setTextDraft(null); }}>
               {label}<span className="sk-key">{key}</span>
             </button>
-          ))}
+          )))}
           <button type="button" onClick={addRoom} disabled={plan.rooms.length >= MAX_ROOMS}>+ Room</button>
         </div>
         <div className="sketch-tools">
@@ -716,9 +876,39 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
           <button type="button" onClick={() => zoomCenter(1 / 1.3)} aria-label="Zoom out">-</button>
           <button type="button" onClick={() => zoomCenter(1.3)} aria-label="Zoom in">+</button>
           <button type="button" onClick={fit}>Fit</button>
-          <button type="button" onClick={exportPng} disabled={!plan.rooms.length && !plan.marks.length && !plan.water.length}>Save PNG</button>
+          <select className="sketch-view" value={surfaceView} onChange={(e) => setSurfaceView(e.target.value)} aria-label="Surface to show" title="Which surface to show">
+            {SURFACE_VIEWS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+          </select>
+          <button type="button" onClick={exportPng} disabled={!plan.rooms.length && !plan.marks.length && !plan.areas.length && !plan.sources.length}>Save PNG</button>
+          <button type="button" className="sk-icon" onClick={full ? exitFull : enterFull} aria-label={full ? 'Exit full screen' : 'Full screen'} title={full ? 'Exit full screen (Esc)' : 'Full screen'}><FullIcon on={full} /></button>
         </div>
       </div>
+
+      {tool === 'area' && (
+        <div className="sketch-strip" aria-label="Affected area options">
+          <span className="sk-strip-kind"><span className="sk-dot" style={{ background: kindDot(areaKind) }} /><strong>{AREA_KINDS[areaKind]}</strong></span>
+          {areaKind === 'water' && <CatChips value={waterCat} onChange={setWaterCat} />}
+          <SurfaceChips value={surfaces} onChange={setSurfaces} />
+          {areaKind !== 'source' && surfaces.includes('wall') && (<><span className="muted">up the wall</span><HeightChips value={wallHeight} onChange={setWallHeight} /></>)}
+          {areaKind !== 'source' && (
+            <div className="chips" role="group" aria-label="Line cleanup">
+              {[['smooth', 'Rounded'], ['straight', 'Straight']].map(([m, label]) => (
+                <button key={m} type="button" className={areaMode === m ? 'on' : ''} aria-pressed={areaMode === m} onClick={() => setAreaMode(m)}>{label}</button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {(tool === 'pen' || tool === 'text') && (
+        <div className="sketch-strip">
+          <span className="muted">Color</span>
+          <div className="sketch-colors">
+            {MARK_COLORS.map((col) => (
+              <button key={col} type="button" className={color === col ? 'on' : ''} style={{ background: col }} aria-label={`Color ${col}`} onClick={() => setColor(col)} />
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="sketch-stage" ref={wrapRef}>
         <canvas
@@ -733,125 +923,135 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
           onContextMenu={(e) => e.preventDefault()}
           aria-label="Sketch drawing area"
         />
+
+        {textDraft && (
+          <form className="sketch-pop" style={textStyle} onSubmit={addText}>
+            <div className="field" style={{ margin: 0 }}>
+              <label htmlFor="sk-text">Note</label>
+              <input id="sk-text" autoFocus maxLength={60} value={textDraft.value} onChange={(e) => setTextDraft({ ...textDraft, value: e.target.value })} placeholder="Door, wet wall, sump..." />
+            </div>
+            <div className="row" style={{ marginTop: 8 }}>
+              <button className="primary small">Add</button>
+              <button type="button" className="secondary small" onClick={() => setTextDraft(null)}>Cancel</button>
+            </div>
+          </form>
+        )}
+
+        {showPop && (
+          <div className="sketch-pop" ref={popRef} style={popStyle} role="dialog" aria-label="Edit selection">
+            {room && (
+              <>
+                <div className="sketch-pop-head"><strong>Room</strong>{closeBtn}</div>
+                <div className="field"><label htmlFor="sk-room-name">Name</label>
+                  <input id="sk-room-name" list="sk-room-presets" key={`${room.id}-l-${room.label}`} defaultValue={room.label} maxLength={40} onBlur={(e) => e.target.value !== room.label && patchRoom(room.id, { label: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} placeholder="Kitchen" />
+                  <datalist id="sk-room-presets">{ROOM_PRESETS.map((n) => <option key={n} value={n} />)}</datalist>
+                </div>
+                {rect ? (
+                  <div className="grid2">
+                    <div className="field"><label htmlFor="sk-room-w">Width</label>
+                      <input id="sk-room-w" key={`${room.id}-w-${box.w}`} inputMode="decimal" defaultValue={fmtFeet(box.w)} onBlur={(e) => setDim('w', e.target.value)} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
+                    </div>
+                    <div className="field"><label htmlFor="sk-room-h">Length</label>
+                      <input id="sk-room-h" key={`${room.id}-h-${box.h}`} inputMode="decimal" defaultValue={fmtFeet(box.h)} onBlur={(e) => setDim('h', e.target.value)} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="muted">{room.pts.length} corners, about {roomSizeText(room)}. Click a wall to set its length.</div>
+                )}
+                {wallIdx != null && (
+                  <div className="field"><label htmlFor="sk-wall-len">Selected wall</label>
+                    <input id="sk-wall-len" key={`${room.id}-wl-${wallIdx}-${wallLen}`} inputMode="decimal" defaultValue={fmtFeet(wallLen)} onBlur={(e) => setWallLength(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
+                  </div>
+                )}
+                {dimErr && <div className="msg err" style={{ margin: 0 }}>{dimErr}</div>}
+                <div className="muted">{roomAreaText(room)}</div>
+                {roomAffected && ['water', 'growth', 'smoke'].filter((kd) => roomAffected[kd]).map((kd) => (
+                  <div key={kd} className="sk-aff" style={{ color: kindDot(kd) }}><strong>{AREA_KINDS[kd]}</strong> {surfaceText(roomAffected[kd])} sq ft</div>
+                ))}
+                <div className="field"><label htmlFor="sk-room-notes">Notes</label>
+                  <input id="sk-room-notes" key={`${room.id}-n-${room.notes}`} defaultValue={room.notes} maxLength={300} onBlur={(e) => e.target.value !== room.notes && patchRoom(room.id, { notes: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} placeholder="Hardwood, wet along north wall" />
+                </div>
+                <div className="row">
+                  {onAddRoomPhoto && <button type="button" className="secondary small" onClick={() => onAddRoomPhoto(room)}>Add photo</button>}
+                  {onViewRoomPhotos && roomPhotos > 0 && <button type="button" className="secondary small" onClick={() => onViewRoomPhotos(room)}>Photos ({roomPhotos})</button>}
+                  {sel.vi != null && sel.vi >= 0 && room.pts.length > 3 && <button type="button" className="secondary small" onClick={removeSelected}>Remove corner</button>}
+                  <button type="button" className="danger small" onClick={() => { commit({ ...planRef.current, rooms: planRef.current.rooms.filter((r) => r.id !== room.id) }); setSel(null); setPopup(null); }}>Delete</button>
+                </div>
+                <details className="sk-more">
+                  <summary>More</summary>
+                  <div className="row">
+                    <button type="button" className="secondary small" onClick={duplicateRoom}>Duplicate</button>
+                    {rect && <button type="button" className="secondary small" onClick={() => patchRoom(room.id, resizeRect(room, box.h, box.w))}>Swap width and length</button>}
+                    {!rect && <button type="button" className="secondary small" onClick={() => patchRoom(room.id, { pts: tidyPts(room.pts) })}>Tidy corners</button>}
+                  </div>
+                </details>
+              </>
+            )}
+
+            {area && (
+              <>
+                <div className="sketch-pop-head"><strong><span className="sk-dot" style={{ background: kindDot(area.kind === 'water' ? 'water' : area.kind) }} />{AREA_KINDS[area.kind]}</strong>{closeBtn}</div>
+                <div className="chips" role="group" aria-label="Type">
+                  {['water', 'growth', 'smoke'].map((kd) => (
+                    <button key={kd} type="button" className={area.kind === kd ? 'on' : ''} aria-pressed={area.kind === kd} onClick={() => patchArea(area.id, { kind: kd, cat: kd === 'water' ? area.cat : 1 })}>{AREA_KINDS[kd]}</button>
+                  ))}
+                </div>
+                {area.kind === 'water' && <CatChips value={area.cat} onChange={(n) => patchArea(area.id, { cat: n })} />}
+                <div className="muted sk-label">Surfaces</div>
+                <SurfaceChips value={area.surfaces} onChange={(next) => patchArea(area.id, { surfaces: next })} />
+                {area.surfaces.includes('wall') && (<><div className="muted sk-label">Up the wall</div><HeightChips value={area.height} onChange={(h) => patchArea(area.id, { height: h })} /></>)}
+                <div className="muted">{areaStat ? `${surfaceText(areaStat)} sq ft` : 'Not inside any room yet.'} Drag the corners to adjust, or the shape to move it.</div>
+                <div className="row">
+                  <div className="chips" role="group" aria-label="Line cleanup" style={{ margin: 0 }}>
+                    {[['smooth', 'Rounded'], ['straight', 'Straight']].map(([m, label]) => (
+                      <button key={m} type="button" className={(area.smooth ? 'smooth' : 'straight') === m ? 'on' : ''} onClick={() => patchArea(area.id, { smooth: m === 'smooth' })}>{label}</button>
+                    ))}
+                  </div>
+                  <button type="button" className="danger small" onClick={removeSelected}>Delete</button>
+                </div>
+              </>
+            )}
+
+            {pin && (
+              <>
+                <div className="sketch-pop-head"><strong><span className="sk-dot" style={{ background: kindDot('source') }} />Source of loss</strong>{closeBtn}</div>
+                <div className="muted sk-label">Surface it came from</div>
+                <SurfaceChips value={pin.surfaces} onChange={(next) => patchSource(pin.id, { surfaces: next })} />
+                <div className="field"><label htmlFor="sk-pin-note">Note</label>
+                  <input id="sk-pin-note" key={`${pin.id}-${pin.note}`} defaultValue={pin.note} maxLength={80} onBlur={(e) => e.target.value !== pin.note && patchSource(pin.id, { note: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} placeholder="Supply line, roof leak..." />
+                </div>
+                <div className="row"><button type="button" className="danger small" onClick={removeSelected}>Delete</button></div>
+              </>
+            )}
+
+            {mark && (
+              <>
+                <div className="sketch-pop-head"><strong>{mark.type === 'text' ? 'Note' : 'Pen line'}</strong>{closeBtn}</div>
+                {mark.type === 'text' && (
+                  <div className="field"><label htmlFor="sk-mark-text">Text</label>
+                    <input id="sk-mark-text" key={mark.id} defaultValue={mark.text} maxLength={60} onBlur={(e) => e.target.value.trim() && e.target.value !== mark.text && patchMark(mark.id, { text: e.target.value.trim() })} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
+                  </div>
+                )}
+                <div className="sketch-colors">
+                  {MARK_COLORS.map((col) => (
+                    <button key={col} type="button" className={mark.color === col ? 'on' : ''} style={{ background: col }} aria-label={`Color ${col}`} onClick={() => patchMark(mark.id, { color: col })} />
+                  ))}
+                </div>
+                <div className="row"><button type="button" className="danger small" onClick={removeSelected}>Delete</button></div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="sketch-summary">
         {plan.rooms.length} room{plan.rooms.length === 1 ? '' : 's'}{plan.rooms.length > 0 && <> · {total.toLocaleString()} sq ft total</>}
-        {wetTotal > 0 && <> · <strong className="sk-wet">~{wetTotal.toLocaleString()} sq ft wet</strong></>}
-        <span className="muted"> · {HINTS[tool]}</span>
+        {['water', 'growth', 'smoke'].filter((kd) => totals.total[kd]).map((kd) => (
+          <span key={kd}> · <strong style={{ color: kindDot(kd) }}>{AREA_KINDS[kd]} {surfaceText(totals.total[kd])} sq ft</strong></span>
+        ))}
+        {plan.sources.length > 0 && <> · <strong style={{ color: kindDot('source') }}>{plan.sources.length} source{plan.sources.length === 1 ? '' : 's'} of loss</strong></>}
+        <span className="muted"> · {tool === 'area' ? AREA_HINTS[areaKind] : HINTS[tool]}</span>
       </div>
-
-      {textDraft && (
-        <form className="sketch-panel" onSubmit={addText}>
-          <div className="field" style={{ margin: 0, flex: 1 }}>
-            <label htmlFor="sk-text">Note text</label>
-            <input id="sk-text" autoFocus maxLength={60} value={textDraft.value} onChange={(e) => setTextDraft({ ...textDraft, value: e.target.value })} placeholder="Door, wet wall, sump..." />
-          </div>
-          <button className="primary small">Add</button>
-          <button type="button" className="secondary small" onClick={() => setTextDraft(null)}>Cancel</button>
-        </form>
-      )}
-
-      {tool === 'pen' || tool === 'text' ? (
-        <div className="sketch-panel">
-          <span className="muted">Color</span>
-          <div className="sketch-colors">
-            {MARK_COLORS.map((c) => (
-              <button key={c} type="button" className={color === c ? 'on' : ''} style={{ background: c }} aria-label={`Color ${c}`} onClick={() => setColor(c)} />
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {(tool === 'water' || water) && (
-        <div className="sketch-panel col">
-          <div className="row" style={{ alignItems: 'center' }}>
-            <span className="muted">Water</span>
-            <div className="chips" role="group" aria-label="Water category">
-              {[1, 2, 3].map((c) => (
-                <button key={c} type="button" className={(water ? water.cat : waterCat) === c ? 'on' : ''} onClick={() => { setWaterCat(c); if (water) patchWater(water.id, { cat: c }); }}>
-                  <span className="sk-dot" style={{ background: WATER_LINE[c] }} />{WATER_CATS[c]}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="row" style={{ alignItems: 'center' }}>
-            <span className="muted">Clean up the line</span>
-            <div className="chips" role="group" aria-label="Line cleanup">
-              {[['smooth', 'Smooth and rounded'], ['straight', 'Straight walls']].map(([m, label]) => (
-                <button key={m} type="button" className={(water ? (water.smooth ? 'smooth' : 'straight') : waterMode) === m ? 'on' : ''} onClick={() => { setWaterMode(m); if (water) patchWater(water.id, { smooth: m === 'smooth' }); }}>{label}</button>
-              ))}
-            </div>
-          </div>
-          {water && (
-            <div className="row" style={{ alignItems: 'center' }}>
-              <span className="muted">{Math.round(polyArea(waterOutline(water)))} sq ft covered by this water. Drag its corners to adjust, or the shape to move it.</span>
-              <button type="button" className="danger small" onClick={removeSelected}>Delete water</button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {room && (
-        <div className="sketch-panel col">
-          <div className="grid2">
-            <div className="field"><label htmlFor="sk-room-name">Room name</label>
-              <input id="sk-room-name" key={`${room.id}-l-${room.label}`} defaultValue={room.label} maxLength={40} onBlur={(e) => e.target.value !== room.label && patchRoom(room.id, { label: e.target.value })} placeholder="Kitchen" />
-            </div>
-            <div className="field"><label htmlFor="sk-room-notes">Notes</label>
-              <input id="sk-room-notes" key={`${room.id}-n-${room.notes}`} defaultValue={room.notes} maxLength={300} onBlur={(e) => e.target.value !== room.notes && patchRoom(room.id, { notes: e.target.value })} placeholder="Hardwood, wet along north wall" />
-            </div>
-          </div>
-          <div className="sketch-presets">
-            {ROOM_PRESETS.map((p) => <button key={p} type="button" onClick={() => patchRoom(room.id, { label: p })}>{p}</button>)}
-          </div>
-          {rect ? (
-            <div className="grid2">
-              <div className="field"><label htmlFor="sk-room-w">Width (feet)</label>
-                <input id="sk-room-w" key={`${room.id}-w-${box.w}`} inputMode="decimal" defaultValue={fmtFeet(box.w)} onBlur={(e) => setDim('w', e.target.value)} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
-              </div>
-              <div className="field"><label htmlFor="sk-room-h">Length (feet)</label>
-                <input id="sk-room-h" key={`${room.id}-h-${box.h}`} inputMode="decimal" defaultValue={fmtFeet(box.h)} onBlur={(e) => setDim('h', e.target.value)} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
-              </div>
-            </div>
-          ) : (
-            <div className="muted">{room.pts.length} corners · overall {roomSizeText(room)}. Click a wall to set its length; click a corner to select it.</div>
-          )}
-          {wallIdx != null && (
-            <div className="field" style={{ maxWidth: 260 }}><label htmlFor="sk-wall-len">Selected wall (feet)</label>
-              <input id="sk-wall-len" key={`${room.id}-wl-${wallIdx}-${wallLen}`} inputMode="decimal" defaultValue={fmtFeet(wallLen)} onBlur={(e) => setWallLength(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
-            </div>
-          )}
-          {dimErr && <div className="msg err" style={{ margin: 0 }}>{dimErr}</div>}
-          <div className="muted">{roomAreaText(room)}{roomWet && <> · <strong className="sk-wet">~{roomWet.wet} sq ft wet ({WATER_CATS[roomWet.cat]})</strong></>}</div>
-          <div className="row">
-            {onAddRoomPhoto && <button type="button" className="secondary small" onClick={() => onAddRoomPhoto(room)}>Add photo to this room</button>}
-            {onViewRoomPhotos && roomPhotos > 0 && <button type="button" className="secondary small" onClick={() => onViewRoomPhotos(room)}>View photos ({roomPhotos})</button>}
-            {rect && <button type="button" className="secondary small" onClick={() => patchRoom(room.id, resizeRect(room, box.h, box.w))}>Swap width and length</button>}
-            {!rect && <button type="button" className="secondary small" onClick={() => patchRoom(room.id, { pts: tidyPts(room.pts) })}>Tidy corners</button>}
-            {sel.vi != null && sel.vi >= 0 && room.pts.length > 3 && <button type="button" className="secondary small" onClick={removeSelected}>Remove this corner</button>}
-            <button type="button" className="secondary small" onClick={duplicateRoom}>Duplicate</button>
-            <button type="button" className="danger small" onClick={() => { commit({ ...planRef.current, rooms: planRef.current.rooms.filter((r) => r.id !== room.id) }); setSel(null); }}>Delete room</button>
-          </div>
-        </div>
-      )}
-
-      {mark && (
-        <div className="sketch-panel">
-          {mark.type === 'text' && (
-            <div className="field" style={{ margin: 0, flex: 1 }}>
-              <label htmlFor="sk-mark-text">Note text</label>
-              <input id="sk-mark-text" key={mark.id} defaultValue={mark.text} maxLength={60} onBlur={(e) => e.target.value.trim() && e.target.value !== mark.text && patchMark(mark.id, { text: e.target.value.trim() })} />
-            </div>
-          )}
-          <div className="sketch-colors">
-            {MARK_COLORS.map((c) => (
-              <button key={c} type="button" className={mark.color === c ? 'on' : ''} style={{ background: c }} aria-label={`Color ${c}`} onClick={() => patchMark(mark.id, { color: c })} />
-            ))}
-          </div>
-          <button type="button" className="danger small" onClick={removeSelected}>Delete</button>
-        </div>
-      )}
     </div>
   );
 }

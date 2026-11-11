@@ -5,7 +5,7 @@ import {
   hitMarkAt, simplifyStroke, planBounds, fitView, toWorld, toScreen, roomPhotoCounts, distToSegment,
   rectPts, polyArea, isRect, roomBox, nearestVertex, nearestEdge, nearestAnchor, insertBreak, insertCorner, addCornerCut,
   removeVertex, dropStraightPoints, tidyPts, moveVertex, moveEdge, moveEdgeSnapped, setEdgeLength, resizeRect, simplifyRDP, cleanWater, waterOutline,
-  carveRooms, subtractRect, wetAreas, totalWet, hitWater, newWater, labelPoint,
+  carveRooms, subtractRect, affectedTotals, surfaceText, wallRuns, pickArea, hitSource, newArea, newSource, cleanSurfaces, labelPoint,
   MAX_ROOMS, MAX_ROOM, MIN_ROOM,
 } from '../lib/sketch.js';
 import { drawPlan } from '../lib/sketchDraw.js';
@@ -74,23 +74,36 @@ test('normalizePlan repairs bad data instead of trusting it', () => {
 
 test('a version 1 sketch (rectangles) opens as shapes, unchanged in size and place', () => {
   const p = normalizePlan({ v: 1, rooms: [{ id: 'k', label: 'Kitchen', x: 2, y: 3, w: 12, h: 14, notes: 'n' }], marks: [] });
-  assert.equal(p.v, 2);
+  assert.equal(p.v, 3);
   assert.deepEqual(p.rooms[0].pts, [[2, 3], [14, 3], [14, 17], [2, 17]]);
   assert.equal(roomArea(p.rooms[0]), 168);
   assert.ok(isRect(p.rooms[0]));
-  assert.deepEqual(p.water, []);
+  assert.deepEqual(p.areas, []);
+  assert.deepEqual(p.sources, []);
 });
 
-test('shapes and water survive a round trip through normalizePlan', () => {
+test('shapes and affected areas survive a round trip through normalizePlan', () => {
   const room = { id: 'r', label: 'L', notes: '', pts: [[0, 0], [10, 0], [10, 5], [5, 5], [5, 10], [0, 10]] };
-  const water = { id: 'w', cat: 2, smooth: true, pts: [[1, 1], [6, 1], [6, 6], [1, 6]] };
-  const p = normalizePlan({ rooms: [room], water: [water, { pts: [[0, 0]] }, { cat: 9, pts: [[0, 0], [1, 0], [1, 1]] }] });
+  const area = { id: 'w', kind: 'water', cat: 2, smooth: true, surfaces: ['floor', 'wall'], height: 4, pts: [[1, 1], [6, 1], [6, 6], [1, 6]] };
+  const source = { id: 's', x: 3, y: 4, surfaces: ['ceiling'], note: 'Supply line' };
+  const p = normalizePlan({ rooms: [room], areas: [area, { pts: [[0, 0]] }, { kind: 'smoke', cat: 9, surfaces: ['bogus'], height: 3, pts: [[0, 0], [1, 0], [1, 1]] }], sources: [source, { x: 'no' }] });
   assert.deepEqual(p.rooms[0].pts, room.pts);
-  assert.equal(p.water.length, 2);
-  assert.deepEqual(p.water[0], water);
-  assert.equal(p.water[1].cat, 1);
+  assert.equal(p.areas.length, 2);
+  assert.deepEqual(p.areas[0], area);
+  assert.deepEqual(p.areas[1], { ...p.areas[1], kind: 'smoke', cat: 1, surfaces: ['floor'], height: 2 }); // bad values fall back
+  assert.deepEqual(p.sources, [source]);
   assert.equal(roomArea(room), 75);
   assert.ok(!isRect(room));
+});
+
+test('a version 2 sketch keeps its water, now as water on the floor', () => {
+  const p = normalizePlan({ v: 2, rooms: [], water: [{ id: 'w', cat: 3, smooth: false, pts: [[1, 1], [6, 1], [6, 6]] }], marks: [] });
+  assert.equal(p.v, 3);
+  assert.equal(p.areas.length, 1);
+  assert.deepEqual([p.areas[0].kind, p.areas[0].cat, p.areas[0].surfaces], ['water', 3, ['floor']]);
+  assert.equal(p.water, undefined);
+  assert.deepEqual(cleanSurfaces(['ceiling', 'floor', 'floor']), ['floor', 'ceiling']);
+  assert.deepEqual(cleanSurfaces([]), ['floor']);
 });
 
 test('normalizePlan caps how many rooms it keeps', () => {
@@ -393,32 +406,88 @@ test('cleanWater refuses a drawing that is too small or not a loop', () => {
   assert.equal(cleanWater([]), null);
 });
 
-test('wet area is measured per room, counts overlaps once, and reports the worst category', () => {
+const floorArea = (id, kind, cat, pts, surfaces = ['floor']) => ({ id, kind, cat, smooth: false, surfaces, height: 2, pts });
+
+test('floor area is measured per room, counts overlaps once, and reports the worst water category', () => {
   const kitchen = { id: 'k', label: 'Kitchen', notes: '', pts: rectPts(0, 0, 12, 10) };
   const hall = { id: 'h', label: 'Hall', notes: '', pts: rectPts(12, 0, 4, 10) };
   const dry = { id: 'd', label: 'Dry', notes: '', pts: rectPts(30, 0, 5, 5) };
-  const w1 = { id: 'w1', cat: 1, smooth: false, pts: rectPts(6, 2, 10, 4) };    // 6 sq ft... see below
-  const w2 = { id: 'w2', cat: 3, smooth: false, pts: rectPts(8, 2, 4, 4) };     // inside w1
-  const plan = { ...emptyPlan(), rooms: [kitchen, hall, dry], water: [w1, w2] };
-  const wet = wetAreas(plan);
-  assert.equal(wet.k.wet, 6 * 4);      // x 6..12
-  assert.equal(wet.h.wet, 4 * 4);      // x 12..16
-  assert.equal(wet.k.cat, 3);
-  assert.equal(wet.h.cat, 1);
-  assert.equal(wet.d, undefined);
-  assert.equal(totalWet(wet), 24 + 16);
-  assert.deepEqual(wetAreas(emptyPlan()), {});
+  const w1 = floorArea('w1', 'water', 1, rectPts(6, 2, 10, 4));
+  const w2 = floorArea('w2', 'water', 3, rectPts(8, 2, 4, 4)); // inside w1
+  const plan = { ...emptyPlan(), rooms: [kitchen, hall, dry], areas: [w1, w2] };
+  const t = affectedTotals(plan);
+  assert.equal(t.rooms.k.water.floor, 6 * 4);      // x 6..12
+  assert.equal(t.rooms.h.water.floor, 4 * 4);      // x 12..16
+  assert.equal(t.rooms.k.water.cat, 3);
+  assert.equal(t.rooms.h.water.cat, 1);
+  assert.equal(t.rooms.d, undefined);
+  assert.equal(t.total.water.floor, 24 + 16);
+  assert.equal(t.total.water.wall, 0);
+  assert.deepEqual(affectedTotals(emptyPlan()), { rooms: {}, total: {} });
 });
 
-test('a smooth water shape is measured as drawn and can be picked', () => {
-  const w = newWater([[2, 2], [8, 2], [8, 6], [2, 6]], 2, true);
+test('each type and surface is counted on its own: floor, ceiling and wall', () => {
+  const room = { id: 'r', label: '', notes: '', pts: rectPts(0, 0, 10, 10) };
+  // one stain in the corner, on the floor and the ceiling and 2 ft up the walls it touches; mold on the ceiling only
+  const stain = floorArea('a', 'water', 2, rectPts(0, 0, 4, 4), ['floor', 'wall', 'ceiling']);
+  const mold = floorArea('b', 'growth', 1, rectPts(5, 5, 2, 2), ['ceiling']);
+  const t = affectedTotals({ ...emptyPlan(), rooms: [room], areas: [stain, mold] });
+  assert.deepEqual(t.rooms.r.water, { floor: 16, wall: 16, ceiling: 16, cat: 2 }); // 4 ft + 4 ft of wall, 2 ft high
+  assert.deepEqual(t.rooms.r.growth, { floor: 0, wall: 0, ceiling: 4, cat: 0 });
+  assert.equal(t.rooms.r.smoke, undefined);
+  assert.equal(surfaceText(t.rooms.r.water), '16 floor · 16 wall · 16 ceiling');
+  assert.equal(surfaceText(t.rooms.r.growth), '4 ceiling');
+  // a taller reach up the wall counts more; a wall-only area counts no floor or ceiling
+  const tall = { ...floorArea('c', 'smoke', 1, rectPts(0, 0, 4, 4), ['wall']), height: 8 };
+  const u = affectedTotals({ ...emptyPlan(), rooms: [room], areas: [tall] });
+  assert.deepEqual(u.rooms.r.smoke, { floor: 0, wall: 64, ceiling: 0, cat: 0 });
+  // a stain that does not reach a wall leaves the walls alone
+  const mid = floorArea('d', 'water', 1, rectPts(4, 4, 2, 2), ['floor', 'wall']);
+  const v = affectedTotals({ ...emptyPlan(), rooms: [room], areas: [mid] });
+  assert.deepEqual(v.rooms.r.water, { floor: 4, wall: 0, ceiling: 0, cat: 1 });
+});
+
+test('wall bands are the stretches of wall a shape touches, and follow the shape', () => {
+  const room = { id: 'r', label: '', notes: '', pts: rectPts(0, 0, 10, 10) };
+  const stain = floorArea('a', 'water', 1, rectPts(0, 0, 4, 4), ['wall']);
+  const runs = wallRuns(room, stain);
+  assert.equal(runs.length, 2);
+  assert.deepEqual(runs.map((r) => Math.round(r.len)), [4, 4]);
+  assert.deepEqual(runs[0].a, [0, 0]);
+  assert.deepEqual(runs[0].b, [4, 0]);
+  // moved along the top wall: the band moves with it (a new shape object, so nothing stale is reused)
+  const moved = { ...stain, pts: rectPts(3, 0, 4, 4) };
+  const r2 = wallRuns(room, moved);
+  assert.equal(r2.length, 1);
+  assert.deepEqual([r2[0].a, r2[0].b], [[3, 0], [7, 0]]);
+  // a shape in the middle of the room touches nothing
+  assert.deepEqual(wallRuns(room, floorArea('m', 'water', 1, rectPts(4, 4, 2, 2), ['wall'])), []);
+});
+
+test('areas and pins can be picked, and the surface view hides what is not on it', () => {
+  const stain = { ...floorArea('a', 'water', 2, rectPts(2, 2, 6, 4), ['floor']), smooth: false };
+  const wallOnly = floorArea('w', 'smoke', 1, rectPts(20, 2, 4, 4), ['wall']);
+  const pin = { ...newSource(5, 9, ['ceiling']), id: 'p' };
+  const plan = { ...emptyPlan(), areas: [stain, wallOnly], sources: [pin] };
+  assert.equal(pickArea(plan, 5, 4, 0.3).area.id, 'a');             // inside a floor shape
+  assert.equal(pickArea(plan, 22, 4, 0.3), null);                   // inside a wall-only shape: nothing to grab
+  assert.equal(pickArea(plan, 20, 4, 0.3).area.id, 'w');            // its edge can be grabbed
+  assert.equal(pickArea(plan, 5, 4, 0.3, 'ceiling'), null);         // hidden in the ceiling view
+  assert.equal(pickArea(plan, 5, 4, 0.3, 'floor').area.id, 'a');
+  assert.equal(hitSource(plan, 5.2, 9, 0.5).id, 'p');
+  assert.equal(hitSource(plan, 5.2, 9, 0.5, 'floor'), null);
+  assert.equal(hitSource(plan, 9, 9, 0.5), null);
+  assert.deepEqual(newSource(1.234, 2, ['wall', 'ceiling']).surfaces, ['wall', 'ceiling']);
+});
+
+test('a smooth shape is measured as drawn', () => {
+  const w = newArea([[2, 2], [8, 2], [8, 6], [2, 6]], { cat: 2, smooth: true });
   const out = waterOutline(w);
   assert.ok(out.length > 4);
   assert.ok(polyArea(out) < 24 && polyArea(out) > 15); // rounded corners trim a little
-  const plan = { ...emptyPlan(), water: [w] };
-  assert.equal(hitWater(plan, 5, 4).id, w.id);
-  assert.equal(hitWater(plan, 20, 4), null);
   assert.equal(waterOutline({ ...w, smooth: false }), w.pts);
+  assert.deepEqual([w.kind, w.cat, w.surfaces, w.height], ['water', 2, ['floor'], 2]);
+  assert.equal(newArea(w.pts, { kind: 'growth', cat: 3 }).cat, 1); // only water has a category
 });
 
 test('a room name is placed inside an odd shape', () => {
@@ -489,15 +558,27 @@ function fakeCtx() {
 test('drawPlan renders rooms, labels, marks, selection and a draft without throwing', () => {
   const plan = normalizePlan({
     rooms: [{ id: 'k', label: 'Kitchen', x: 0, y: 0, w: 12, h: 14 }, { id: 'h', label: 'Hall', x: 12, y: 0, w: 3, h: 14 }],
-    water: [{ id: 'w', cat: 2, smooth: true, pts: [[1, 1], [9, 1], [9, 8], [1, 8]] }],
+    areas: [
+      { id: 'w', kind: 'water', cat: 2, smooth: true, surfaces: ['floor', 'wall', 'ceiling'], height: 4, pts: [[1, 1], [9, 1], [9, 8], [1, 8]] },
+      { id: 'g', kind: 'growth', cat: 1, smooth: false, surfaces: ['ceiling'], height: 2, pts: [[10, 1], [11, 1], [11, 4]] },
+      { id: 'm', kind: 'smoke', cat: 1, smooth: false, surfaces: ['wall'], height: 8, pts: [[2, 9], [6, 9], [6, 14], [2, 14]] },
+    ],
+    sources: [{ id: 's', x: 3, y: 3, surfaces: ['floor', 'wall'], note: '' }],
     marks: [{ type: 'pen', color: '#c0392b', pts: [[1, 1], [5, 5]] }, { type: 'text', text: 'Wet', x: 2, y: 3, color: '#2f4858' }],
   });
   const view = fitView(planBounds(plan), 400, 300);
   const ctx = fakeCtx();
   drawPlan(ctx, plan, view, { W: 400, H: 300, selection: { kind: 'room', id: 'k' }, counts: { k: 3 }, draft: { type: 'room', x: 20, y: 0, w: 5, h: 5 } });
   drawPlan(ctx, plan, view, { W: 400, H: 300, selection: { kind: 'mark', id: plan.marks[1].id }, draft: { type: 'pen', color: '#000000', pts: [[0, 0], [1, 1]] } });
-  drawPlan(ctx, plan, view, { W: 400, H: 300, selection: { kind: 'room', id: 'k', vi: 2, ei: 1 }, wet: wetAreas(plan), hover: { x: 3, y: 0, kind: 'break' } });
-  drawPlan(ctx, plan, view, { W: 400, H: 300, selection: { kind: 'water', id: 'w' }, draft: { type: 'water', cat: 2, pts: [[0, 0], [3, 1]] } });
+  drawPlan(ctx, plan, view, { W: 400, H: 300, selection: { kind: 'room', id: 'k', vi: 2, ei: 1 }, affected: affectedTotals(plan).rooms, hover: { x: 3, y: 0, kind: 'break' } });
+  drawPlan(ctx, plan, view, { W: 400, H: 300, selection: { kind: 'area', id: 'w' }, draft: { type: 'area', kind: 'growth', cat: 1, pts: [[0, 0], [3, 1]] } });
+  drawPlan(ctx, plan, view, { W: 400, H: 300, selection: { kind: 'source', id: 's' } });
+  for (const surface of ['floor', 'wall', 'ceiling']) drawPlan(fakeCtx(), plan, view, { W: 400, H: 300, surface, selection: { kind: 'area', id: 'm' } });
+  // the surface views draw without throwing, and the pin carries its surface letters
+  const wallCtx = fakeCtx();
+  drawPlan(wallCtx, plan, view, { W: 400, H: 300, surface: 'wall' });
+  const pinText = wallCtx.calls.filter((c) => c[0] === 'fillText').map((c) => c[1]);
+  assert.ok(pinText.includes('S') && pinText.includes('FW'), `pin missing: ${pinText}`);
   // hovering the top wall of the kitchen (12 ft) at 3 ft: 3' on one side and 9' on the other, with the cut preview
   const kit = plan.rooms[0];
   const hctx = fakeCtx();
@@ -509,7 +590,7 @@ test('drawPlan renders rooms, labels, marks, selection and a draft without throw
   assert.ok(text.includes('Kitchen'));
   assert.ok(text.some((t) => t.includes('168 sq ft')));
   assert.ok(text.includes('3'));
-  assert.ok(text.some((t) => t.startsWith('Wet ~')));
+  assert.ok(text.some((t) => t.startsWith('Water ')), `no water line in ${text}`);
   assert.ok(text.includes(`12'`)); // wall lengths on the selected room
 });
 

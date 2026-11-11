@@ -1205,7 +1205,7 @@ a.stat-tile:hover{ border-color: var(--accent); }
 .sketch-tools button:disabled{ opacity: 0.4; cursor: not-allowed; }
 .sketch-stage{ position: relative; width: 100%; height: min(62vh, 560px); min-height: 320px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
 .sketch-canvas{ display: block; touch-action: none; user-select: none; -webkit-user-select: none; cursor: default; }
-.sketch-canvas.tool-room, .sketch-canvas.tool-pen, .sketch-canvas.tool-text, .sketch-canvas.tool-water, .sketch-canvas.tool-break, .sketch-canvas.tool-corner{ cursor: crosshair; }
+.sketch-canvas.tool-room, .sketch-canvas.tool-pen, .sketch-canvas.tool-text, .sketch-canvas.tool-area, .sketch-canvas.tool-break, .sketch-canvas.tool-corner{ cursor: crosshair; }
 .sketch-canvas.tool-pan{ cursor: grab; }
 .sketch-summary{ margin: 8px 0; font-size: 13px; font-weight: 600; }
 .sketch-summary .muted{ font-weight: 400; }
@@ -1438,3 +1438,27 @@ a.stat-tile:hover{ border-color: var(--accent); }
 .sk-dot{ display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
 .sk-wet{ color: #1f6fd0; }
 [data-theme="dark"] .sk-wet{ color: #7db4ff; }
+
+/* sketch: affected areas menu, option strip, click popup, full screen */
+.sketch-menu{ position: relative; display: inline-block; }
+.sk-caret{ display: inline-block; width: 0; height: 0; margin-left: 6px; vertical-align: middle; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid currentColor; opacity: 0.7; }
+.sketch-tools .sketch-menu-list{ position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; min-width: 200px; display: flex; flex-direction: column; gap: 2px; padding: 4px; background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+.sketch-tools .sketch-menu-list button{ display: flex; align-items: center; text-align: left; border: 0; background: transparent; padding: 10px 12px; border-radius: 6px; }
+.sketch-tools .sketch-menu-list button:hover, .sketch-tools .sketch-menu-list button.on{ background: var(--panel); color: var(--ink); }
+.sketch-strip{ display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0 0 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.sketch-strip .chips{ margin: 0; }
+.sk-strip-kind{ display: inline-flex; align-items: center; font-size: 13px; }
+.sketch-view{ padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card-bg); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.sketch-tools button.sk-icon{ display: inline-flex; align-items: center; justify-content: center; padding: 8px 10px; }
+.sketch-pop{ position: absolute; z-index: 6; display: flex; flex-direction: column; gap: 8px; padding: 12px; overflow: auto; box-sizing: border-box; background: var(--card-bg); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.22); }
+.sketch-pop .field, .sketch-pop .chips{ margin: 0; }
+.sketch-pop .row{ display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.sketch-pop-head{ display: flex; justify-content: space-between; align-items: center; }
+.sk-x{ border: 0; background: transparent; color: var(--ink-soft); font-size: 22px; line-height: 1; padding: 0 4px; cursor: pointer; }
+.sk-label{ margin-bottom: -4px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+.sk-aff{ font-size: 12.5px; }
+.sk-more summary{ cursor: pointer; font-size: 12.5px; color: var(--ink-soft); }
+.sk-more .row{ margin-top: 6px; }
+.sketch-full, .sketch:fullscreen{ position: fixed; inset: 0; z-index: 1400; display: flex; flex-direction: column; box-sizing: border-box; width: 100vw; height: 100vh; height: 100dvh; padding: 10px 12px; background: var(--card-bg); overflow: auto; }
+.sketch:fullscreen{ position: static; }
+.sketch-full .sketch-stage, .sketch:fullscreen .sketch-stage{ flex: 1; height: auto; min-height: 0; }
