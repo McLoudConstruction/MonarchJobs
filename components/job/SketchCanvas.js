@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import {
   AREA_KINDS, MARK_COLORS, MAX_MARKS, MAX_ROOMS, MAX_AREAS, MAX_SOURCES, MIN_ROOM, MAX_ROOM, ROOM_PRESETS, SURFACES, WALL_HEIGHTS, WATER_CATS,
   addCornerCut, affectedTotals, carveRooms, cleanSurfaces, cleanWater, dropStraightPoints, edgeLength, fitView, hitMarkAt, hitRoom, hitSource,
-  insertBreak, isRect, makeId, moveEdgeSnapped, moveVertex, nearestAnchor, nearestEdge, nearestVertex, newArea, newRoom, newSource, normalizePlan,
+  insertBreak, isRect, makeId, moveEdgeSnapped, moveVertex, nearestAnchor, nearestEdge, nearestVertex, newArea, newRoom, newSource, normalizePlan, placeGrowth,
   parseFeet, pickArea, planBounds, rectPts, removeVertex, resizeRect, roomAreaText, roomBox, roomSizeText, setEdgeLength,
   simplifyStroke, snap, snapOnEdge, surfaceText, tidyPts, toScreen, toWorld, totalArea, translatePts, fmtFeet,
 } from '@/lib/sketch';
@@ -35,9 +35,9 @@ const HINTS = {
 };
 const AREA_HINTS = {
   water: 'Draw around where the water went. Choose the surfaces it reached.',
-  growth: 'Draw around the growth. Choose the surfaces it is on.',
+  growth: 'Draw a line along a wall, or a loop for the ceiling. It snaps to the nearest one. Choose Manual or hold Alt to place it freely.',
   smoke: 'Draw around what the smoke reached. Choose the surfaces it is on.',
-  source: 'Tap where the loss started. Choose the surface it came from.',
+  source: 'Tap where the loss started.',
 };
 const SURFACE_VIEWS = [['all', 'All surfaces'], ['floor', 'Floor'], ['wall', 'Walls'], ['ceiling', 'Ceiling']];
 const KIND_ORDER = ['water', 'source', 'growth', 'smoke'];
@@ -121,6 +121,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   const [color, setColor] = useState(MARK_COLORS[0]);
   const [areaKind, setAreaKind] = useState('water'); // what the Affected areas tool is marking
   const [waterCat, setWaterCat] = useState(1);
+  const [growthAuto, setGrowthAuto] = useState(true); // Growth: lines snap to a wall, loops to a ceiling
   const [areaMode, setAreaMode] = useState('smooth');
   const [surfaces, setSurfaces] = useState(['floor']); // surfaces for the next thing drawn
   const [wallHeight, setWallHeight] = useState(2);
@@ -142,7 +143,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   const colorRef = useRef(color);
   colorRef.current = color;
   const areaRef = useRef({});
-  areaRef.current = { kind: areaKind, cat: waterCat, mode: areaMode, surfaces, height: wallHeight };
+  areaRef.current = { kind: areaKind, cat: waterCat, mode: areaMode, surfaces, height: wallHeight, auto: growthAuto };
   const surfaceRef = useRef('all');
   surfaceRef.current = surfaceView;
   const popupRef = useRef(null);
@@ -462,7 +463,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
         dragRef.current = null;
         return;
       }
-      dragRef.current = { mode: 'area', pts: [[w.x, w.y]], draft: { type: 'area', kind: a.kind, cat: a.cat, pts: [[w.x, w.y]] } };
+      dragRef.current = { mode: 'area', free: e.altKey, pts: [[w.x, w.y]], draft: { type: 'area', kind: a.kind, cat: a.cat, pts: [[w.x, w.y]] } };
       schedule();
       return;
     }
@@ -664,9 +665,13 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     } else if (d.mode === 'area') {
       const v = viewRef.current;
       const a = areaRef.current;
-      const pts = cleanWater(d.pts, { mode: a.mode, eps: Math.max(0.3, 9 / v.scale) });
+      const eps = Math.max(0.3, 9 / v.scale);
+      const placed = a.kind === 'growth' && a.auto && !d.free ? placeGrowth(plan, d.pts, { mode: a.mode, eps }) : null;
+      const pts = placed ? placed.pts : (a.kind === 'growth' && a.auto && !d.free ? null : cleanWater(d.pts, { mode: a.mode, eps }));
       if (pts && plan.areas.length < MAX_AREAS) {
-        const area = newArea(pts, { kind: a.kind, cat: a.cat, smooth: a.mode === 'smooth', surfaces: a.surfaces, height: a.height });
+        const area = newArea(pts, placed
+          ? { kind: a.kind, smooth: placed.smooth, surfaces: placed.surfaces, height: a.height }
+          : { kind: a.kind, cat: a.cat, smooth: a.mode === 'smooth', surfaces: a.surfaces, height: a.height });
         commit({ ...plan, areas: [...plan.areas, area] });
         setSel({ kind: 'area', id: area.id });
       }
@@ -900,8 +905,15 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
         <div className="sketch-strip" aria-label="Affected area options">
           <span className="sk-strip-kind"><span className="sk-dot" style={{ background: kindDot(areaKind) }} /><strong>{AREA_KINDS[areaKind]}</strong></span>
           {areaKind === 'water' && <CatChips value={waterCat} onChange={setWaterCat} />}
-          <SurfaceChips value={surfaces} onChange={setSurfaces} />
-          {areaKind !== 'source' && surfaces.includes('wall') && (<><span className="muted">up the wall</span><HeightChips value={wallHeight} onChange={setWallHeight} /></>)}
+          {areaKind === 'growth' && (
+            <div className="chips" role="group" aria-label="Where growth goes" title="Auto: a line snaps to the nearest wall, a loop to the nearest ceiling. Hold Alt while drawing to skip the snap.">
+              <button type="button" className={growthAuto ? 'on' : ''} aria-pressed={growthAuto} onClick={() => setGrowthAuto(true)}>Auto</button>
+              <button type="button" className={growthAuto ? '' : 'on'} aria-pressed={!growthAuto} onClick={() => setGrowthAuto(false)}>Manual</button>
+            </div>
+          )}
+          {areaKind !== 'source' && !(areaKind === 'growth' && growthAuto) && <SurfaceChips value={surfaces} onChange={setSurfaces} />}
+          {areaKind !== 'source' && (areaKind === 'growth' && growthAuto ? true : surfaces.includes('wall')) && (<><span className="muted">up the wall</span><HeightChips value={wallHeight} onChange={setWallHeight} /></>)}
+          {areaKind === 'growth' && growthAuto && <span className="muted">Draw a line along a wall or a loop for the ceiling.</span>}
           {areaKind !== 'source' && (
             <div className="chips" role="group" aria-label="Line cleanup">
               {[['smooth', 'Rounded'], ['straight', 'Straight']].map(([m, label]) => (
@@ -1064,8 +1076,6 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
             {pin && (
               <>
                 <div className="sketch-pop-head"><strong><span className="sk-dot" style={{ background: kindDot('source') }} />Source of loss</strong>{closeBtn}</div>
-                <div className="muted sk-label">Surface it came from</div>
-                <SurfaceChips value={pin.surfaces} onChange={(next) => patchSource(pin.id, { surfaces: next })} />
                 <div className="field"><label htmlFor="sk-pin-note">Note</label>
                   <input id="sk-pin-note" key={`${pin.id}-${pin.note}`} defaultValue={pin.note} maxLength={80} onBlur={(e) => e.target.value !== pin.note && patchSource(pin.id, { note: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} placeholder="Supply line, roof leak..." />
                 </div>

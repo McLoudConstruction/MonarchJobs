@@ -31,3 +31,40 @@ test('fitView keeps the plan inside the inset area', () => {
   const plain = fitView(b, 800, 500, 20);
   assert.ok(v.scale <= plain.scale);
 });
+
+import { placeGrowth, rectPts, affectedTotals, normalizePlan, newArea } from '../lib/sketch.js';
+const room = { id: 'r', label: '', notes: '', pts: rectPts(0, 0, 12, 10) };
+const plan0 = normalizePlan({ rooms: [room] });
+
+test('growth: a line near a wall becomes a wall band along it', () => {
+  const stroke = [[2, 0.5], [4, 0.4], [6, 0.6], [8, 0.5]];
+  const g = placeGrowth(plan0, stroke);
+  assert.deepEqual(g.surfaces, ['wall']);
+  const ys = g.pts.map((p) => p[1]);
+  assert.ok(Math.min(...ys) === 0 && Math.max(...ys) > 0 && Math.max(...ys) <= 0.6); // along the top wall, inside the room
+  const area = newArea(g.pts, { kind: 'growth', surfaces: g.surfaces, smooth: g.smooth, height: 4 });
+  const t = affectedTotals({ ...plan0, areas: [area] }).total.growth;
+  assert.ok(Math.abs(t.wall - 6 * 4) < 1.5, `wall sq ft ${t.wall}`); // about 6 ft long x 4 ft high
+  assert.equal(t.ceiling || 0, 0);
+});
+
+test('growth: a line near the right wall snaps there, not to the top', () => {
+  const g = placeGrowth(plan0, [[11.6, 3], [11.7, 5], [11.5, 7]]);
+  const xs = g.pts.map((p) => p[0]);
+  assert.ok(Math.max(...xs) === 12 && Math.min(...xs) >= 11.4);
+});
+
+test('growth: a loop becomes a ceiling shape and is pulled inside a room', () => {
+  const circle = (cx, cy, r) => Array.from({ length: 25 }, (_, i) => [cx + r * Math.cos((i / 24) * 2 * Math.PI), cy + r * Math.sin((i / 24) * 2 * Math.PI)]);
+  const inside = placeGrowth(plan0, circle(6, 5, 2));
+  assert.deepEqual(inside.surfaces, ['ceiling']);
+  const cx = inside.pts.reduce((t, p) => t + p[0], 0) / inside.pts.length;
+  assert.ok(Math.abs(cx - 6) < 0.2);
+  const outside = placeGrowth(plan0, circle(16, 5, 2));
+  const ox = outside.pts.reduce((t, p) => t + p[0], 0) / outside.pts.length;
+  assert.ok(ox > 11 && ox < 12, `centre x ${ox}`);
+});
+
+test('growth: nothing to snap to without rooms', () => {
+  assert.equal(placeGrowth(normalizePlan({}), [[0, 0], [3, 0]]), null);
+});

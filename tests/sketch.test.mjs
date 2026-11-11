@@ -574,11 +574,11 @@ test('drawPlan renders rooms, labels, marks, selection and a draft without throw
   drawPlan(ctx, plan, view, { W: 400, H: 300, selection: { kind: 'area', id: 'w' }, draft: { type: 'area', kind: 'growth', cat: 1, pts: [[0, 0], [3, 1]] } });
   drawPlan(ctx, plan, view, { W: 400, H: 300, selection: { kind: 'source', id: 's' } });
   for (const surface of ['floor', 'wall', 'ceiling']) drawPlan(fakeCtx(), plan, view, { W: 400, H: 300, surface, selection: { kind: 'area', id: 'm' } });
-  // the surface views draw without throwing, and the pin carries its surface letters
+  // the surface views draw without throwing, and the pin is a plain dot with no letters
   const wallCtx = fakeCtx();
   drawPlan(wallCtx, plan, view, { W: 400, H: 300, surface: 'wall' });
   const pinText = wallCtx.calls.filter((c) => c[0] === 'fillText').map((c) => c[1]);
-  assert.ok(pinText.includes('S') && pinText.includes('FW'), `pin missing: ${pinText}`);
+  assert.ok(!pinText.includes('S') && !pinText.includes('FW'), `pin has letters: ${pinText}`);
   // hovering the top wall of the kitchen (12 ft) at 3 ft: 3' on one side and 9' on the other, with the cut preview
   const kit = plan.rooms[0];
   const hctx = fakeCtx();
