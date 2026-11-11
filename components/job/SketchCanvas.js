@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   AREA_KINDS, MARK_COLORS, MAX_MARKS, MAX_ROOMS, MAX_AREAS, MAX_SOURCES, MIN_ROOM, MAX_ROOM, ROOM_PRESETS, SURFACES, WALL_HEIGHTS, WATER_CATS,
@@ -131,6 +131,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   const [wallHeight, setWallHeight] = useState(2);
   const [surfaceView, setSurfaceView] = useState('all'); // which surface to show: all, floor, wall, ceiling
   const [menuOpen, setMenuOpen] = useState(false);
+  const [popH, setPopH] = useState(320); // measured height of the open popup, so it can be kept on the sketch
   const [objMenu, setObjMenu] = useState(false);
   const [objMenuPos, setObjMenuPos] = useState(null); // where the wide Objects menu sits, in screen pixels
   const [objType, setObjType] = useState('door'); // what the Objects tool places
@@ -924,11 +925,15 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   const roomAffected = room ? totals.rooms[room.id] : null;
   const showPop = !!(popup && selected);
   const areaStat = showPop && area ? affectedTotals({ ...plan, areas: [area] }).total[area.kind] : null;
+  useLayoutEffect(() => {
+    const h = popRef.current ? popRef.current.offsetHeight : 0;
+    if (h && Math.abs(h - popH) > 1) setPopH(h);
+  });
   const { W: stageW, H: stageH } = sizeRef.current;
   const narrow = stageW < 520;
   const popStyle = !showPop ? null : narrow
     ? { left: 8, right: 8, bottom: 8, maxHeight: '75%' }
-    : { left: clampN(popup.x + 14, 8, Math.max(8, stageW - 300 - 8)), top: clampN(popup.y + 14, 8, Math.max(8, stageH - 300)), width: 300, maxHeight: stageH - 16 };
+    : { left: clampN(popup.x + 14, 8, Math.max(8, stageW - 300 - 8)), top: clampN(popup.y + 14, 8, Math.max(8, stageH - popH - 8)), width: 300, maxHeight: stageH - 16 };
   const textPos = textDraft ? toScreen(viewRef.current, textDraft.x, textDraft.y) : null;
   const textStyle = !textDraft ? null : narrow
     ? { left: 8, right: 8, bottom: 8 }
