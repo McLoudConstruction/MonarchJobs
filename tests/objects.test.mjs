@@ -107,3 +107,25 @@ test('nearestWall reports the wall under a point', () => {
   assert.ok(w && Math.abs(w.s - 5) < 1e-6 && w.ny > 0);
   assert.equal(nearestWall(plan, 5, 5, 1), null);
 });
+
+import { parseInches, inchesText, isInches } from '../lib/objectTypes.js';
+test('doors and windows are measured in inches', () => {
+  assert.ok(isInches('door') && isInches('window') && isInches('garage') && !isInches('island') && !isInches('outlet'));
+  assert.equal(parseInches('36'), 3);
+  assert.equal(parseInches('32"'), 32 / 12);
+  assert.equal(parseInches('30 in'), 2.5);
+  assert.equal(parseInches("6'8\""), 6 + 8 / 12);
+  assert.equal(parseInches("3'"), 3);
+  assert.ok(Number.isNaN(parseInches('abc')));
+  assert.equal(inchesText(3), '36"');
+  assert.equal(inchesText(32 / 12), '32"');
+  assert.equal(inchesText(2.6875), '32.25"');
+});
+
+test('door types: every door type is a door family member and draws', () => {
+  const doors = Object.entries(OBJECT_TYPES).filter(([, t]) => t.family === 'door').map(([id]) => id);
+  for (const want of ['door', 'doubledoor', 'french', 'slider', 'bypass', 'pocket', 'bifold', 'barn', 'dutch', 'garage']) assert.ok(doors.includes(want), want);
+  const o = makeObject('bifold', 4, 0);
+  assert.equal(o.oh, 80 / 12);
+  assert.ok(Math.abs(cleanObjects([{ ...o, w: 32 / 12 }], (x) => x)[0].w - 32 / 12) < 1e-4); // 32" survives storage
+});

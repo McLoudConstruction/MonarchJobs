@@ -10,7 +10,7 @@ import {
   simplifyStroke, snap, snapOnEdge, surfaceText, tidyPts, toScreen, toWorld, totalArea, translatePts, fmtFeet,
 } from '@/lib/sketch';
 import { drawPlan, areaStyle, WATER_LINE } from '@/lib/sketchDraw';
-import { OBJECT_TYPES, OBJECT_GROUPS, MAX_OBJECTS, makeObject, objectCounts } from '@/lib/objectTypes';
+import { OBJECT_TYPES, OBJECT_GROUPS, MAX_OBJECTS, makeObject, objectCounts, isInches, inchesText, parseInches } from '@/lib/objectTypes';
 import { placeObject, hitObject } from '@/lib/sketchObjects';
 import { jpegToPdf } from '@/lib/pdfImage';
 
@@ -290,7 +290,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   function duplicateObject(o) {
     const p = planRef.current;
     if (p.objects.length >= MAX_OBJECTS) return;
-    const copy = makeObject(o.t, o.x + 1, o.y + 1, { r: o.r, w: o.w, d: o.d, label: o.label, note: o.note, h: o.h, f: o.f, m: o.m });
+    const copy = makeObject(o.t, o.x + 1, o.y + 1, { r: o.r, w: o.w, d: o.d, label: o.label, note: o.note, h: o.h, oh: o.oh, f: o.f, m: o.m });
     commit({ ...p, objects: [...p.objects, copy] });
     setSel({ kind: 'object', id: copy.id });
   }
@@ -990,7 +990,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
                       <div key={g} className="sk-obj-group">
                         <div className="sk-obj-head">{g}</div>
                         <div className="sk-obj-grid">
-                          {Object.entries(OBJECT_TYPES).filter(([, t]) => t.group === g).map(([id, t]) => (
+                          {Object.entries(OBJECT_TYPES).filter(([, t]) => t.group === g && t.menu !== false).map(([id, t]) => (
                             <button key={id} type="button" role="menuitem" className={tool === 'object' && objType === id ? 'on' : ''} onClick={() => pickObject(id)}>{t.label}</button>
                           ))}
                         </div>
@@ -1194,26 +1194,57 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
                     onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
                 </div>
               );
+              // doors and windows are quoted in inches
+              const inches = (id, label, value, key, minIn, maxIn) => (
+                <div className="field" key={key}><label htmlFor={id}>{label}</label>
+                  <input id={id} key={`${obj.id}-${key}-${value}`} inputMode="decimal" defaultValue={inchesText(value)}
+                    onBlur={(e) => { const ft = parseInches(e.target.value); if (Number.isFinite(ft) && ft * 12 >= minIn && ft * 12 <= maxIn) { if (Math.abs(ft - value) > 1e-6) patchObject(obj.id, { [key]: Math.round(ft * 10000) / 10000 }); } else e.target.value = inchesText(value); }}
+                    onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
+                </div>
+              );
+              const changeDoorType = (to) => {
+                const nu = OBJECT_TYPES[to];
+                patchObject(obj.id, {
+                  t: to,
+                  w: Math.abs(obj.w - ot.w) < 1e-6 ? nu.w : obj.w, // a size that was never changed follows the new type
+                  oh: Math.abs((obj.oh ?? ot.oh) - ot.oh) < 1e-6 ? nu.oh : obj.oh,
+                });
+              };
+              const doorTypes = Object.entries(OBJECT_TYPES).filter(([, t]) => t.family === 'door');
               return (
                 <>
-                  <div className="sketch-pop-head"><strong>{ot.label}</strong>{closeBtn}</div>
+                  <div className="sketch-pop-head"><strong>{ot.family === 'door' ? 'Door' : ot.label}</strong>{closeBtn}</div>
+                  {ot.family === 'door' && (
+                    <div className="field"><label htmlFor="sk-obj-type">Type</label>
+                      <select id="sk-obj-type" value={obj.t} onChange={(e) => changeDoorType(e.target.value)}>
+                        {doorTypes.map(([id, t]) => <option key={id} value={id}>{t.typeLabel || t.label}</option>)}
+                      </select>
+                    </div>
+                  )}
                   <div className="field"><label htmlFor="sk-obj-label">Label</label>
                     <input id="sk-obj-label" key={`${obj.id}-l-${obj.label}`} defaultValue={obj.label} maxLength={40} placeholder={ot.label} onBlur={(e) => e.target.value !== obj.label && patchObject(obj.id, { label: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
                   </div>
-                  {ot.mode !== 'wallpoint' && (
+                  {isWall && (
                     <div className="grid2">
-                      {feet('sk-obj-w', isWall ? 'Width' : ot.mode === 'box' ? 'Length' : 'Size', obj.w, 'w')}
+                      {inches('sk-obj-w', 'Width', obj.w, 'w', 6, 400)}
+                      {inches('sk-obj-oh', 'Height', obj.oh ?? ot.oh, 'oh', 12, 240)}
+                    </div>
+                  )}
+                  {isWall && ot.h != null && inches('sk-obj-h', 'Sill height', obj.h ?? ot.h, 'h', 0, 120)}
+                  {!isWall && ot.mode !== 'wallpoint' && (
+                    <div className="grid2">
+                      {feet('sk-obj-w', ot.mode === 'box' ? 'Length' : 'Size', obj.w, 'w')}
                       {ot.mode === 'box' && feet('sk-obj-d', 'Depth', obj.d, 'd')}
                     </div>
                   )}
-                  {ot.h != null && feet('sk-obj-h', ot.kind === 'window' ? 'Sill height' : 'Height off floor', obj.h ?? ot.h, 'h', 0, 30)}
+                  {!isWall && ot.h != null && feet('sk-obj-h', 'Height off floor', obj.h ?? ot.h, 'h', 0, 30)}
                   <div className="field"><label htmlFor="sk-obj-note">Note</label>
                     <input id="sk-obj-note" key={`${obj.id}-n-${obj.note}`} defaultValue={obj.note} maxLength={80} placeholder="Brand, material, size..." onBlur={(e) => e.target.value !== obj.note && patchObject(obj.id, { note: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
                   </div>
                   <div className="row">
                     {ot.mode === 'box' && <button type="button" className="secondary small" onClick={() => patchObject(obj.id, { r: (obj.r + 90) % 360 })}>Rotate</button>}
                     {(isWall || ot.mode === 'wallpoint' || ot.kind === 'stairs') && <button type="button" className="secondary small" onClick={() => patchObject(obj.id, { f: !obj.f })}>{ot.kind === 'stairs' ? 'Flip direction' : isWall ? 'Flip side' : 'Flip'}</button>}
-                    {ot.kind === 'door' && <button type="button" className="secondary small" onClick={() => patchObject(obj.id, { m: !obj.m })}>Flip hinge</button>}
+                    {['door', 'dutch', 'pocket', 'barn'].includes(ot.kind) && <button type="button" className="secondary small" onClick={() => patchObject(obj.id, { m: !obj.m })}>{ot.kind === 'door' || ot.kind === 'dutch' ? 'Flip hinge' : 'Flip end'}</button>}
                     <button type="button" className="secondary small" onClick={() => duplicateObject(obj)}>Duplicate</button>
                     <button type="button" className="danger small" onClick={removeSelected}>Delete</button>
                   </div>
