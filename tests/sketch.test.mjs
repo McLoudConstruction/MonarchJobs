@@ -5,7 +5,7 @@ import {
   hitMarkAt, simplifyStroke, planBounds, fitView, toWorld, toScreen, roomPhotoCounts, distToSegment,
   rectPts, polyArea, isRect, roomBox, nearestVertex, nearestEdge, nearestAnchor, insertBreak, insertCorner,
   removeVertex, tidyPts, moveVertex, moveEdge, setEdgeLength, resizeRect, simplifyRDP, cleanWater, waterOutline,
-  wetAreas, totalWet, hitWater, newWater, labelPoint,
+  carveRooms, subtractRect, wetAreas, totalWet, hitWater, newWater, labelPoint,
   MAX_ROOMS, MAX_ROOM, MIN_ROOM,
 } from '../lib/sketch.js';
 import { drawPlan } from '../lib/sketchDraw.js';
@@ -369,4 +369,22 @@ test('drawPlan renders rooms, labels, marks, selection and a draft without throw
   assert.ok(text.includes('3'));
   assert.ok(text.some((t) => t.startsWith('Wet ~')));
   assert.ok(text.includes(`12'`)); // wall lengths on the selected room
+});
+
+test('carving: a new room cuts its overlap out of a neighbour', () => {
+  const rooms = [{ id: 'a', label: 'A', notes: '', pts: rectPts(0, 0, 10, 10) }];
+  const top = carveRooms(rooms, { x: 0, y: 0, w: 10, h: 4 }); // dragged up over the top
+  assert.equal(top.length, 1);
+  assert.equal(roomArea(top[0]), 60);
+  const corner = carveRooms(rooms, { x: 6, y: 0, w: 6, h: 4 }); // L-shape stays one room
+  assert.equal(corner.length, 1);
+  assert.equal(roomArea(corner[0]), 100 - 16);
+  const split = carveRooms(rooms, { x: 4, y: -2, w: 2, h: 14 }); // cut in two
+  assert.equal(split.length, 2);
+  assert.equal(split[0].id, 'a');
+  assert.equal(roomArea(split[0]) + roomArea(split[1]), 80);
+  assert.equal(carveRooms(rooms, { x: -1, y: -1, w: 12, h: 12 }).length, 0); // covered
+  assert.equal(carveRooms(rooms, { x: 10, y: 0, w: 5, h: 5 })[0], rooms[0]); // only touching
+  assert.equal(carveRooms(rooms, { x: 2, y: 2, w: 3, h: 3 })[0], rooms[0]); // inside: no hole
+  assert.ok(subtractRect(rectPts(0, 0, 10, 10), { x: 0, y: 0, w: 10, h: 4 }).length === 1);
 });

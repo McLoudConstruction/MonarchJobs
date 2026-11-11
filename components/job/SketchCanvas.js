@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   MARK_COLORS, MAX_MARKS, MAX_ROOMS, MAX_WATER, MIN_ROOM, MAX_ROOM, ROOM_PRESETS, WATER_CATS,
-  cleanWater, edgeLength, fitView, hitMarkAt, hitRoom, hitWater, insertBreak, insertCorner, isRect, makeId, moveEdgeSnapped,
+  carveRooms, cleanWater, edgeLength, fitView, hitMarkAt, hitRoom, hitWater, insertBreak, insertCorner, isRect, makeId, moveEdgeSnapped,
   moveVertex, nearestAnchor, nearestEdge, nearestVertex, newRoom, newWater, normalizePlan, parseFeet, planBounds,
   polyArea, rectPts, removeVertex, resizeRect, roomAreaText, roomBox, roomSizeText, setEdgeLength,
   simplifyStroke, snap, snapOnEdge, tidyPts, toWorld, totalArea, totalWet, translatePts, waterOutline, wetAreas, fmtFeet,
@@ -499,7 +499,10 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       const dr = d.draft;
       if (dr && dr.w >= MIN_ROOM && dr.h >= MIN_ROOM && plan.rooms.length < MAX_ROOMS) {
         const room = { id: makeId(), label: '', notes: '', pts: rectPts(dr.x, dr.y, Math.min(dr.w, MAX_ROOM), Math.min(dr.h, MAX_ROOM)) };
-        commit({ ...plan, rooms: [...plan.rooms, room] });
+        // the new room takes its space from any room it was drawn over
+        const rect = { x: dr.x, y: dr.y, w: Math.min(dr.w, MAX_ROOM), h: Math.min(dr.h, MAX_ROOM) };
+        const carved = carveRooms(plan.rooms, rect);
+        commit({ ...plan, rooms: [...carved, room] });
         setSel({ kind: 'room', id: room.id });
         setTool('select');
       }
