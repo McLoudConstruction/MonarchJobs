@@ -6,10 +6,12 @@ import { usePathname } from 'next/navigation';
 import { getSupabase } from '@/lib/supabaseClient';
 import { useTheme } from '@/lib/useTheme';
 import { initialsFor, displayNameFor } from '@/lib/userDisplay';
-import { DashboardIcon, SalesIcon, ScheduleIcon, JobDashboardIcon, SettingsIcon, SunIcon, MoonIcon, UserIcon, SignOutIcon, MoreIcon } from '@/components/icons';
+import { DashboardIcon, SalesIcon, ScheduleIcon, JobDashboardIcon, SettingsIcon, SunIcon, MoonIcon, UserIcon, SignOutIcon, MoreIcon, BellIcon } from '@/components/icons';
 import BottomSheet from '@/components/BottomSheet';
 import JobJumpSearch from '@/components/JobJumpSearch';
 import { logoUrl } from '@/lib/branding';
+import { NotificationsProvider, useNotificationCenter } from '@/lib/useNotifications';
+import { readPushStatus, resyncPush } from '@/lib/push';
 
 const ALL = ['owner', 'office', 'tech'];
 const OFFICE = ['owner', 'office'];
@@ -23,7 +25,12 @@ const NAV = [
   { href: '/schedule', label: 'Schedule', icon: ScheduleIcon, roles: ALL, primary: true },
   { href: '/jobs', label: 'Jobs', icon: JobDashboardIcon, roles: ALL, primary: true },
   { href: '/customers', label: 'Customers', icon: UserIcon, roles: OFFICE },
+  // sideOnly: phones reach it from the bell in the top bar
+  { href: '/notifications', label: 'Notifications', icon: BellIcon, roles: ALL, sideOnly: true },
 ];
+
+const NUDGE_KEY = 'mj_push_nudge';
+const NUDGE_DAYS = 14;
 
 // The business logo replaces the "Monarch Jobs" text once one is uploaded in Settings. The path is
 // remembered for the browser session so the logo is there immediately on every page.
@@ -60,8 +67,19 @@ function Brand({ brand }) {
 
 const isActive = (item, pathname) => pathname === item.href || pathname.startsWith(`${item.href}/`);
 
-export default function AppShell({ staff, signOut, children }) {
+// Wraps the shell so the sidebar badge, the phone top bar and the Notifications page share one live feed.
+export default function AppShell(props) {
+  return (
+    <NotificationsProvider userId={props.staff.id}>
+      <AppShellInner {...props} />
+    </NotificationsProvider>
+  );
+}
+
+function AppShellInner({ staff, signOut, children }) {
   const pathname = usePathname() || '';
+  const { unread } = useNotificationCenter();
+  const [nudge, setNudge] = useState(null);
   const { theme, setTheme } = useTheme();
   const [ready, setReady] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
@@ -101,8 +119,28 @@ export default function AppShell({ staff, signOut, children }) {
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
   }, [accountOpen]);
 
+  // One gentle reminder, not a nag: shown until push is on or the person dismisses it for two weeks.
+  useEffect(() => {
+    let alive = true;
+    resyncPush('');
+    (async () => {
+      try {
+        const last = Number(localStorage.getItem(NUDGE_KEY) || 0);
+        if (Date.now() - last < NUDGE_DAYS * 86400000) return;
+      } catch { /* storage unavailable: show it */ }
+      const status = await readPushStatus();
+      if (alive && (status === 'off' || status === 'needs_install')) setNudge(status);
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  function dismissNudge() {
+    setNudge(null);
+    try { localStorage.setItem(NUDGE_KEY, String(Date.now())); } catch { /* ignore */ }
+  }
+
   const moreItems = [
-    ...nav.filter((n) => !n.primary),
+    ...nav.filter((n) => !n.primary && !n.sideOnly),
     ...(canSettings ? [{ href: '/settings', label: 'Settings', icon: SettingsIcon }] : []),
   ];
   const moreActive = moreItems.some((n) => isActive(n, pathname));
@@ -118,6 +156,7 @@ export default function AppShell({ staff, signOut, children }) {
               <n.icon className="side-icon" />
               <span>{n.label}</span>
               {n.href === '/leads' && ready > 0 && <span className="nav-count" title="Approved estimates waiting to be scheduled">{ready}</span>}
+              {n.href === '/notifications' && unread > 0 && <span className="nav-count" title="Unread notifications">{unread > 99 ? '99+' : unread}</span>}
             </Link>
           ))}
         </nav>
@@ -157,6 +196,12 @@ export default function AppShell({ staff, signOut, children }) {
       {/* phones keep a slim top bar with the logo and the bottom nav */}
       <div className="shell-topbar shell-topbar-mobile">
         <div className="shell-logo"><Brand brand={brand} /></div>
+        <div className="shell-topbar-actions">
+          <Link href="/notifications" className="shell-topbar-icon-btn" aria-label={`Notifications${unread ? `, ${unread} unread` : ''}`}>
+            <BellIcon />
+            {unread > 0 && <span className="shell-topbar-count">{unread > 99 ? '99+' : unread}</span>}
+          </Link>
+        </div>
       </div>
 
       <div className="shell-body">
@@ -201,7 +246,16 @@ export default function AppShell({ staff, signOut, children }) {
         </BottomSheet>
 
         <div className="shell-content">
-          <div className="page">{children}</div>
+          <div className="page">
+            {nudge && pathname !== '/notifications' && (
+              <div className="push-nudge" role="status">
+                <span>{nudge === 'needs_install' ? 'Add MonarchJobs to your Home Screen to get notifications.' : 'Get notified when something needs you, even when the app is closed.'}</span>
+                <Link href="/notifications" onClick={dismissNudge}>Set up</Link>
+                <button type="button" aria-label="Dismiss" onClick={dismissNudge}>&times;</button>
+              </div>
+            )}
+            {children}
+          </div>
         </div>
       </div>
     </div>

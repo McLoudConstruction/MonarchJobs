@@ -133,3 +133,12 @@ export function SignOutIcon(props) {
   );
 }
 
+
+export function BellIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <path d="M5 8a5 5 0 0110 0c0 4.5 1.5 5.5 1.5 5.5h-13S5 12.5 5 8z" />
+      <path d="M8.5 16.5a1.6 1.6 0 003 0" />
+    </svg>
+  );
+}
