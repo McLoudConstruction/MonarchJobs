@@ -31,11 +31,10 @@ const TOOLS = [
   ['missing', 'Missing wall', 'M'],
   ['area', 'Affected areas', 'W'],
   ['object', 'Objects', 'O'],
-  ['moisture', 'Moisture', 'P'],
   ['text', 'Text', 'T'],
   ['comment', 'Comment', 'K'],
 ];
-const KEYS = { v: 'select', r: 'room', b: 'break', c: 'corner', m: 'missing', w: 'area', o: 'object', p: 'moisture', t: 'text', k: 'comment' };
+const KEYS = { v: 'select', r: 'room', b: 'break', c: 'corner', m: 'missing', w: 'area', o: 'object', t: 'text', k: 'comment' };
 const HINTS = {
   select: 'Click a room to select it. Drag a wall to slide it along its neighbours, or drag a corner to make an angle. Hold Ctrl and drag a corner or wall to start a new room there. Double-click a corner, or press Delete with it selected, to remove it.',
   missing: 'Click a wall to mark all of it as missing (open to the next space), or drag along a wall to mark just that stretch. Click a missing wall with Select to change or delete it.',
@@ -45,7 +44,7 @@ const HINTS = {
   corner: 'Hover a wall and click to add a corner. To cut off a corner of a room, click one wall, then click the wall next to it. The tool stays on, so keep clicking. Esc starts over.',
   area: 'Pick what to mark and which surfaces it is on, then draw around it. It is cleaned up when you let go.',
   object: 'Pick an object, then click to place it. Doors, windows and outlets snap to the wall; cabinets and fixtures sit flush against it. Hold Alt to place freely. Esc stops. Click one with Select to edit it.',
-  moisture: 'Pick the surface, material and meter scale, then tap where the reading was taken. Type the reading and humidity and press Enter. To take the same spot again later, tap its pin and add a new reading.',
+  moisture: 'Tap the sketch where the reading was taken, then type it. Drag to move around, pinch to zoom. Tap a pin to add the next reading at that spot, and use the arrows to step through the points.',
   text: 'Tap where the note should go, then type it.',
   comment: 'Tap the spot the comment is about, then type. Type @ to tag a teammate. Tap a comment pin to read, reply or resolve it.',
 };
@@ -55,6 +54,7 @@ const AREA_HINTS = {
   smoke: 'Draw around what the smoke reached. Choose the surfaces it is on.',
   source: 'Tap where the loss started.',
 };
+let rememberedMode = 'draw'; // the mode stays when the tech opens another sketch (each one remounts the canvas)
 const SURFACE_VIEWS = [['all', 'All surfaces'], ['floor', 'Floor'], ['wall', 'Walls'], ['ceiling', 'Ceiling']];
 const KIND_ORDER = ['water', 'source', 'growth', 'smoke'];
 const kindDot = (kind) => areaStyle({ kind, cat: 2 }).line;
@@ -142,7 +142,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   const countsRef = useRef(photoCounts);
   const rafRef = useRef(0);
 
-  const [tool, setTool] = useState('select');
+  const [tool, setTool] = useState(rememberedMode === 'moisture' ? 'moisture' : 'select');
   const [sel, setSel] = useState(null); // { kind: 'room' | 'mark' | 'area' | 'source', id, vi?, ei? }
   const [color, setColor] = useState(MARK_COLORS[0]);
   const [areaKind, setAreaKind] = useState('water'); // what the Affected areas tool is marking
@@ -158,6 +158,10 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   const [air, setAir] = useState({ rh: '', temp: '' }); // humidity and temperature carry over to the next reading: the air is the same
   const [rdErr, setRdErr] = useState('');
   const [stdOpen, setStdOpen] = useState(false); // the dry standards list
+  const [mode, setMode] = useState(rememberedMode); // 'draw' builds the sketch; 'moisture' logs readings on it and leaves the drawing alone
+  const [moistOpen, setMoistOpen] = useState(false); // the options for the next point are unfolded
+  const [moveId, setMoveId] = useState(null); // a moisture point waiting to be put somewhere else
+  const [kb, setKb] = useState(0); // how far the phone keyboard covers the bottom of the sketch, in pixels
   const [menuOpen, setMenuOpen] = useState(false);
   const [popH, setPopH] = useState(320); // measured height of the open popup, so it can be kept on the sketch
   const [objMenu, setObjMenu] = useState(false);
@@ -193,6 +197,12 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   surfaceRef.current = surfaceView;
   const moistRef = useRef(moist);
   moistRef.current = moist;
+  const modeRef = useRef('draw');
+  modeRef.current = mode;
+  const baseViewRef = useRef(null); // the view before the entry sheet slid the map up
+  const movedViewRef = useRef(null);
+  const moveIdRef = useRef(null);
+  moveIdRef.current = moveId;
   const moistLabelsRef = useRef(true);
   moistLabelsRef.current = moistLabels;
   const popupRef = useRef(null);
@@ -233,6 +243,20 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   useEffect(() => { schedule(); }, [surfaceView, moistLabels, schedule]);
   const moistSelId = sel?.kind === 'moisture' ? sel.id : null;
   useEffect(() => { setRd({ val: '', note: '' }); setRdErr(''); }, [moistSelId]);
+  // the phone keyboard slides over the bottom of the page: measure how much, so the entry sheet can sit above it
+  useEffect(() => {
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    if (!vv) return undefined;
+    const upd = () => {
+      const st = wrapRef.current;
+      if (!st) return;
+      setKb(Math.max(0, Math.round(st.getBoundingClientRect().bottom - (vv.offsetTop + vv.height))));
+    };
+    upd();
+    vv.addEventListener('resize', upd);
+    vv.addEventListener('scroll', upd);
+    return () => { vv.removeEventListener('resize', upd); vv.removeEventListener('scroll', upd); };
+  }, []);
   useEffect(() => { hoverRef.current = null; lastCornerRef.current = null; setPopup(null); setMenuOpen(false); setObjMenu(false); ghostRef.current = null; schedule(); }, [tool, schedule]);
 
   // size the canvas to its box, keep it crisp on high-density screens, and fit the drawing once
@@ -529,24 +553,9 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       } else dragRef.current = null;
       return;
     }
-    if (t === 'moisture') { // tap to place a point and write its first reading; tap an existing pin to add another reading
-      if (hadPopup) { dragRef.current = null; return; } // the tap that closes the editor does not also place a point
-      const hit = hitMoisture(plan, w.x, w.y, tolFt * 0.9, surfaceRef.current);
-      if (hit) {
-        setSel({ kind: 'moisture', id: hit.id });
-        dragRef.current = { mode: 'move-moist', id: hit.id, sx: p.x, sy: p.y, wx: w.x, wy: w.y, orig: { x: hit.x, y: hit.y }, plan, moved: false };
-        schedule();
-        return;
-      }
-      if (plan.moisture.length < MAX_MOISTURE) {
-        const m = moistRef.current;
-        const pt = makeMoisture(nextNumber(plan.moisture), snap(w.x, 0.25), snap(w.y, 0.25), { surface: m.surface, material: m.material, type: m.type });
-        commit({ ...plan, moisture: [...plan.moisture, pt] });
-        setSel({ kind: 'moisture', id: pt.id });
-        const at = toScreen(viewRef.current, pt.x, pt.y);
-        openPopup(at.x, at.y);
-      }
-      dragRef.current = null;
+    if (t === 'moisture') { // a tap places a point or opens a pin; dragging pans, so a finger can move around without dropping points
+      const hit = moveIdRef.current ? null : hitMoisture(plan, w.x, w.y, Math.max(tolFt, 18 / v.scale), surfaceRef.current);
+      dragRef.current = { mode: 'moist-tap', sx: p.x, sy: p.y, ox: v.ox, oy: v.oy, wx: w.x, wy: w.y, hitId: hit ? hit.id : null, hadPopup, moved: false };
       return;
     }
     if (t === 'object') { // click to place; the tool stays on so several can go in a row
@@ -599,19 +608,15 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       return;
     }
     const filter = surfaceRef.current;
-    const mp = hitMoisture(plan, w.x, w.y, tolFt * 0.9, filter);
-    const pin = mp ? null : hitSource(plan, w.x, w.y, tolFt * 0.9, filter);
-    const obj = mp || pin ? null : hitObject(plan, w.x, w.y, tolFt, filter);
-    const mark = mp || pin || obj ? null : hitMarkAt(plan, w.x, w.y, tolFt * 0.6);
+    const pin = hitSource(plan, w.x, w.y, tolFt * 0.9, filter);
+    const obj = pin ? null : hitObject(plan, w.x, w.y, tolFt, filter);
+    const mark = pin || obj ? null : hitMarkAt(plan, w.x, w.y, tolFt * 0.6);
     const picked = pickArea(plan, w.x, w.y, edgeTol * 1.4, filter);
     const room = hitRoom(plan, w.x, w.y);
     // an affected area is picked by its edge, or anywhere on it when no room is under it, so a wet room can still be selected
     const area = picked && (picked.onEdge || !room || (cur && s.kind === 'area' && cur.id === picked.area.id)) ? picked.area : null;
     // a pin, pen stroke or note lying on a room wins over the room under it
-    if (mp) {
-      setSel({ kind: 'moisture', id: mp.id });
-      dragRef.current = { mode: 'move-moist', id: mp.id, sx: p.x, sy: p.y, wx: w.x, wy: w.y, orig: { x: mp.x, y: mp.y }, plan, moved: false };
-    } else if (pin) {
+    if (pin) {
       setSel({ kind: 'source', id: pin.id });
       dragRef.current = { mode: 'move-pin', id: pin.id, wx: w.x, wy: w.y, orig: { x: pin.x, y: pin.y }, plan, moved: false };
     } else if (obj) {
@@ -739,13 +744,9 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       const nx = snap(d.orig.x + (w.x - d.wx), 0.25);
       const ny = snap(d.orig.y + (w.y - d.wy), 0.25);
       d.plan = { ...d.plan, sources: d.plan.sources.map((x) => (x.id === d.id ? { ...x, x: nx, y: ny } : x)) };
-    } else if (d.mode === 'move-moist') {
-      if (!d.moved && Math.hypot(p.x - d.sx, p.y - d.sy) > 5) d.moved = true; // a tap that wobbles is still a tap
-      if (d.moved) {
-        const nx = snap(d.orig.x + (w.x - d.wx), 0.25);
-        const ny = snap(d.orig.y + (w.y - d.wy), 0.25);
-        d.plan = { ...d.plan, moisture: d.plan.moisture.map((x) => (x.id === d.id ? { ...x, x: nx, y: ny } : x)) };
-      }
+    } else if (d.mode === 'moist-tap') {
+      if (!d.moved && Math.hypot(p.x - d.sx, p.y - d.sy) > 8) d.moved = true; // a tap that wobbles is still a tap
+      if (d.moved) viewRef.current = { ...v, ox: d.ox + (p.x - d.sx), oy: d.oy + (p.y - d.sy) };
     } else if (d.mode === 'missing') {
       const h = d.hit;
       const s = Math.max(0, Math.min(h.len, Math.round(((w.x - h.a[0]) * h.ux + (w.y - h.a[1]) * h.uy) / 0.25) * 0.25));
@@ -794,8 +795,29 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     }
     dragRef.current = null;
     const plan = planRef.current;
+    if (d.mode === 'moist-tap') { // a tap, not a drag
+      if (d.moved || !p) { schedule(); return; }
+      const mv = moveIdRef.current;
+      if (mv) { // the tap says where the pin being moved goes
+        commit({ ...plan, moisture: plan.moisture.map((m) => (m.id === mv ? { ...m, x: snap(d.wx, 0.25), y: snap(d.wy, 0.25) } : m)) });
+        setMoveId(null);
+        setSel({ kind: 'moisture', id: mv });
+        openPopup(0, 0);
+      } else if (d.hitId) {
+        setSel({ kind: 'moisture', id: d.hitId });
+        openPopup(0, 0);
+      } else if (!d.hadPopup && plan.moisture.length < MAX_MOISTURE) { // the tap that only closed the sheet does not also drop a point
+        const m = moistRef.current;
+        const pt = makeMoisture(nextNumber(plan.moisture), snap(d.wx, 0.25), snap(d.wy, 0.25), { surface: m.surface, material: m.material, type: m.type });
+        commit({ ...plan, moisture: [...plan.moisture, pt] });
+        setSel({ kind: 'moisture', id: pt.id });
+        openPopup(0, 0);
+      }
+      schedule();
+      return;
+    }
     // a plain click on something (no drag) opens its editor next to the click
-    if (p && ['move-room', 'vertex', 'edge', 'move-mark', 'avertex', 'move-area', 'move-pin', 'move-obj', 'move-moist', 'move-comment'].includes(d.mode) && !d.moved) openPopup(p.x, p.y);
+    if (p && ['move-room', 'vertex', 'edge', 'move-mark', 'avertex', 'move-area', 'move-pin', 'move-obj', 'move-comment'].includes(d.mode) && !d.moved) openPopup(p.x, p.y);
 
     if (d.mode === 'missing') {
       const h = d.hit;
@@ -847,7 +869,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       if (p && Math.hypot(p.x - d.sx, p.y - d.sy) < 8 && planRef.current.comments.length < MAX_COMMENTS) { setPopup(null); setSel(null); setCmDraft({ x: Math.round(d.wx * 100) / 100, y: Math.round(d.wy * 100) / 100, value: '' }); }
     } else if (d.mode === 'text') {
       if (p && Math.hypot(p.x - d.sx, p.y - d.sy) < 8) setTextDraft({ x: snap(d.wx, 0.25), y: snap(d.wy, 0.25), value: '' });
-    } else if (['move-room', 'vertex', 'edge', 'move-mark', 'avertex', 'move-area', 'move-pin', 'move-obj', 'move-moist', 'move-comment'].includes(d.mode) && d.moved && d.plan) {
+    } else if (['move-room', 'vertex', 'edge', 'move-mark', 'avertex', 'move-area', 'move-pin', 'move-obj', 'move-comment'].includes(d.mode) && d.moved && d.plan) {
       let next = d.plan;
       if (d.mode === 'vertex' || d.mode === 'edge') {
         // a corner or wall that now lines up with its neighbours leaves a stray point: drop it
@@ -988,6 +1010,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     if ((e.key === 'Delete' || e.key === 'Backspace') && selRef.current) { e.preventDefault(); removeSelected(); return; }
     if (e.key === 'Escape') {
       if (popupRef.current) { closePopup(); return; }
+      if (modeRef.current === 'moisture') { if (moveIdRef.current) setMoveId(null); return; } // Esc never leaves the mode by accident
       if (toolRef.current === 'corner' && lastCornerRef.current) { lastCornerRef.current = null; schedule(); return; } // drop the first click, stay in the tool
       if (dragRef.current) { dragRef.current = null; pointers.current.clear(); }
       if (textDraft) { setTextDraft(null); return; }
@@ -996,7 +1019,8 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       if (fullRef.current) exitFull();
       return;
     }
-    if (KEYS[k]) { e.preventDefault(); setTool(KEYS[k]); setTextDraft(null); if (k === 'w') setAreaKind('water'); }
+    if (k === 'p') { e.preventDefault(); switchMode(modeRef.current === 'draw' ? 'moisture' : 'draw'); return; }
+    if (modeRef.current === 'draw' && KEYS[k]) { e.preventDefault(); setTool(KEYS[k]); setTextDraft(null); if (k === 'w') setAreaKind('water'); }
   };
   useEffect(() => {
     const h = (e) => keyRef.current?.(e);
@@ -1027,7 +1051,28 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
 
   // ---- moisture readings -------------------------------------------------
   const isStaffOffice = !!staff && staff.role !== 'tech';
-  function addReading(e) {
+  // The point after (step 1) or before (step -1) this one, by pin number, wrapping round. Null when it is the only one.
+  function neighbour(id, step) {
+    const list = [...planRef.current.moisture].sort((a, b) => a.n - b.n);
+    const i = list.findIndex((m) => m.id === id);
+    return list.length > 1 && i >= 0 ? list[(i + step + list.length) % list.length] : null;
+  }
+  function gotoPoint(id) {
+    setMoveId(null);
+    setSel({ kind: 'moisture', id });
+    openPopup(0, 0);
+  }
+  function switchMode(next) {
+    if (next === modeRef.current) return;
+    rememberedMode = next;
+    setMode(next);
+    setTool(next === 'moisture' ? 'moisture' : 'select');
+    setSel(null); setPopup(null); setTextDraft(null); setCmDraft(null); setMoveId(null); setMoistOpen(false);
+    lastCornerRef.current = null;
+    if (next === 'moisture' && !fullRef.current && typeof window !== 'undefined' && window.innerWidth < 700) enterFull(); // phones get the whole screen
+    setTimeout(() => fit(), 150); // keep the drawing clear of the controls along the top
+  }
+  function addReading(e, andNext = false) {
     e?.preventDefault();
     const m = selRef.current?.kind === 'moisture' ? findSel(planRef.current, selRef.current) : null;
     if (!m) return;
@@ -1040,10 +1085,12 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     const tempV = tempT === '' ? null : Number(tempT);
     if (tempV !== null && (!Number.isFinite(tempV) || tempV < -20 || tempV > 200)) { setRdErr('Temperature is a number in degrees F.'); return; }
     if (m.readings.length >= MAX_READINGS) { setRdErr(`A point holds up to ${MAX_READINGS} readings.`); return; }
+    const nxt = andNext ? neighbour(m.id, 1) : null;
     patchMoisture(m.id, { readings: [...m.readings, makeReading({ val, rh: rhV, temp: tempV, note: rd.note, by: meRef.current })] });
     setRd({ val: '', note: '' });
     setRdErr('');
-    closePopup(); // ready for the next spot
+    if (nxt) gotoPoint(nxt.id); // rechecking: straight on to the next spot
+    else closePopup(); // ready for the next spot
   }
   function setStandard(key, valText, type) {
     const t = valText.trim();
@@ -1116,12 +1163,47 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   const wallIdx = room && sel.ei != null && sel.ei < room.pts.length ? sel.ei : null;
   const wallLen = wallIdx != null ? edgeLength(room.pts, wallIdx) : 0;
   const roomAffected = room ? totals.rooms[room.id] : null;
-  const showPop = !!(popup && selected);
+  const showPop = !!(popup && selected) && sel.kind !== 'moisture';
   const areaStat = showPop && area ? affectedTotals({ ...plan, areas: [area] }).total[area.kind] : null;
   useLayoutEffect(() => {
     const h = popRef.current ? popRef.current.offsetHeight : 0;
     if (h && Math.abs(h - popH) > 1) setPopH(h);
   });
+  const sheetOpen = mode === 'moisture' && !!mp && !!popup;
+  const kbPad = full ? kb : 0;
+  // The sheet opens under the finger that tapped; the browser's follow-up click would land on it. Ignore touches for a moment.
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    setArmed(false);
+    if (!sheetOpen) return undefined;
+    const t = setTimeout(() => setArmed(true), 400);
+    return () => clearTimeout(t);
+  }, [sheetOpen, mp?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!sheetOpen || !mp) return;
+    const { W, H } = sizeRef.current;
+    const top = 64; // clear of the Draw / Moisture switch along the top
+    const bottom = Math.max(top + 60, H - popH - kbPad - 16);
+    const v = viewRef.current;
+    const at = toScreen(v, mp.x, mp.y);
+    let { ox, oy } = v;
+    if (at.y > bottom || at.y < top) oy += (top + bottom) / 2 - at.y;
+    if (at.x < 40 || at.x > W - 40) ox += W / 2 - at.x;
+    if (ox !== v.ox || oy !== v.oy) {
+      if (!baseViewRef.current) baseViewRef.current = v;
+      viewRef.current = { ...v, ox, oy };
+      movedViewRef.current = viewRef.current;
+      schedule();
+    }
+    // only when the sheet opens, changes height or moves to another point, so it never fights a drag
+  }, [sheetOpen, mp?.id, popH, kbPad]); // eslint-disable-line react-hooks/exhaustive-deps
+  // when the sheet closes, the map goes back to where it was, unless the tech has panned or zoomed since
+  useEffect(() => {
+    if (sheetOpen) return;
+    if (baseViewRef.current && viewRef.current === movedViewRef.current) { viewRef.current = baseViewRef.current; schedule(); }
+    baseViewRef.current = null;
+    movedViewRef.current = null;
+  }, [sheetOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const { W: stageW, H: stageH } = sizeRef.current;
   const narrow = stageW < 520;
   const popStyle = !showPop ? null : narrow
@@ -1156,13 +1238,17 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   );
 
   return (
-    <div className={`sketch${full ? ' sketch-full' : ''}`} ref={rootRef} tabIndex={-1}>
+    <div className={`sketch${full ? ' sketch-full' : ''}${mode === 'moisture' ? ' mode-moisture' : ''}`} ref={rootRef} tabIndex={-1}>
       {(full || !headSlot) && <div className="sketch-head-inline">{headBtns}</div>}
       {!full && headSlot && createPortal(headBtns, headSlot)}
 
       <div className="sketch-stage" ref={wrapRef}>
         <div className="sketch-over sketch-over-tl">
-          <div className="sketch-tools" role="toolbar" aria-label="Sketch tools">
+          <div className="sk-mode" role="tablist" aria-label="Sketch mode">
+            <button type="button" role="tab" aria-selected={mode === 'draw'} className={mode === 'draw' ? 'on' : ''} onClick={() => switchMode('draw')} title="Build the sketch">Draw</button>
+            <button type="button" role="tab" aria-selected={mode === 'moisture'} className={mode === 'moisture' ? 'on' : ''} onClick={() => switchMode('moisture')} title="Log moisture readings (P)">Moisture{plan.moisture.length ? ` (${plan.moisture.length})` : ''}</button>
+          </div>
+          {mode === 'draw' && (<div className="sketch-tools" role="toolbar" aria-label="Sketch tools">
             {TOOLS.map(([k, label, key]) => (k === 'object' ? (
               <div key={k} className="sketch-menu">
                 <button type="button" className={tool === 'object' ? 'on' : ''} aria-haspopup="menu" aria-expanded={objMenu} title={`${label} (${key})`} onClick={(e) => {
@@ -1215,7 +1301,39 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
             <select className="sketch-view" value={surfaceView} onChange={(e) => { setSurfaceView(e.target.value); if (e.target.value !== 'all') setMoist((m) => ({ ...m, surface: e.target.value })); }} aria-label="Surface to show" title="Which surface to show">
               {SURFACE_VIEWS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
             </select>
-          </div>
+          </div>)}
+          {mode === 'moisture' && !sheetOpen && (
+            <div className="sk-moist-bar">
+              <button type="button" className="sk-next" aria-expanded={moistOpen} onClick={() => setMoistOpen(!moistOpen)}>
+                New point: {MOISTURE_SURFACES[moist.surface]} · {MOISTURE_MATERIALS[moist.material]} · {MOISTURE_TYPES[moist.type].short.trim()}<span className="sk-caret" aria-hidden="true" />
+              </button>
+              {moistOpen && (
+                <div className="sk-moist-opts">
+                  <div className="sk-opt-label">New points go on the</div>
+                  <SurfacePick value={moist.surface} onChange={(v) => setMoist({ ...moist, surface: v })} />
+                  <label className="sk-opt">Material
+                    <select value={moist.material} onChange={(e) => setMoist({ ...moist, material: e.target.value })}>
+                      {Object.entries(MOISTURE_MATERIALS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                    </select>
+                  </label>
+                  <label className="sk-opt">Reading type
+                    <select value={moist.type} onChange={(e) => setMoist({ ...moist, type: e.target.value })}>
+                      {Object.entries(MOISTURE_TYPES).map(([k, t]) => <option key={k} value={k}>{t.label}</option>)}
+                    </select>
+                  </label>
+                  <label className="sk-opt">Show
+                    <select value={surfaceView} onChange={(e) => { setSurfaceView(e.target.value); if (e.target.value !== 'all') setMoist((m) => ({ ...m, surface: e.target.value })); }}>
+                      {SURFACE_VIEWS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                    </select>
+                  </label>
+                  <div className="chips" role="group" aria-label="Moisture options">
+                    <button type="button" className={moistLabels ? 'on' : ''} aria-pressed={moistLabels} onClick={() => setMoistLabels(!moistLabels)}>Readings on map</button>
+                    <button type="button" onClick={() => { setStdOpen(true); setMoistOpen(false); }}>Dry standards</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {tool === 'area' && (
             <div className="sketch-strip" aria-label="Affected area options">
               <span className="sk-strip-kind"><span className="sk-dot" style={{ background: kindDot(areaKind) }} /><strong>{AREA_KINDS[areaKind]}</strong></span>
@@ -1236,22 +1354,6 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
                   ))}
                 </div>
               )}
-            </div>
-          )}
-          {tool === 'moisture' && (
-            <div className="sketch-strip" aria-label="Moisture point options">
-              <span className="sk-strip-kind"><span className="sk-dot" style={{ background: MOISTURE_COLORS.unset }} /><strong>Moisture point</strong></span>
-              <SurfacePick value={moist.surface} onChange={(v) => setMoist({ ...moist, surface: v })} />
-              <select className="sketch-view" value={moist.material} onChange={(e) => setMoist({ ...moist, material: e.target.value })} aria-label="Material">
-                {Object.entries(MOISTURE_MATERIALS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-              </select>
-              <select className="sketch-view" value={moist.type} onChange={(e) => setMoist({ ...moist, type: e.target.value })} aria-label="Reading type">
-                {Object.entries(MOISTURE_TYPES).map(([k, t]) => <option key={k} value={k}>{t.label}</option>)}
-              </select>
-              <div className="chips" role="group" aria-label="Moisture options">
-                <button type="button" className={moistLabels ? 'on' : ''} aria-pressed={moistLabels} onClick={() => setMoistLabels(!moistLabels)} title="Show the reading beside each pin">Readings</button>
-                <button type="button" onClick={() => setStdOpen(true)} title="The dry standard for each material on this job">Dry standards</button>
-              </div>
             </div>
           )}
           {tool === 'object' && (
@@ -1292,6 +1394,13 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
           onContextMenu={(e) => e.preventDefault()}
           aria-label="Sketch drawing area"
         />
+        {mode === 'moisture' && !plan.moisture.length && !sheetOpen && !moveId && <div className="sk-tip">Tap the sketch where you took a reading</div>}
+        {moveId && (
+          <div className="sk-movebar" role="status">
+            <span>Tap where point {plan.moisture.find((m) => m.id === moveId)?.n} should go</span>
+            <button type="button" onClick={() => { const id = moveId; setMoveId(null); gotoPoint(id); }}>Cancel</button>
+          </div>
+        )}
 
         {textDraft && (
           <form className="sketch-pop" style={textStyle} onSubmit={addText}>
@@ -1402,100 +1511,6 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
                 <div className="row"><button type="button" className="danger small" onClick={removeSelected}>Delete</button></div>
               </>
             )}
-
-            {mp && (() => {
-              const goal = goalFor(plan, mp);
-              const st = moistureStatus(mp, goal);
-              const color = MOISTURE_COLORS[st.state];
-              const short = MOISTURE_TYPES[mp.type].short;
-              const roomHere = hitRoom(plan, mp.x, mp.y);
-              const ordered = sortedReadings(mp);
-              const std = plan.standards[mp.material];
-              const airGpp = gpp(air.temp.trim() === '' ? null : air.temp, air.rh.trim() === '' ? null : air.rh);
-              const canDel = (r) => isStaffOffice || (!!r.by?.id && r.by.id === me.id);
-              return (
-                <>
-                  <div className="sketch-pop-head"><strong><span className="sk-dot" style={{ background: color }} />Moisture point {mp.n}</strong>{closeBtn}</div>
-                  <div className="muted">{roomHere?.label || 'Not in a named room'} · {MOISTURE_MATERIALS[mp.material]} · {MOISTURE_SURFACES[mp.surface]}{mp.surface === 'wall' && mp.h != null ? ` at ${fmtFeet(mp.h)}` : ''}</div>
-                  <div className="sk-aff" style={{ color }}><strong>{STATUS_TEXT[st.state]}</strong>{goal != null ? ` · dry standard ${fmtReading(goal)}${short}` : ''}{st.trend ? ` · ${TREND_MARK[st.trend]} since the last reading` : ''}</div>
-                  <form key={mp.id} className="sk-rd-form" onSubmit={addReading}>
-                    <div className="grid2">
-                      <div className="field"><label htmlFor="sk-rd-val">Reading ({short.trim()})</label>
-                        <input id="sk-rd-val" autoFocus inputMode="decimal" value={rd.val} onChange={(e) => setRd({ ...rd, val: e.target.value })} placeholder="12.4" />
-                      </div>
-                      <div className="field"><label htmlFor="sk-rd-rh">Humidity (% RH)</label>
-                        <input id="sk-rd-rh" inputMode="decimal" value={air.rh} onChange={(e) => setAir({ ...air, rh: e.target.value })} placeholder="48" />
-                      </div>
-                    </div>
-                    <div className="grid2">
-                      <div className="field"><label htmlFor="sk-rd-temp">Temperature (&deg;F)</label>
-                        <input id="sk-rd-temp" inputMode="decimal" value={air.temp} onChange={(e) => setAir({ ...air, temp: e.target.value })} placeholder="72" />
-                      </div>
-                      <div className="field"><label>GPP</label><div className="muted sk-gpp">{airGpp != null ? Math.round(airGpp) : 'needs temp and RH'}</div></div>
-                    </div>
-                    <div className="field"><label htmlFor="sk-rd-note">Note</label>
-                      <input id="sk-rd-note" maxLength={80} value={rd.note} onChange={(e) => setRd({ ...rd, note: e.target.value })} placeholder="Behind the dishwasher..." />
-                    </div>
-                    {rdErr && <div className="msg err" style={{ margin: 0 }}>{rdErr}</div>}
-                    <div className="row"><button className="primary small" disabled={!rd.val.trim()}>Add reading</button></div>
-                  </form>
-                  {ordered.length > 0 && (
-                    <ul className="sk-readings" aria-label="Readings at this point, newest first">
-                      {ordered.map((r, i) => {
-                        const before = i > 0 ? ordered[i - 1] : null;
-                        const tr = before ? (Math.abs(r.val - before.val) < 0.05 ? 'flat' : r.val < before.val ? 'down' : 'up') : null;
-                        return (
-                          <li key={r.id}>
-                            <div><strong>{valueText(mp, r)}</strong>{tr ? ` ${TREND_MARK[tr]}` : ''} <span className="muted">{airText(r)}</span></div>
-                            <div className="muted">{whenText(r.at)}{r.by?.name ? ` · ${r.by.name}` : ''}{r.note ? ` · ${r.note}` : ''}</div>
-                            {canDel(r) && <button type="button" className="sk-x" aria-label="Delete this reading" onClick={() => patchMoisture(mp.id, { readings: mp.readings.filter((x) => x.id !== r.id) })}>{'\u00d7'}</button>}
-                          </li>
-                        );
-                      }).reverse()}
-                    </ul>
-                  )}
-                  <details className="sk-more">
-                    <summary>Point details</summary>
-                    <div className="muted sk-label">Surface</div>
-                    <SurfacePick value={mp.surface} onChange={(v) => patchMoisture(mp.id, { surface: v })} />
-                    <div className="grid2">
-                      <div className="field"><label htmlFor="sk-mp-mat">Material</label>
-                        <select id="sk-mp-mat" value={mp.material} onChange={(e) => patchMoisture(mp.id, { material: e.target.value })}>
-                          {Object.entries(MOISTURE_MATERIALS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-                        </select>
-                      </div>
-                      <div className="field"><label htmlFor="sk-mp-type">Reading type</label>
-                        <select id="sk-mp-type" value={mp.type} onChange={(e) => patchMoisture(mp.id, { type: e.target.value })} title="Applies to every reading at this point">
-                          {Object.entries(MOISTURE_TYPES).map(([k, t]) => <option key={k} value={k}>{t.label}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="grid2">
-                      <div className="field"><label htmlFor="sk-mp-goal">Dry standard</label>
-                        <input id="sk-mp-goal" key={`${mp.id}-g-${mp.goal}-${mp.material}-${mp.type}`} inputMode="decimal" defaultValue={mp.goal == null ? '' : fmtReading(mp.goal)}
-                          placeholder={std && std.type === mp.type ? `job: ${fmtReading(std.val)}` : 'none'}
-                          onBlur={(e) => {
-                            const t = e.target.value.trim();
-                            if (t === '') { if (mp.goal != null) patchMoisture(mp.id, { goal: null }); return; }
-                            const v = parseReading(t);
-                            if (Number.isFinite(v) && v <= 100) { if (v !== mp.goal) patchMoisture(mp.id, { goal: v }); } else e.target.value = mp.goal == null ? '' : fmtReading(mp.goal);
-                          }}
-                          onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
-                      </div>
-                      {mp.surface === 'wall' && (
-                        <div className="field"><label htmlFor="sk-mp-h">Height up the wall</label>
-                          <input id="sk-mp-h" key={`${mp.id}-h-${mp.h}`} inputMode="decimal" defaultValue={mp.h == null ? '' : fmtFeet(mp.h)} placeholder="2'"
-                            onBlur={(e) => { const t = e.target.value.trim(); if (t === '') { if (mp.h != null) patchMoisture(mp.id, { h: null }); return; } const ft = parseFeet(t); if (Number.isFinite(ft) && ft <= 30) { if (ft !== mp.h) patchMoisture(mp.id, { h: Math.round(ft * 100) / 100 }); } else e.target.value = mp.h == null ? '' : fmtFeet(mp.h); }}
-                            onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
-                        </div>
-                      )}
-                    </div>
-                    <div className="muted">A point&apos;s own dry standard wins over the job standard for its material. Drag the pin to move it.</div>
-                  </details>
-                  <div className="row"><button type="button" className="danger small" onClick={() => { if (!mp.readings.length || window.confirm(`Delete point ${mp.n} and its ${mp.readings.length} reading${mp.readings.length === 1 ? '' : 's'}?`)) removeSelected(); }}>Delete point</button></div>
-                </>
-              );
-            })()}
 
             {obj && (() => {
               const ot = OBJECT_TYPES[obj.t];
@@ -1608,6 +1623,122 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
             )}
           </div>
         )}
+
+        {sheetOpen && (() => {
+          const goal = goalFor(plan, mp);
+          const st = moistureStatus(mp, goal);
+          const color = MOISTURE_COLORS[st.state];
+          const short = MOISTURE_TYPES[mp.type].short;
+          const roomHere = hitRoom(plan, mp.x, mp.y);
+          const ordered = sortedReadings(mp);
+          const std = plan.standards[mp.material];
+          const prevPt = neighbour(mp.id, -1);
+          const nextPt = neighbour(mp.id, 1);
+          const airGpp = gpp(air.temp.trim() === '' ? null : air.temp, air.rh.trim() === '' ? null : air.rh);
+          const canDel = (r) => isStaffOffice || (!!r.by?.id && r.by.id === me.id);
+          return (
+            <div className="sk-sheet" ref={popRef} role="dialog" aria-label={`Moisture point ${mp.n}`} style={{ bottom: kbPad, maxHeight: `calc(100% - ${kbPad + 8}px)`, pointerEvents: armed ? 'auto' : 'none' }}>
+              <div className="sk-sheet-head">
+                <button type="button" className="sk-nav" aria-label="Previous point" disabled={!prevPt} onClick={() => prevPt && gotoPoint(prevPt.id)}>{'‹'}</button>
+                <div className="sk-sheet-title">
+                  <strong><span className="sk-dot" style={{ background: color }} />Point {mp.n}</strong>
+                  <span className="muted">{roomHere?.label || 'No room'} · {MOISTURE_MATERIALS[mp.material]} · {MOISTURE_SURFACES[mp.surface]}{mp.surface === 'wall' && mp.h != null ? ` at ${fmtFeet(mp.h)}` : ''}</span>
+                </div>
+                <button type="button" className="sk-nav" aria-label="Next point" disabled={!nextPt} onClick={() => nextPt && gotoPoint(nextPt.id)}>{'›'}</button>
+                <button type="button" className="sk-nav" aria-label="Close" onClick={closePopup}>{'×'}</button>
+              </div>
+              {(st.latest || goal != null) && (
+                <div className="sk-last" style={{ borderLeftColor: color }}>
+                  <strong style={{ color }}>{STATUS_TEXT[st.state]}</strong>
+                  {st.latest && <> · last {valueText(mp, st.latest)}{st.trend ? ` ${TREND_MARK[st.trend]}` : ''} <span className="muted">{whenText(st.latest.at)}</span></>}
+                  {goal != null && <span className="muted"> · dry standard {fmtReading(goal)}{short}</span>}
+                </div>
+              )}
+              <form key={mp.id} className="sk-rd-form" onSubmit={(e) => addReading(e, false)}>
+                <div className="sk-three">
+                  <label className="sk-field big">Reading
+                    <span className="sk-inputwrap">
+                      <input autoFocus inputMode="decimal" enterKeyHint="done" autoComplete="off" value={rd.val} onChange={(e) => setRd({ ...rd, val: e.target.value })} placeholder="0.0" />
+                      <span className="sk-unit">{short.trim()}</span>
+                    </span>
+                  </label>
+                  <label className="sk-field">RH %<input inputMode="decimal" autoComplete="off" value={air.rh} onChange={(e) => setAir({ ...air, rh: e.target.value })} placeholder="48" /></label>
+                  <label className="sk-field">Temp &deg;F
+                    <span className="sk-inputwrap">
+                      <input inputMode="decimal" autoComplete="off" value={air.temp} onChange={(e) => setAir({ ...air, temp: e.target.value })} placeholder="72" />
+                      {airGpp != null && <span className="sk-unit sk-gpp">{Math.round(airGpp)} gpp</span>}
+                    </span>
+                  </label>
+                </div>
+                {rdErr && <div className="msg err" style={{ margin: 0 }}>{rdErr}</div>}
+                <div className="sk-actions">
+                  <button className="primary" disabled={!rd.val.trim()}>Save reading</button>
+                  {nextPt && <button type="button" className="secondary" disabled={!rd.val.trim()} onClick={() => addReading(null, true)}>Save &amp; next {'›'}</button>}
+                </div>
+              </form>
+              <details className="sk-more">
+                <summary>{rd.note ? `Note: ${rd.note}` : `Note${ordered.length ? ` · History (${ordered.length})` : ''} · Details`}</summary>
+                <div className="sk-details">
+                  <label className="sk-field">Note for this reading
+                    <input maxLength={80} autoComplete="off" value={rd.note} onChange={(e) => setRd({ ...rd, note: e.target.value })} placeholder="Behind the dishwasher..." />
+                  </label>
+                  {ordered.length > 0 && (
+                    <>
+                      <div className="sk-opt-label">History, newest first</div>
+                      <ul className="sk-readings" aria-label="Readings at this point, newest first">
+                        {ordered.map((r, i) => {
+                          const before = i > 0 ? ordered[i - 1] : null;
+                          const tr = before ? (Math.abs(r.val - before.val) < 0.05 ? 'flat' : r.val < before.val ? 'down' : 'up') : null;
+                          return (
+                            <li key={r.id}>
+                              <div><strong>{valueText(mp, r)}</strong>{tr ? ` ${TREND_MARK[tr]}` : ''} <span className="muted">{airText(r)}</span></div>
+                              <div className="muted">{whenText(r.at)}{r.by?.name ? ` · ${r.by.name}` : ''}{r.note ? ` · ${r.note}` : ''}</div>
+                              {canDel(r) && <button type="button" className="sk-x" aria-label="Delete this reading" onClick={() => patchMoisture(mp.id, { readings: mp.readings.filter((x) => x.id !== r.id) })}>{'×'}</button>}
+                            </li>
+                          );
+                        }).reverse()}
+                      </ul>
+                    </>
+                  )}
+                  <div className="sk-opt-label">This point</div>
+                  <SurfacePick value={mp.surface} onChange={(v) => patchMoisture(mp.id, { surface: v })} />
+                  <label className="sk-opt">Material
+                    <select value={mp.material} onChange={(e) => patchMoisture(mp.id, { material: e.target.value })}>
+                      {Object.entries(MOISTURE_MATERIALS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                    </select>
+                  </label>
+                  <label className="sk-opt">Reading type (applies to every reading here)
+                    <select value={mp.type} onChange={(e) => patchMoisture(mp.id, { type: e.target.value })}>
+                      {Object.entries(MOISTURE_TYPES).map(([k, t]) => <option key={k} value={k}>{t.label}</option>)}
+                    </select>
+                  </label>
+                  <label className="sk-field">Dry standard for this point
+                    <input key={`${mp.id}-g-${mp.goal}-${mp.material}-${mp.type}`} inputMode="decimal" autoComplete="off" defaultValue={mp.goal == null ? '' : fmtReading(mp.goal)}
+                      placeholder={std && std.type === mp.type ? `job standard: ${fmtReading(std.val)}` : 'none'}
+                      onBlur={(e) => {
+                        const t = e.target.value.trim();
+                        if (t === '') { if (mp.goal != null) patchMoisture(mp.id, { goal: null }); return; }
+                        const v = parseReading(t);
+                        if (Number.isFinite(v) && v <= 100) { if (v !== mp.goal) patchMoisture(mp.id, { goal: v }); } else e.target.value = mp.goal == null ? '' : fmtReading(mp.goal);
+                      }}
+                      onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
+                  </label>
+                  {mp.surface === 'wall' && (
+                    <label className="sk-field">Height up the wall
+                      <input key={`${mp.id}-h-${mp.h}`} inputMode="decimal" autoComplete="off" defaultValue={mp.h == null ? '' : fmtFeet(mp.h)} placeholder="2'"
+                        onBlur={(e) => { const t = e.target.value.trim(); if (t === '') { if (mp.h != null) patchMoisture(mp.id, { h: null }); return; } const ft = parseFeet(t); if (Number.isFinite(ft) && ft <= 30) { if (ft !== mp.h) patchMoisture(mp.id, { h: Math.round(ft * 100) / 100 }); } else e.target.value = mp.h == null ? '' : fmtFeet(mp.h); }}
+                        onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
+                    </label>
+                  )}
+                  <div className="sk-actions sk-actions-plain">
+                    <button type="button" className="secondary" onClick={() => { setMoveId(mp.id); setPopup(null); }}>Move pin</button>
+                    <button type="button" className="danger" onClick={() => { if (!mp.readings.length || window.confirm(`Delete point ${mp.n} and its ${mp.readings.length} reading${mp.readings.length === 1 ? '' : 's'}?`)) removeSelected(); }}>Delete point</button>
+                  </div>
+                </div>
+              </details>
+            </div>
+          );
+        })()}
       </div>
 
       {stdOpen && (
@@ -1655,7 +1786,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
           return <> · <strong>{c.points} moisture point{c.points === 1 ? '' : 's'}</strong>{c.wet > 0 && <> · <strong style={{ color: MOISTURE_COLORS.wet }}>{c.wet} wet</strong></>}{c.dry > 0 && <> · <strong style={{ color: MOISTURE_COLORS.dry }}>{c.dry} dry</strong></>}</>;
         })()}
         {plan.sources.length > 0 && <> · <strong style={{ color: kindDot('source') }}>{plan.sources.length} source{plan.sources.length === 1 ? '' : 's'} of loss</strong></>}
-        <span className="muted"> · {tool === 'area' ? AREA_HINTS[areaKind] : HINTS[tool]}</span>
+        <span className="muted sk-hint"> · {tool === 'area' ? AREA_HINTS[areaKind] : HINTS[tool]}</span>
       </div>
     </div>
   );

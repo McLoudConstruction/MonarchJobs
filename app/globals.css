@@ -1713,8 +1713,61 @@ button.assign-btn:hover{ background: #d90000; border-color: #d90000; box-shadow:
 .sk-readings{ list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 190px; overflow: auto; }
 .sk-readings li{ position: relative; padding: 6px 26px 6px 8px; border: 1px solid var(--line); border-radius: 7px; font-size: 12.5px; }
 .sk-readings li .sk-x{ position: absolute; top: 4px; right: 4px; }
-.sk-gpp{ padding: 5px 0; font-size: 13px; }
 .sk-std{ width: min(520px, 94vw); max-height: 86vh; overflow: auto; }
 .sk-std-list{ display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .sk-std-row{ display: grid; grid-template-columns: 1fr 70px minmax(0, 1.4fr); gap: 8px; align-items: center; font-size: 13px; }
 .sk-std-row input, .sk-std-row select{ padding: 5px 8px; font-size: 13px; min-width: 0; }
+
+/* moisture mode: built for a phone in one hand. Big targets, 16px inputs (no iOS zoom), a bottom sheet that sits above the keyboard */
+.sk-mode{ display: inline-flex; padding: 3px; gap: 2px; border-radius: 12px; background: rgba(255,255,255,0.9); border: 1px solid rgba(120,130,140,0.35); }
+[data-theme="dark"] .sk-mode{ background: rgba(30,36,42,0.9); }
+.sketch-over .sk-mode button{ min-height: 38px; padding: 6px 16px; border: 0; border-radius: 9px; background: transparent; color: var(--ink); font-size: 14px; font-weight: 700; }
+.sketch-over .sk-mode button.on{ background: var(--accent); color: var(--accent-ink); opacity: 1; }
+.sk-moist-bar{ display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: 100%; }
+.sketch-over .sk-moist-bar > button.sk-next{ display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 40px; padding: 6px 12px; border: 1px solid rgba(120,130,140,0.35); border-radius: 10px; font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sk-moist-opts{ display: flex; flex-direction: column; gap: 10px; width: min(340px, 100%); max-height: 70vh; overflow: auto; box-sizing: border-box; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card-bg); box-shadow: 0 8px 24px rgba(0,0,0,0.22); }
+.sk-opt-label{ font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-soft); }
+.sk-moist-opts .chips, .sk-sheet .chips{ margin: 0; gap: 8px; }
+.sk-moist-opts .chips button, .sk-sheet .chips button{ flex: 1; min-height: 44px; font-size: 14px; }
+.sk-opt, .sk-field{ display: flex; flex-direction: column; gap: 4px; margin: 0; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.sk-opt select, .sk-field input{ width: 100%; box-sizing: border-box; min-height: 48px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card-bg); color: var(--ink); font: inherit; font-size: 16px; font-weight: 500; }
+.sk-sheet{ position: absolute; z-index: 8; left: 0; right: 0; bottom: 0; margin: 0 auto; width: 100%; max-width: 540px; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px calc(14px + env(safe-area-inset-bottom)); border: 1px solid var(--line); border-bottom: 0; border-radius: 16px 16px 0 0; background: var(--card-bg); color: var(--ink); box-shadow: 0 -8px 30px rgba(0,0,0,0.25); overflow: auto; overscroll-behavior: contain; }
+.sk-sheet-head{ display: flex; align-items: center; gap: 8px; }
+.sk-sheet-title{ display: flex; flex: 1; flex-direction: column; min-width: 0; line-height: 1.25; }
+.sk-sheet-title .muted{ font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sk-sheet-title strong{ font-size: 17px; }
+.sk-nav{ display: inline-flex; flex: none; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--card-bg); color: var(--ink); font-size: 26px; line-height: 1; cursor: pointer; }
+.sk-nav:disabled{ opacity: 0.3; cursor: default; }
+.sk-last{ padding: 2px 0 2px 10px; border-left: 4px solid var(--line); font-size: 14px; }
+.sk-rd-form{ display: flex; flex-direction: column; gap: 8px; }
+.sk-three{ display: grid; grid-template-columns: 1.5fr 1fr 1.15fr; gap: 8px; align-items: end; }
+.sk-field.big input{ min-height: 56px; padding-right: 54px; font-size: 24px; font-weight: 700; }
+.sk-three .sk-field input{ min-height: 56px; padding: 8px 10px; }
+.sk-three .sk-unit{ right: 8px; font-size: 11.5px; }
+.sk-three .sk-unit.sk-gpp{ right: 6px; }
+.sk-three .sk-inputwrap input{ padding-right: 48px; }
+.sk-inputwrap{ position: relative; display: block; }
+.sk-unit{ position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-size: 14px; font-weight: 600; color: var(--ink-soft); pointer-events: none; }
+.sk-two{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sk-unit.sk-gpp{ font-weight: 700; color: var(--ink); }
+.sk-note input{ width: 100%; box-sizing: border-box; min-height: 46px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card-bg); color: var(--ink); font: inherit; font-size: 16px; }
+.sk-actions{ display: flex; gap: 10px; }
+.sk-rd-form .sk-actions{ position: sticky; bottom: 0; padding: 2px 0; background: var(--card-bg); }
+.sk-actions button{ flex: 1; min-height: 52px; border-radius: 12px; font-size: 16px; font-weight: 700; }
+.sk-sheet details summary{ display: flex; align-items: center; min-height: 36px; cursor: pointer; font-size: 14px; font-weight: 600; }
+.sk-details{ display: flex; flex-direction: column; gap: 10px; padding-bottom: 4px; }
+.sk-sheet .sk-readings{ max-height: 220px; }
+.sk-sheet .sk-readings li .sk-x{ width: 34px; height: 34px; top: 6px; right: 6px; }
+.sk-tip{ position: absolute; left: 50%; bottom: 18px; z-index: 4; transform: translateX(-50%); max-width: 92%; padding: 11px 18px; border-radius: 999px; background: rgba(10,25,41,0.9); color: #fff; font-size: 14px; font-weight: 600; text-align: center; pointer-events: none; }
+.sk-movebar{ position: absolute; left: 50%; bottom: 18px; z-index: 6; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; max-width: 94%; padding: 7px 7px 7px 18px; border-radius: 999px; background: #0a1929; color: #fff; font-size: 14px; font-weight: 600; box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
+.sk-movebar button{ min-height: 40px; padding: 0 16px; border: 0; border-radius: 999px; background: #54e9de; color: #0a1929; font-weight: 700; cursor: pointer; }
+.sketch.mode-moisture .sketch-over button.sk-icon{ width: 42px; height: 42px; }
+.sketch.mode-moisture .sketch-over-tr{ gap: 6px; }
+@media (max-width: 700px){
+  .sketch.mode-moisture .sketch-over-tl{ right: 58px; }
+  .sketch.mode-moisture .sk-sheet{ max-width: none; }
+  .sk-std-row{ grid-template-columns: 1fr 76px; }
+  .sk-std-row select{ grid-column: 1 / -1; }
+  .sk-std-row input, .sk-std-row select{ min-height: 44px; font-size: 16px; }
+}
+@media (max-width: 700px){ .sketch.mode-moisture .sketch-summary .sk-hint{ display: none; } }
