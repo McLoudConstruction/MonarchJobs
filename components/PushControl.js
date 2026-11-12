@@ -15,7 +15,7 @@ export default function PushControl({ token }) {
 
   async function turnOn() {
     setBusy(true); setMsg(null);
-    try { setStatus(await enablePush(token)); setMsg({ ok: true, text: 'Notifications are on for this phone.' }); }
+    try { setStatus(await enablePush(token)); setMsg({ ok: true, text: 'Notifications are on for this device.' }); }
     catch (e) { setMsg({ ok: false, text: e.message }); setStatus(await readPushStatus()); }
     setBusy(false);
   }
@@ -37,19 +37,19 @@ export default function PushControl({ token }) {
 
   return (
     <div className="card push-card">
-      <h3>Push notifications on this phone</h3>
+      <h3>Push notifications on this device</h3>
       {status === 'on' && (
         <>
           <p className="hint">On. You will get a notification here even when the app is closed.</p>
           <div className="row">
             <button type="button" className="secondary small" disabled={busy} onClick={sendTest}>Send me a test</button>
-            <button type="button" className="secondary small" disabled={busy} onClick={turnOff}>Turn off on this phone</button>
+            <button type="button" className="secondary small" disabled={busy} onClick={turnOff}>Turn off on this device</button>
           </div>
         </>
       )}
       {status === 'off' && (
         <>
-          <p className="hint">Get new leads, schedule changes and job updates as they happen, even when the app is closed. Each phone is turned on once.</p>
+          <p className="hint">Get new leads, schedule changes and job updates as they happen, even when the app is closed. Each phone and each browser is turned on once.</p>
           <button type="button" className="primary" disabled={busy} onClick={turnOn}>{busy ? 'Turning on...' : 'Turn on notifications'}</button>
         </>
       )}
@@ -57,7 +57,7 @@ export default function PushControl({ token }) {
         <p className="hint">On iPhone and iPad, add MonarchJobs to your Home Screen first: tap the Share button in Safari, choose <strong>Add to Home Screen</strong>, then open MonarchJobs from the new icon and come back to this page.</p>
       )}
       {status === 'denied' && (
-        <p className="hint">Notifications are blocked for this site on this phone. Allow them in your phone or browser settings for MonarchJobs, then come back and turn them on.</p>
+        <p className="hint">Notifications are blocked for this site on this device. Allow them in your browser or phone settings (in Chrome, the lock icon next to the address) for MonarchJobs, then come back and turn them on.</p>
       )}
       {status === 'unsupported' && (
         <p className="hint">This browser cannot receive push notifications. The bell inside the app still works.</p>

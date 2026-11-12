@@ -11,7 +11,7 @@ export async function POST(request) {
   if (auth.error) return auth.error;
   const result = await sendTestPush(auth.staff.id);
   if (!result.sent) {
-    return NextResponse.json({ error: result.reason || 'The test could not be delivered. Try turning notifications off and on again on this phone.' }, { status: 400 });
+    return NextResponse.json({ error: result.reason || 'The test could not be delivered. Try turning notifications off and on again on this device.' }, { status: 400 });
   }
   return NextResponse.json({ ok: true, sent: result.sent });
 }
