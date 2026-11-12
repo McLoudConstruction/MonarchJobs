@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { emptyPlan, normalizePlan, newRoom, heightFor, planBounds, cleanSurfaces } from '../lib/sketch.js';
 import {
   gpp, parseReading, fmtReading, makeMoisture, makeReading, cleanMoisture, cleanStandards, nextNumber, moistureStatus, goalFor,
-  moistureCounts, hitMoisture, valueText, airText, sortedReadings, MAX_READINGS,
+  moistureCounts, hitMoisture, valueText, airText, sortedReadings, MAX_READINGS, padEdit,
 } from '../lib/moisture.js';
 import { moistureLogCsv, moistureLogRows, csvCell } from '../lib/moistureLog.js';
 import { drawPlan } from '../lib/sketchDraw.js';
@@ -311,4 +311,20 @@ test('days: old readings are filed by date, a day view shows what was read that 
   assert.match(rows[2], /,35,,,/);
   // it survives a save and load
   assert.equal(normalizePlan(JSON.parse(JSON.stringify(plan))).days.length, 3);
+});
+
+test('number pad: digits, one point, one decimal, backspace, and a leading zero gives way', () => {
+  const type = (keys, opts) => [...keys].reduce((s, k) => padEdit(s, k === '<' ? 'back' : k, opts), '');
+  assert.equal(type('14.2'), '14.2');
+  assert.equal(type('14.25'), '14.2'); // one decimal place
+  assert.equal(type('1.2.3'), '1.23'.slice(0, 3)); // a second point is ignored, the next digit would be a second decimal
+  assert.equal(type('.5'), '0.5');
+  assert.equal(type('07'), '7');
+  assert.equal(type('0.'), '0.');
+  assert.equal(type('123456'), '12345'); // five characters at most
+  assert.equal(type('14.2<<'), '14');
+  assert.equal(type('<<'), '');
+  assert.equal(type('72.5', { decimals: 0 }), '725'); // whole numbers only: the point does nothing
+  assert.equal(padEdit('12', 'x'), '12');
+  assert.equal(padEdit(null, '5'), '5');
 });

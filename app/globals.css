@@ -1828,3 +1828,45 @@ button.assign-btn:hover{ background: #d90000; border-color: #d90000; box-shadow:
 
 /* Moisture floorplan: no dragging the plan around; a vertical swipe on it scrolls the page, and a tap picks a room */
 .sketch[data-variant="moisture"] .sketch-canvas{ touch-action: pan-y; }
+
+/* Moisture (phone): the stage is only as tall as the floorplan needs; the app sets --sk-fit-h */
+@media (max-width: 700px){
+  .sketch[data-variant="moisture"]:not(.sketch-full) .sketch-stage{ min-height: min(360px, var(--sk-fit-h, 360px)); max-height: var(--sk-fit-h, none); }
+}
+
+/* Moisture point sheet: a layer over the screen, sized to what the keyboard leaves free */
+.sk-sheet-layer{ position: fixed; left: 0; right: 0; top: 0; bottom: 0; z-index: 1500; display: flex; flex-direction: column; justify-content: flex-end; pointer-events: none; }
+.sk-sheet-layer .sk-sheet{ position: relative; left: auto; right: auto; bottom: auto; flex: 0 1 auto; max-width: none; max-height: 100%; gap: 6px; padding-top: 10px; }
+.sk-sheet:focus{ outline: none; }
+.sk-sheet button{ touch-action: manipulation; }
+.sk-sheet .sk-num, .sk-sheet .sk-key, .sk-sheet .sk-save{ -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+
+/* Reading / RH / Temp boxes (the number pad types into the lit one) */
+.sk-three{ align-items: stretch; }
+.sk-sheet .sk-num{ position: relative; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; min-height: 58px; padding: 6px 10px; border: 2px solid var(--line); border-radius: 12px; background: var(--card-bg); color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+.sk-sheet .sk-num.on{ border-color: var(--accent); box-shadow: 0 0 0 3px rgba(84,233,222,0.35); }
+.sk-num-label{ font-size: 11px; font-weight: 700; color: var(--ink-soft); }
+.sk-num-val{ display: inline-flex; align-items: center; min-height: 24px; font-size: 20px; font-weight: 700; line-height: 1.15; }
+.sk-num.big .sk-num-val{ font-size: 28px; }
+.sk-num-val.ph{ color: var(--ink-soft); opacity: .55; font-weight: 600; }
+.sk-num-unit{ position: absolute; right: 8px; bottom: 6px; font-size: 11.5px; font-weight: 700; color: var(--ink-soft); }
+.sk-caret{ display: inline-block; width: 2px; height: 1.05em; margin-left: 2px; background: var(--accent); animation: sk-blink 1s steps(2) infinite; }
+@keyframes sk-blink{ 50%{ opacity: 0; } }
+
+/* the number pad: digits on the left, Save on the right */
+.sk-pad{ display: grid; grid-template-columns: repeat(3, 1fr) 1.3fr; grid-template-rows: repeat(4, 42px); gap: 6px; }
+.sk-sheet .sk-key{ min-height: 0; height: auto; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--card-bg); color: var(--ink); font: inherit; font-size: 22px; font-weight: 600; cursor: pointer; }
+.sk-sheet .sk-key:active{ background: rgba(120,130,140,0.25); }
+.sk-sheet .sk-key.fn{ font-size: 20px; }
+.sk-sheet .sk-save{ grid-column: 4; grid-row: 1 / span 4; min-height: 0; padding: 0 6px; border: 0; border-radius: 12px; background: var(--accent); color: var(--accent-ink); font: inherit; font-size: 17px; font-weight: 700; cursor: pointer; }
+.sk-pad.two .sk-save{ grid-row: 1 / span 2; }
+.sk-pad.two .sk-save.next{ grid-row: 3 / span 2; }
+.sk-sheet .sk-pad.two .sk-save.alt{ background: var(--card-bg); color: var(--ink); border: 1px solid var(--line); }
+.sk-sheet .sk-save:disabled{ opacity: .4; cursor: default; }
+
+/* surface / material / meter type, and the note, are on the first screen */
+.sk-setup{ display: grid; grid-template-columns: 0.85fr 1.5fr 0.85fr; gap: 8px; }
+.sk-setup .sk-opt{ min-width: 0; font-size: 11px; }
+.sk-setup .sk-opt select{ min-height: 44px; padding: 6px 8px; font-size: 15px; text-overflow: ellipsis; }
+.sk-sheet .sk-field{ font-size: 11px; }
+.sk-sheet .sk-field input{ min-height: 44px; }
