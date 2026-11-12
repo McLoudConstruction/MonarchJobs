@@ -236,3 +236,38 @@ test('drawPlan: plain floorplan hides areas switched off', async () => {
   };
   assert.ok(count({}) > count({ hiddenAreas: new Set(['a1']) }));
 });
+
+test('room numbers are handed out automatically and never repeat', async () => {
+  const { emptyPlan, newRoom, ensureRoomNums, normalizePlan, roomTitle } = await import('../lib/sketch.js');
+  let plan = emptyPlan();
+  plan.rooms.push(newRoom('', 0, 0), newRoom('', 12, 0));
+  plan = ensureRoomNums(plan);
+  assert.deepEqual(plan.rooms.map((r) => r.num), [1, 2]);
+  const copy = { ...plan.rooms[0], id: 'copy', num: 0 };
+  plan = ensureRoomNums({ ...plan, rooms: [...plan.rooms, copy] });
+  assert.deepEqual(plan.rooms.map((r) => r.num), [1, 2, 3]);
+  // deleting room 2 does not renumber the rest, and the next room is 4
+  plan = { ...plan, rooms: plan.rooms.filter((r) => r.num !== 2) };
+  plan = ensureRoomNums({ ...plan, rooms: [...plan.rooms, newRoom('', 30, 0)] });
+  assert.deepEqual(plan.rooms.map((r) => r.num), [1, 3, 4]);
+  // a repeated number (a pasted copy) is fixed
+  const dup = ensureRoomNums({ ...plan, rooms: [...plan.rooms, { ...plan.rooms[0], id: 'x' }] });
+  assert.equal(new Set(dup.rooms.map((r) => r.num)).size, dup.rooms.length);
+  // loading an old sketch numbers its rooms
+  const old = normalizePlan({ v: 3, rooms: [{ id: 'a', label: 'Kitchen', pts: [[0, 0], [10, 0], [10, 10], [0, 10]] }, { id: 'b', pts: [[10, 0], [20, 0], [20, 10], [10, 10]] }] });
+  assert.deepEqual(old.rooms.map((r) => r.num), [1, 2]);
+  assert.equal(roomTitle(old.rooms[0]), 'Kitchen');
+  assert.equal(roomTitle(old.rooms[1]), 'Room 2');
+});
+
+test('room type: standard types, Other with its own text, bad values dropped', async () => {
+  const { normalizePlan, roomTitle, ROOM_TYPES } = await import('../lib/sketch.js');
+  assert.ok(ROOM_TYPES.kitchen && ROOM_TYPES.bedroom && ROOM_TYPES.bathroom && ROOM_TYPES.living && ROOM_TYPES.other);
+  const pts = [[0, 0], [10, 0], [10, 10], [0, 10]];
+  const p = normalizePlan({ v: 3, rooms: [
+    { id: 'a', type: 'bedroom', pts }, { id: 'b', type: 'other', other: 'Sunroom', pts }, { id: 'c', type: 'bogus', other: 'x', pts }, { id: 'd', type: 'kitchen', other: 'ignored', pts },
+  ] });
+  assert.deepEqual(p.rooms.map((r) => r.type), ['bedroom', 'other', '', 'kitchen']);
+  assert.deepEqual(p.rooms.map(roomTitle), ['Bedroom', 'Sunroom', 'Room 3', 'Kitchen']);
+  assert.equal(p.rooms[3].other, '');
+});

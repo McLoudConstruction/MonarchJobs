@@ -4,9 +4,9 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { createPortal } from 'react-dom';
 import { staffName } from '@/lib/userDisplay';
 import {
-  AREA_KINDS, MARK_COLORS, MAX_MARKS, MAX_ROOMS, MAX_AREAS, MAX_SOURCES, MIN_ROOM, MAX_ROOM, ROOM_PRESETS, SURFACES, WALL_HEIGHTS, WATER_CATS,
+  AREA_KINDS, MARK_COLORS, MAX_MARKS, MAX_ROOMS, MAX_AREAS, MAX_SOURCES, MIN_ROOM, MAX_ROOM, ROOM_TYPES, SURFACES, WALL_HEIGHTS, WATER_CATS,
   addCornerCut, affectedTotals, carveRooms, cleanSurfaces, cleanWater, dropStraightPoints, edgeLength, fitView, heightFor, hitMarkAt, hitRoom, hitSource,
-  insertBreak, isRect, makeId, moveEdgeSnapped, moveVertex, nearestAnchor, nearestEdge, nearestVertex, newArea, newRoom, newSource, normalizePlan, placeGrowth,
+  ensureRoomNums, insertBreak, isRect, pointInPoly, polyBox, roomTitle, makeId, moveEdgeSnapped, moveVertex, nearestAnchor, nearestEdge, nearestVertex, newArea, newRoom, newSource, normalizePlan, placeGrowth,
   parseFeet, pickArea, planBounds, rectPts, removeVertex, resizeRect, roomAreaText, roomBox, roomSizeText, setEdgeLength,
   simplifyStroke, snap, snapOnEdge, surfaceText, tidyPts, toScreen, toWorld, totalArea, translatePts, fmtFeet,
 } from '@/lib/sketch';
@@ -169,6 +169,9 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   const mode = variant === 'moisture' ? 'moisture' : 'draw'; // the Sketch tab draws; the Moisture tab logs readings on a plain floorplan and leaves the drawing alone
   const [hidden, setHidden] = useState(() => new Set()); // moisture floorplan: affected-area layers switched off
   const [showPins, setShowPins] = useState(true);
+  const [focusId, setFocusId] = useState(null); // moisture floorplan: the room zoomed into, the rest greyed out
+  const focusRef = useRef(null);
+  focusRef.current = focusId;
   const [layersOpen, setLayersOpen] = useState(false);
   const layerRef = useRef({ hidden: new Set(), pins: true });
   layerRef.current = { hidden, pins: showPins };
@@ -243,7 +246,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
       affected: totalsRef.current.totals.rooms, draft: d?.draft || null, hover: d ? null : hoverRef.current,
       pending: toolRef.current === 'corner' ? lastCornerRef.current : null,
       meId: meRef.current.id, commentDraft: cmDraftRef.current,
-      ...(modeRef.current === 'moisture' ? { plain: true, grid: false, comments: false, hiddenAreas: layerRef.current.hidden, moisture: layerRef.current.pins } : { moisture: false }),
+      ...(modeRef.current === 'moisture' ? { plain: true, grid: false, comments: false, hiddenAreas: layerRef.current.hidden, moisture: layerRef.current.pins, focusRoom: focusRef.current } : { moisture: false }),
       ghost: d?.ghost || ((toolRef.current === 'object' || toolRef.current === 'missing') && !d ? ghostRef.current : null),
     });
   }, []);
@@ -254,7 +257,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
 
   useEffect(() => { countsRef.current = photoCounts; schedule(); }, [photoCounts, schedule]);
   useEffect(() => { schedule(); setDimErr(''); }, [sel, schedule]);
-  useEffect(() => { schedule(); }, [surfaceView, moistLabels, hidden, showPins, schedule]);
+  useEffect(() => { schedule(); }, [surfaceView, moistLabels, hidden, showPins, focusId, schedule]);
   const moistSelId = sel?.kind === 'moisture' ? sel.id : null;
   useEffect(() => { setRd({ val: '', note: '' }); setRdErr(''); }, [moistSelId]);
   // the phone keyboard slides over the bottom of the page: measure how much, so the entry sheet can sit above it
@@ -303,7 +306,8 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   }, [draw]);
 
   // ---- changes -----------------------------------------------------------
-  const commit = useCallback((next) => {
+  const commit = useCallback((rawNext) => {
+    const next = ensureRoomNums(rawNext); // new rooms and copies get their number here
     undoRef.current.push(planRef.current);
     if (undoRef.current.length > 80) undoRef.current.shift();
     redoRef.current = [];
@@ -410,7 +414,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     const r = selected;
     if (!r || sel.kind !== 'room' || planRef.current.rooms.length >= MAX_ROOMS) return;
     const b = roomBox(r);
-    const copy = { ...r, id: makeId(), pts: translatePts(r.pts, snap(b.w + 1), 0), label: r.label ? `${r.label} 2` : '' };
+    const copy = { ...r, id: makeId(), pts: translatePts(r.pts, snap(b.w + 1), 0), num: 0, label: r.label ? `${r.label} 2` : '' };
     commit({ ...planRef.current, rooms: [...planRef.current.rooms, copy] });
     setSel({ kind: 'room', id: copy.id });
   }
@@ -428,7 +432,8 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   // Fit the plan to the box. On the moisture floorplan a wide plan sits under the zoom buttons' column rather
   // than leaving a gap beside it, as long as it clears the buttons.
   function fitFor(W, H) {
-    const b = planBounds(planRef.current);
+    const fr = focusRef.current ? planRef.current.rooms.find((r) => r.id === focusRef.current) : null;
+    const b = fr ? polyBox(fr.pts) : planBounds(planRef.current);
     const ins = controlInset();
     const base = fitView(b, W, H, 24, ins);
     if (modeRef.current !== 'moisture' || !ins.right) return base;
@@ -591,7 +596,9 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     }
     if (t === 'moisture' && !layerRef.current.pins) { dragRef.current = { mode: 'pan', sx: p.x, sy: p.y, ox: v.ox, oy: v.oy }; return; } // points layer is off: just pan
     if (t === 'moisture') { // a tap places a point or opens a pin; dragging pans, so a finger can move around without dropping points
-      const hit = moveIdRef.current ? null : hitMoisture(plan, w.x, w.y, Math.max(tolFt, 18 / v.scale), surfaceRef.current);
+      const fr = focusRef.current ? plan.rooms.find((r) => r.id === focusRef.current) : null;
+      let hit = moveIdRef.current ? null : hitMoisture(plan, w.x, w.y, Math.max(tolFt, 18 / v.scale), surfaceRef.current);
+      if (hit && fr && !pointInPoly(fr.pts, hit.x, hit.y)) hit = null; // pins in the greyed-out rooms are not reachable
       dragRef.current = { mode: 'moist-tap', sx: p.x, sy: p.y, ox: v.ox, oy: v.oy, wx: w.x, wy: w.y, hitId: hit ? hit.id : null, hadPopup, moved: false };
       return;
     }
@@ -843,7 +850,10 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
       } else if (d.hitId) {
         setSel({ kind: 'moisture', id: d.hitId });
         openPopup(0, 0);
-      } else if (!d.hadPopup && plan.moisture.length < MAX_MOISTURE) { // the tap that only closed the sheet does not also drop a point
+      } else if (!focusRef.current) { // the whole floorplan: a tap on a room zooms into it
+        const rm = !d.hadPopup ? hitRoom(plan, d.wx, d.wy) : null;
+        if (rm) enterRoom(rm);
+      } else if (!d.hadPopup && plan.moisture.length < MAX_MOISTURE && pointInPoly(plan.rooms.find((r) => r.id === focusRef.current)?.pts || [], d.wx, d.wy)) { // the tap that only closed the sheet does not also drop a point; points go in this room only
         const m = moistRef.current;
         const pt = makeMoisture(nextNumber(plan.moisture), snap(d.wx, 0.25), snap(d.wy, 0.25), { surface: m.surface, material: m.material, type: m.type });
         commit({ ...plan, moisture: [...plan.moisture, pt] });
@@ -870,7 +880,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     if (d.mode === 'room') {
       const dr = d.draft;
       if (dr && dr.w >= MIN_ROOM && dr.h >= MIN_ROOM && plan.rooms.length < MAX_ROOMS) {
-        const room = { id: makeId(), label: '', notes: '', pts: rectPts(dr.x, dr.y, Math.min(dr.w, MAX_ROOM), Math.min(dr.h, MAX_ROOM)) };
+        const room = { id: makeId(), num: 0, type: '', other: '', label: '', notes: '', pts: rectPts(dr.x, dr.y, Math.min(dr.w, MAX_ROOM), Math.min(dr.h, MAX_ROOM)) };
         // the new room takes its space from any room it was drawn over
         const rect = { x: dr.x, y: dr.y, w: Math.min(dr.w, MAX_ROOM), h: Math.min(dr.h, MAX_ROOM) };
         const carved = carveRooms(plan.rooms, rect);
@@ -1047,7 +1057,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     if ((e.key === 'Delete' || e.key === 'Backspace') && selRef.current) { e.preventDefault(); removeSelected(); return; }
     if (e.key === 'Escape') {
       if (popupRef.current) { closePopup(); return; }
-      if (modeRef.current === 'moisture') { if (moveIdRef.current) setMoveId(null); return; } // Esc never leaves the mode by accident
+      if (modeRef.current === 'moisture') { if (moveIdRef.current) setMoveId(null); else if (focusRef.current) exitRoom(); return; } // Esc never leaves the mode by accident
       if (toolRef.current === 'corner' && lastCornerRef.current) { lastCornerRef.current = null; schedule(); return; } // drop the first click, stay in the tool
       if (dragRef.current) { dragRef.current = null; pointers.current.clear(); }
       if (textDraft) { setTextDraft(null); return; }
@@ -1093,7 +1103,22 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     const i = list.findIndex((m) => m.id === id);
     return list.length > 1 && i >= 0 ? list[(i + step + list.length) % list.length] : null;
   }
+  function enterRoom(rm) {
+    setMoveId(null); setSel(null); setPopup(null);
+    focusRef.current = rm.id;
+    setFocusId(rm.id);
+    fit();
+  }
+  function exitRoom() {
+    setMoveId(null); setSel(null); setPopup(null);
+    focusRef.current = null;
+    setFocusId(null);
+    fit();
+  }
   function gotoPoint(id) {
+    const pt = planRef.current.moisture.find((m) => m.id === id);
+    const rm = pt && focusRef.current ? hitRoom(planRef.current, pt.x, pt.y) : null;
+    if (rm && rm.id !== focusRef.current) { focusRef.current = rm.id; setFocusId(rm.id); fit(); } // stepping to a point in another room follows it
     setMoveId(null);
     setSel({ kind: 'moisture', id });
     openPopup(0, 0);
@@ -1331,6 +1356,12 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
           </div>)}
           {mode === 'moisture' && !sheetOpen && (
             <div className="sk-moist-bar">
+              {focusId && (
+                <div className="sk-bar-row">
+                  <button type="button" className="sk-back" onClick={exitRoom}>{'\u2190'} Back to floorplan</button>
+                  <span className="sk-room-chip">{roomTitle(plan.rooms.find((r) => r.id === focusId))}</span>
+                </div>
+              )}
               <div className="sk-bar-row">
               <button type="button" className="sk-layers-btn" aria-expanded={layersOpen} onClick={() => { setLayersOpen(!layersOpen); setMoistOpen(false); }} title="Layers">
                 <LayersIcon />Layers{hidden.size ? ` (${layerList.length - hidden.size}/${layerList.length})` : ''}
@@ -1437,7 +1468,9 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
           onContextMenu={(e) => e.preventDefault()}
           aria-label="Sketch drawing area"
         />
-        {mode === 'moisture' && !plan.moisture.length && !sheetOpen && !moveId && <div className="sk-tip">Tap the plan to log a reading</div>}
+        {mode === 'moisture' && !sheetOpen && !moveId && (focusId
+          ? !plan.moisture.some((m) => pointInPoly(plan.rooms.find((r) => r.id === focusId)?.pts || [], m.x, m.y)) && <div className="sk-tip">Tap the room to log a reading</div>
+          : !plan.moisture.length && <div className="sk-tip">Tap a room to zoom in and log readings</div>)}
         {moveId && (
           <div className="sk-movebar" role="status">
             <span>Tap where point {plan.moisture.find((m) => m.id === moveId)?.n} should go</span>
@@ -1474,10 +1507,20 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
           <div className="sketch-pop" ref={popRef} style={popStyle} role="dialog" aria-label="Edit selection">
             {room && (
               <>
-                <div className="sketch-pop-head"><strong>Room</strong>{closeBtn}</div>
-                <div className="field"><label htmlFor="sk-room-name">Name</label>
-                  <input id="sk-room-name" list="sk-room-presets" key={`${room.id}-l-${room.label}`} defaultValue={room.label} maxLength={40} onBlur={(e) => e.target.value !== room.label && patchRoom(room.id, { label: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} placeholder="Kitchen" />
-                  <datalist id="sk-room-presets">{ROOM_PRESETS.map((n) => <option key={n} value={n} />)}</datalist>
+                <div className="sketch-pop-head"><strong>{room.num ? `Room ${room.num}` : 'Room'}</strong>{closeBtn}</div>
+                <div className="field"><label htmlFor="sk-room-type">Room {room.num || ''} type</label>
+                  <select id="sk-room-type" value={room.type || ''} onChange={(e) => patchRoom(room.id, { type: e.target.value, ...(e.target.value === 'other' ? {} : { other: '' }) })}>
+                    <option value="">Choose a type...</option>
+                    {Object.entries(ROOM_TYPES).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                  </select>
+                </div>
+                {room.type === 'other' && (
+                  <div className="field"><label htmlFor="sk-room-other">What kind of room</label>
+                    <input id="sk-room-other" key={`${room.id}-o-${room.other}`} defaultValue={room.other} maxLength={30} onBlur={(e) => e.target.value !== room.other && patchRoom(room.id, { other: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} placeholder="Sunroom" />
+                  </div>
+                )}
+                <div className="field"><label htmlFor="sk-room-name">Name (optional)</label>
+                  <input id="sk-room-name" key={`${room.id}-l-${room.label}`} defaultValue={room.label} maxLength={40} onBlur={(e) => e.target.value !== room.label && patchRoom(room.id, { label: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} placeholder="Primary bedroom" />
                 </div>
                 {rect ? (
                   <div className="grid2">
@@ -1685,7 +1728,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                 <button type="button" className="sk-nav" aria-label="Previous point" disabled={!prevPt} onClick={() => prevPt && gotoPoint(prevPt.id)}>{'‹'}</button>
                 <div className="sk-sheet-title">
                   <strong><span className="sk-dot" style={{ background: color }} />Point {mp.n}</strong>
-                  <span className="muted">{roomHere?.label || 'No room'} · {MOISTURE_MATERIALS[mp.material]} · {MOISTURE_SURFACES[mp.surface]}{mp.surface === 'wall' && mp.h != null ? ` at ${fmtFeet(mp.h)}` : ''}</span>
+                  <span className="muted">{roomHere ? roomTitle(roomHere) : 'No room'} · {MOISTURE_MATERIALS[mp.material]} · {MOISTURE_SURFACES[mp.surface]}{mp.surface === 'wall' && mp.h != null ? ` at ${fmtFeet(mp.h)}` : ''}</span>
                 </div>
                 <button type="button" className="sk-nav" aria-label="Next point" disabled={!nextPt} onClick={() => nextPt && gotoPoint(nextPt.id)}>{'›'}</button>
                 <button type="button" className="sk-nav" aria-label="Close" onClick={closePopup}>{'×'}</button>

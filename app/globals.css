@@ -1790,3 +1790,8 @@ button.assign-btn:hover{ background: #d90000; border-color: #d90000; box-shadow:
   .sk-layers{ max-height: 40vh; }
 }
 .sk-to-moisture{ display: inline-flex; align-items: center; gap: 6px; }
+
+/* Moisture: zoomed into a room */
+.sketch-over .sk-moist-bar .sk-bar-row > button.sk-back{ background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+.sk-room-chip{ display: inline-flex; align-items: center; min-height: 40px; padding: 6px 12px; border-radius: 10px; background: rgba(255,255,255,0.92); border: 1px solid rgba(120,130,140,0.35); font-size: 13px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+[data-theme="dark"] .sk-room-chip{ background: rgba(30,36,42,0.92); }

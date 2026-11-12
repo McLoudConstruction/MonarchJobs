@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getSupabase } from '@/lib/supabaseClient';
 import { PHOTO_BUCKET, PHOTO_KINDS, PHOTO_KIND_KEYS } from '@/lib/jobDocs';
-import { normalizePlan } from '@/lib/sketch';
+import { normalizePlan, roomTitle } from '@/lib/sketch';
 import { useSignedUrls } from '@/lib/useSignedUrls';
 import { fmtDateTime } from '@/lib/format';
 import PhotoMarkup from '@/components/job/PhotoMarkup';
@@ -31,7 +31,7 @@ export default function PhotoViewer({ list, startId, onClose, onChanged, onAppen
     getSupabase().from('job_sketches').select('id,name,plan').eq('job_id', jobId).order('sort_order').then(({ data }) => {
       if (!alive) return;
       setRooms((data || []).flatMap((s) => normalizePlan(s.plan).rooms.map((r) => ({
-        value: `${s.id}|${r.id}`, label: `${data.length > 1 ? `${s.name}: ` : ''}${r.label || 'Unnamed room'}`,
+        value: `${s.id}|${r.id}`, label: `${data.length > 1 ? `${s.name}: ` : ''}${roomTitle(r)}`,
       }))));
     });
     return () => { alive = false; };

@@ -587,7 +587,7 @@ test('drawPlan renders rooms, labels, marks, selection and a draft without throw
   assert.ok(hoverText.includes("3'") && hoverText.includes("9'"), `split lengths missing: ${hoverText}`);
   drawPlan(ctx, emptyPlan(), view, { W: 400, H: 300 });
   const text = ctx.calls.filter((c) => c[0] === 'fillText').map((c) => c[1]);
-  assert.ok(text.includes('Kitchen'));
+  assert.ok(text.some((t) => t.includes('Kitchen'))); // drawn with its room number, for example "#1 Kitchen"
   assert.ok(text.some((t) => t.includes('168 sq ft')));
   assert.ok(text.includes('3'));
   assert.ok(text.some((t) => t.startsWith('Water ')), `no water line in ${text}`);
