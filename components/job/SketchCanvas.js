@@ -19,6 +19,7 @@ import { OBJECT_TYPES, OBJECT_GROUPS, MAX_OBJECTS, makeObject, objectCounts, isI
 import { placeObject, hitObject, nearestWall, wallSpan } from '@/lib/sketchObjects';
 import { jpegToPdf } from '@/lib/pdfImage';
 import { moistureLogCsv, moistureSummaryCsv } from '@/lib/moistureLog';
+import { renderMoistureReport } from '@/lib/moistureReport';
 import { addDay, atForDay, countOnDay, dateText, dayName, dayView, pointTimeline, removeDay, todayKey } from '@/lib/moistureDays';
 import { areaLayers } from '@/lib/moistureLayers';
 import { hitComment, tagsFromText, segments, timeAgo, logEntry, withLog, canDeleteComment, activity, MAX_COMMENTS, MAX_REPLIES } from '@/lib/sketchComments';
@@ -1306,6 +1307,31 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
       : { W, H, counts: {}, affected: totalsFor(plan).rooms, surface: 'all', grid: true, comments: false, moisture: false });
     return out;
   }
+  // The customer report: the plan as of the latest day (every layer, numbered pins), then the tables and curves.
+  function exportReport() {
+    const full = planRef.current;
+    const ds = full.days || [];
+    const plan = dayView(full, ds.length ? ds[ds.length - 1].id : null);
+    const b = planBounds(plan);
+    const title = exportName.replace(/\s+moisture$/i, '');
+    const finish = (img) => {
+      const pdf = renderMoistureReport(full, { title, planImage: img, preparedAt: new Date() });
+      download(new Blob([pdf], { type: 'application/pdf' }), 'pdf', '-report');
+    };
+    if (!b) { finish(null); return; }
+    const W = 900; // a smaller canvas keeps the pins and room names readable on the page
+    const H = Math.round(clampN(900 * ((b.maxY - b.minY + 4) / Math.max(b.maxX - b.minX + 4, 4)), 300, 800));
+    const out = document.createElement('canvas');
+    out.width = W; out.height = H;
+    const ctx = out.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, W, H);
+    drawPlan(ctx, plan, fitView(b, W, H, 60), { W, H, surface: 'all', plain: true, grid: false, comments: false, hiddenAreas: null, moisture: true, moistLabels: false });
+    out.toBlob(async (blob) => {
+      if (!blob) { finish(null); return; }
+      finish({ bytes: new Uint8Array(await blob.arrayBuffer()), w: W, h: H });
+    }, 'image/jpeg', 0.9);
+  }
   function download(blob, ext, suffix = '') {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1318,6 +1344,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   }
   function exportAs(kind) {
     setExportOpen(false);
+    if (kind === 'report') { exportReport(); return; }
     if (kind === 'summary') { download(new Blob([moistureSummaryCsv(planRef.current)], { type: 'text/csv;charset=utf-8' }), 'csv', '-moisture-summary'); return; }
     if (kind === 'csv') { download(new Blob([moistureLogCsv(planRef.current)], { type: 'text/csv;charset=utf-8' }), 'csv', '-moisture-log'); return; }
     const out = renderExport();
@@ -2150,6 +2177,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
             <div className="sketch-pop-head"><strong>Export sketch</strong><button type="button" className="sk-x" aria-label="Close" onClick={() => setExportOpen(false)}>{'\u00d7'}</button></div>
             <button type="button" className="secondary" onClick={() => exportAs('png')}>Export as PNG</button>
             <button type="button" className="secondary" onClick={() => exportAs('pdf')}>Export as PDF</button>
+            {mode === 'moisture' && <button type="button" className="primary" disabled={!plan.moisture.length} onClick={() => exportAs('report')} title="Floor plan, readings by day, drying curves, dry dates and the full log">Customer report (PDF)</button>}
             {mode === 'moisture' && <button type="button" className="secondary" disabled={!plan.moisture.length} onClick={() => exportAs('summary')} title="One row per point, one column per day">Daily summary (CSV)</button>}
             {mode === 'moisture' && <button type="button" className="secondary" disabled={!plan.moisture.length} onClick={() => exportAs('csv')} title="Every reading at every point, oldest first">Full moisture log (CSV)</button>}
           </div>
