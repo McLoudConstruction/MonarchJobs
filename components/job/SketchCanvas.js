@@ -191,6 +191,8 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   const [showPins, setShowPins] = useState(true);
   const [dayId, setDayId] = useState(null); // moisture floorplan: the day being viewed and logged
   const [dayOpen, setDayOpen] = useState(false);
+  const [recheck, setRecheck] = useState(null); // id of the day being rechecked: the tech is in "recheck mode" until they tap Finish
+  const [recheckDone, setRecheckDone] = useState(null); // { name, read, total } shown after Finish recheck
   const [newDate, setNewDate] = useState(() => todayKey());
   const dayRef = useRef(null);
   const dvRef = useRef({ src: null, day: null, out: null });
@@ -1217,6 +1219,37 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     setDayId(r.id);
     setDayOpen(false);
   }
+  // Recheck mode: one clear start and one clear finish, so a tech always knows whether they are still logging a round of readings.
+  function recheckCounts(dId) {
+    const pts = planRef.current.moisture.filter((m) => m.kind !== 'standard');
+    return { total: pts.length, read: pts.filter((m) => m.readings.some((r) => r.day === dId)).length };
+  }
+  function startRecheck() {
+    const r = addDay(planRef.current, todayKey());
+    if (r.added) commit(r.plan);
+    setDayId(r.id);
+    setRecheck(r.id);
+    setRecheckDone(null);
+    setDayOpen(false); setLayersOpen(false); setMoistOpen(false);
+    setSel(null);
+  }
+  function finishRecheck() {
+    const dId = recheck;
+    if (!dId) return;
+    const c = recheckCounts(dId);
+    const left = c.total - c.read;
+    if (left > 0 && !window.confirm(`${left} point${left === 1 ? ' has' : 's have'} not been read yet. Finish the recheck anyway?`)) return;
+    const d = planRef.current.days.find((x) => x.id === dId);
+    setRecheck(null);
+    setSel(null);
+    setRecheckDone({ name: d ? dayName(planRef.current.days, d.id) : 'Recheck', ...c });
+  }
+  useEffect(() => { if (recheck && dayId !== recheck) setRecheck(null); }, [dayId, recheck]);
+  useEffect(() => {
+    if (!recheckDone) return undefined;
+    const t = setTimeout(() => setRecheckDone(null), 8000);
+    return () => clearTimeout(t);
+  }, [recheckDone]);
   function deleteDay(id) {
     if (countOnDay(planRef.current, id) && !window.confirm('This day has readings. Delete the day and every reading on it?')) return;
     commit(removeDay(planRef.current, id));
@@ -1609,9 +1642,47 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                   <GearIcon />
                 </button>
               </div>
-              {curDay && curDay === days[days.length - 1] && curDay.date !== todayKey() && (
-                <div className="sk-bar-row"><button type="button" className="sk-newday" onClick={() => startDay(todayKey())}>Start Day {days.length + 1} (today)</button></div>
-              )}
+              {(() => {
+                const first = days[0];
+                const todayDay = days.find((d) => d.date === todayKey());
+                const real = plan.moisture.filter((m) => m.kind !== 'standard').length;
+                if (!days.length || !real) return null;
+                if (recheck) {
+                  const c = recheckCounts(recheck);
+                  const all = c.read >= c.total;
+                  const d = days.find((x) => x.id === recheck);
+                  return (
+                    <div className={`sk-recheck on${all ? ' all' : ''}`} role="status">
+                      <div className="sk-rc-info">
+                        <strong>Rechecking {d ? `${dayName(days, d.id)} \u00b7 ${dateText(d.date)}` : ''}</strong>
+                        <span>{all ? 'Every point is read. Tap Finish.' : `${c.read} of ${c.total} points read`}</span>
+                        <i className="sk-rc-bar"><b style={{ width: `${c.total ? Math.round((c.read / c.total) * 100) : 0}%` }} /></i>
+                      </div>
+                      <button type="button" className="sk-rc-btn" onClick={finishRecheck}>Finish recheck</button>
+                    </div>
+                  );
+                }
+                if (recheckDone) {
+                  return (
+                    <div className="sk-recheck done" role="status">
+                      <div className="sk-rc-info">
+                        <strong>{'\u2713'} {recheckDone.name} saved</strong>
+                        <span>{recheckDone.read} of {recheckDone.total} points read</span>
+                      </div>
+                      <button type="button" className="sk-rc-btn quiet" onClick={() => setRecheckDone(null)}>OK</button>
+                    </div>
+                  );
+                }
+                if (todayDay && first && todayDay.id === first.id) return null; // the loss started today: just log the first readings
+                const c = todayDay ? recheckCounts(todayDay.id) : null;
+                return (
+                  <div className="sk-recheck">
+                    <button type="button" className="sk-rc-btn start" onClick={startRecheck}>
+                      {todayDay ? `Continue recheck \u00b7 ${c.read} of ${c.total} read` : 'Start recheck'}
+                    </button>
+                  </div>
+                );
+              })()}
               {dayOpen && (
                 <div className="sk-moist-opts sk-layers" role="group" aria-label="Days">
                   {days.map((d) => (
@@ -2026,6 +2097,9 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                   </>
                 )}
               </div>
+              {!recheck && !creating && days.length > 1 && curDay && curDay.date !== todayKey() && (
+                <div className="sk-pastday" role="note">You are logging on {dayName(days, curDay.id)} ({dateText(curDay.date)}), not today. Close this and tap Start recheck for today's readings.</div>
+              )}
               <div className="sk-strip" role="tablist" aria-label="Readings by day" ref={stripRef}>
                 {cells.map((c) => {
                   const cur = c.day.id === curId;

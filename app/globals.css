@@ -1903,3 +1903,19 @@ button.assign-btn:hover{ background: #d90000; border-color: #d90000; box-shadow:
 .sk-sheet .sk-kinds button.on{ background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
 .sk-sheet .sk-kinds button:disabled{ opacity: .4; cursor: default; }
 .sk-std-note{ grid-column: 1 / -1; font-size: 12px; color: var(--ink-soft); }
+
+/* recheck mode: one big start, one big finish */
+.sketch-over .sk-moist-bar .sk-recheck, .sk-recheck{ display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box; }
+.sk-recheck .sk-rc-btn{ min-height: 48px; padding: 0 18px; border-radius: 12px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.sk-recheck .sk-rc-btn.start{ flex: 1; white-space: normal; }
+.sk-recheck .sk-rc-btn.quiet{ background: transparent; color: var(--ink); border-color: var(--line); }
+.sk-recheck.on, .sk-recheck.done{ padding: 8px 10px 8px 12px; border: 2px solid var(--accent); border-radius: 14px; background: var(--card-bg); }
+.sk-recheck .sk-rc-info{ flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: var(--ink-soft); }
+.sk-recheck .sk-rc-info strong{ font-size: 15px; color: var(--ink); }
+.sk-recheck .sk-rc-bar{ display: block; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.sk-recheck .sk-rc-bar b{ display: block; height: 100%; background: var(--accent); transition: width .25s; }
+.sk-recheck.on.all{ border-color: #2b8a3e; }
+.sk-recheck.on.all .sk-rc-btn{ background: #2b8a3e; border-color: #2b8a3e; color: #fff; }
+.sk-recheck.on.all .sk-rc-bar b{ background: #2b8a3e; }
+.sk-recheck.done{ border-color: #2b8a3e; }
+.sk-pastday{ padding: 8px 10px; border-radius: 10px; background: #fff4e6; border: 1px solid #ffa94d; color: #7c4a03; font-size: 13px; line-height: 1.35; }
