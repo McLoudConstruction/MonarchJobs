@@ -115,7 +115,7 @@ test('the job dry standard applies to a material unless the point has its own go
     point(3, 3, 3, { material: 'carpet' }, [reading(10, 2)]),
     point(4, 4, 4, {}, []),
   ] };
-  assert.deepEqual(moistureCounts(withReadings), { points: 4, wet: 1, dry: 1, unset: 1, none: 1 });
+  assert.deepEqual(moistureCounts(withReadings), { points: 4, wet: 1, dry: 1, unset: 1, none: 1, standards: 0, air: 0 });
 });
 
 test('normalizePlan keeps moisture and standards, and old sketches get empty ones', () => {
@@ -182,14 +182,15 @@ test('the moisture log has one row per reading, oldest first, with room, standar
   const rows = moistureLogRows(plan);
   assert.equal(rows.length, 3);
   assert.deepEqual(rows.map((r) => r[1]), [1, 2, 2], 'same time: lower point number first, then the later date');
-  assert.equal(rows[1][2], 'Kitchen');
-  assert.equal(rows[1][4], 2);
-  assert.equal(rows[1][11], 'Wet');
-  assert.equal(rows[2][11], 'Dry');
-  assert.equal(rows[0][10], '', 'no standard for hardwood');
-  assert.equal(rows[0][11], '');
+  assert.equal(rows[1][2], 'Moisture reading');
+  assert.equal(rows[1][3], 'Kitchen');
+  assert.equal(rows[1][5], 2);
+  assert.equal(rows[1][12], 'Wet');
+  assert.equal(rows[2][12], 'Dry');
+  assert.equal(rows[0][11], '', 'no standard for hardwood');
+  assert.equal(rows[0][12], '');
   const csv = moistureLogCsv(plan);
-  assert.ok(csv.startsWith('\ufeffDay,Point,Room,Surface'));
+  assert.ok(csv.startsWith('\ufeffDay,Point,Point type,Room,Surface'));
   assert.ok(csv.includes('"behind ""fridge"", left"'));
   assert.equal(csv.trim().split('\r\n').length, 4);
   assert.equal(moistureLogCsv(base()).trim().split('\r\n').length, 1, 'just the header when there are no readings');
@@ -307,6 +308,7 @@ test('days: old readings are filed by date, a day view shows what was read that 
   assert.equal(addDay(more.plan, '2026-11-13').added, false);
   // the summary has a column per day and a final status
   const rows = moistureSummaryCsv(plan).trim().split('\r\n');
+  assert.match(rows[0], /^Point,Point type,Room,/);
   assert.match(rows[0], /Initial loss \(Nov 10\),Day 2 \(Nov 11\),Day 3 \(Nov 12\),Status/);
   assert.match(rows[1], /,40,22,11,Dry$/);
   assert.match(rows[2], /,35,,,/);
@@ -328,4 +330,53 @@ test('number pad: digits, one point, one decimal, backspace, and a leading zero 
   assert.equal(type('72.5', { decimals: 0 }), '725'); // whole numbers only: the point does nothing
   assert.equal(padEdit('12', 'x'), '12');
   assert.equal(padEdit(null, '5'), '5');
+});
+
+test('point kinds: a dry standard point sets the goal for its material, an air point has only RH and temp', async () => {
+  const { dayView, pointTimeline, dailyMatrix, addDay } = await import('../lib/moistureDays.js');
+  const { measuredStandard, POINT_KINDS } = await import('../lib/moisture.js');
+  assert.deepEqual(Object.keys(POINT_KINDS), ['reading', 'standard', 'air']);
+  assert.equal(makeMoisture(1, 0, 0, { kind: 'bogus' }).kind, 'reading');
+  let plan = { ...base(), standards: { drywall: { val: 15, type: 'mc' } } };
+  plan = addDay(addDay(plan, '2026-11-10').plan, '2026-11-11').plan;
+  const [d1, d2] = plan.days;
+  const std = (v, d, extra = {}) => makeReading({ val: v, at: at(10 + (d === d2.id ? 1 : 0)), by, day: d, ...extra });
+  plan = { ...plan, moisture: [
+    point(1, 1, 1, { material: 'drywall', kind: 'standard' }, [std(11, d1.id)]),
+    point(2, 2, 2, { material: 'drywall', kind: 'standard' }, [std(12, d1.id)]),
+    point(3, 3, 3, { material: 'drywall' }, [std(14, d1.id), std(11, d2.id)]),
+    point(4, 4, 4, { material: 'drywall' }, [std(20, d1.id)]),
+    point(5, 5, 5, { kind: 'air' }, [makeReading({ val: null, rh: 48, temp: 72, at: at(10), by, day: d1.id })]),
+  ] };
+  assert.equal(measuredStandard(plan, 'drywall', 'mc'), 11.5, 'average of the dry standard points');
+  assert.equal(goalFor(plan, plan.moisture[2]), 11.5, 'measured wins over the typed standard');
+  assert.equal(goalFor({ ...plan, moisture: plan.moisture.slice(2) }, plan.moisture[2]), 15, 'no standard points: the typed standard');
+  assert.equal(goalFor(plan, plan.moisture[0]), null, 'a standard point has no goal');
+  const c = moistureCounts(plan);
+  assert.deepEqual([c.points, c.wet, c.dry, c.standards, c.air], [2, 1, 1, 2, 1], 'point 3 is down to 11 (dry), point 4 is at 20 (wet); standards and air are counted apart');
+  // days: a standard stays good on later days, an air point must be read again
+  const v2 = dayView(plan, d2.id);
+  assert.equal(moistureStatus(v2.moisture[0], null).state, 'standard');
+  assert.equal(moistureStatus(v2.moisture[4], null).state, 'none');
+  assert.equal(moistureStatus(plan.moisture[4], null).state, 'air');
+  // the strip: a cell per day with the day's reading and where the point stood
+  const tl = pointTimeline(plan, plan.moisture[2]);
+  assert.deepEqual(tl.map((c) => [c.name, c.reading && c.reading.val, c.state, c.trend]), [['Initial loss', 14, 'wet', null], ['Day 2', 11, 'dry', 'down']]);
+  assert.equal(pointTimeline(plan, plan.moisture[3])[1].reading, null);
+  assert.equal(pointTimeline(plan, plan.moisture[3])[1].state, 'none');
+  // an air reading survives a save and load, and is in the full log but not the daily matrix
+  const back = normalizePlan(JSON.parse(JSON.stringify(plan)));
+  assert.equal(back.moisture[4].kind, 'air');
+  assert.equal(back.moisture[4].readings[0].val, null);
+  assert.equal(back.moisture[4].readings[0].rh, 48);
+  assert.equal(dailyMatrix(plan).length, 4);
+  const rows = moistureLogRows(plan);
+  const airRow = rows.find((r) => r[1] === 5);
+  assert.equal(airRow[2], 'Air (RH & temp)');
+  assert.equal(airRow[10], '', 'no moisture value');
+  assert.equal(airRow[13], '48');
+  assert.equal(airRow[14], '72');
+  // an air point needs a humidity or a temperature to keep a reading; a moisture point needs a value
+  assert.equal(cleanMoisture([{ n: 1, x: 1, y: 1, kind: 'air', readings: [{ val: null, at: at(10) }] }], (x) => x || 'i').at(0).readings.length, 0);
+  assert.equal(cleanMoisture([{ n: 1, x: 1, y: 1, readings: [{ val: null, rh: 50, at: at(10) }] }], (x) => x || 'i').at(0).readings.length, 0);
 });

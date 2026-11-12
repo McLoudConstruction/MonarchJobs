@@ -1875,6 +1875,31 @@ button.assign-btn:hover{ background: #d90000; border-color: #d90000; box-shadow:
 .sk-sheet .sk-save.next{ display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; white-space: nowrap; font-size: 16px; }
 .sk-arrow{ font-size: 40px; line-height: .8; font-weight: 600; }
 /* a new point on the initial loss: Save sits where the close button was */
-.sk-sheet .sk-headsave{ flex: none; min-height: 44px; padding: 0 20px; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-ink); font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
+.sk-sheet .sk-headsave{ flex: none; min-height: 44px; padding: 0 16px; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-ink); font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
 .sk-sheet .sk-headsave:disabled{ opacity: .4; cursor: default; }
 .sk-sheet button, .sk-sheet .sk-num{ -webkit-tap-highlight-color: transparent; }
+
+/* The day strip: the point across every day, replacing the one-line status */
+.sk-strip{ position: relative; display: flex; align-items: stretch; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; margin: 0 -14px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+.sk-strip::-webkit-scrollbar{ display: none; }
+.sk-sheet .sk-sd{ position: relative; flex: 1 0 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 0; min-width: 92px; padding: 6px 14px 8px 0; margin-right: 14px; border: 0; border-right: 1px solid var(--line); border-radius: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.sk-sheet .sk-sd:last-child{ border-right: 0; margin-right: 0; }
+.sk-sd-day{ font-size: 12px; font-weight: 700; color: var(--ink-soft); line-height: 1.25; }
+.sk-sd-date{ font-size: 11px; color: var(--ink-soft); opacity: .8; line-height: 1.25; }
+.sk-sd-val{ margin-top: 2px; font-size: 17px; font-weight: 700; line-height: 1.2; white-space: nowrap; }
+.sk-sd-val.live{ color: var(--ink); }
+.sk-sheet .sk-sd.on::after{ content: ''; position: absolute; left: 0; right: 14px; bottom: -1px; height: 3px; border-radius: 2px; background: var(--accent); }
+.sk-sheet .sk-sd.on:last-child::after{ right: 0; }
+.sk-sheet .sk-sd.on .sk-sd-day{ color: var(--ink); }
+
+/* new point on the initial loss: the keypad takes the whole width */
+.sk-pad.solo{ grid-template-columns: repeat(3, 1fr); }
+.sk-three.air{ grid-template-columns: 1fr 1fr; }
+
+/* point type */
+.sk-kinds-label{ margin-top: 2px; }
+.sk-kinds{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.sk-sheet .sk-kinds button{ min-height: 42px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--card-bg); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; line-height: 1.15; cursor: pointer; }
+.sk-sheet .sk-kinds button.on{ background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.sk-sheet .sk-kinds button:disabled{ opacity: .4; cursor: default; }
+.sk-std-note{ grid-column: 1 / -1; font-size: 12px; color: var(--ink-soft); }

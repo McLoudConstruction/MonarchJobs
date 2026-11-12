@@ -12,14 +12,14 @@ import {
 } from '@/lib/sketch';
 import { drawPlan, areaStyle, WATER_LINE } from '@/lib/sketchDraw';
 import {
-  MAX_MOISTURE, MAX_READINGS, MOISTURE_COLORS, MOISTURE_MATERIALS, MOISTURE_SURFACES, MOISTURE_TYPES, STATUS_TEXT, TREND_MARK,
-  airText, fmtReading, goalFor, gpp, hitMoisture, makeMoisture, makeReading, moistureCounts, moistureStatus, nextNumber, padEdit, parseReading, sortedReadings, valueText,
+  MAX_MOISTURE, MAX_READINGS, MOISTURE_COLORS, MOISTURE_MATERIALS, MOISTURE_SURFACES, MOISTURE_TYPES, POINT_KINDS, TREND_MARK,
+  airText, fmtReading, goalFor, gpp, hitMoisture, makeMoisture, makeReading, measuredStandard, moistureCounts, moistureStatus, nextNumber, padEdit, parseReading, sortedReadings, valueText,
 } from '@/lib/moisture';
 import { OBJECT_TYPES, OBJECT_GROUPS, MAX_OBJECTS, makeObject, objectCounts, isInches, inchesText, parseInches } from '@/lib/objectTypes';
 import { placeObject, hitObject, nearestWall, wallSpan } from '@/lib/sketchObjects';
 import { jpegToPdf } from '@/lib/pdfImage';
 import { moistureLogCsv, moistureSummaryCsv } from '@/lib/moistureLog';
-import { addDay, atForDay, countOnDay, dateText, dayName, dayView, removeDay, todayKey } from '@/lib/moistureDays';
+import { addDay, atForDay, countOnDay, dateText, dayName, dayView, pointTimeline, removeDay, todayKey } from '@/lib/moistureDays';
 import { areaLayers } from '@/lib/moistureLayers';
 import { hitComment, tagsFromText, segments, timeAgo, logEntry, withLog, canDeleteComment, activity, MAX_COMMENTS, MAX_REPLIES } from '@/lib/sketchComments';
 import MentionBox from '@/components/job/MentionBox';
@@ -290,7 +290,15 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   useEffect(() => { schedule(); setDimErr(''); }, [sel, schedule]);
   useEffect(() => { schedule(); }, [surfaceView, moistLabels, hidden, showPins, focusId, dayId, schedule]);
   const moistSelId = sel?.kind === 'moisture' ? sel.id : null;
-  useEffect(() => { setRd({ val: '', note: '' }); setRdErr(''); setNumField('val'); }, [moistSelId]);
+  const prevKindRef = useRef('reading');
+  useEffect(() => {
+    setRd({ val: '', note: '' });
+    setRdErr('');
+    const k = (planRef.current.moisture.find((m) => m.id === moistSelId) || {}).kind || 'reading';
+    setNumField(k === 'air' ? 'rh' : 'val');
+    if (k === 'air' || prevKindRef.current === 'air') setAir({ rh: '', temp: '' }); // the air outside is not the air in the room: it does not carry over
+    prevKindRef.current = k;
+  }, [moistSelId]);
   // the phone keyboard slides over the bottom of the page: measure how much, so the entry sheet can sit above it
   useEffect(() => {
     const vv = typeof window !== 'undefined' ? window.visualViewport : null;
@@ -1197,6 +1205,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     const i = list.findIndex((m) => m.id === id);
     for (let k = 1; k < list.length; k += 1) {
       const c = list[(i + k) % list.length];
+      if (c.kind === 'standard') continue; // a dry standard is read once, not every day
       if (!c.readings.some((r) => r.day === dId)) return c;
     }
     return null;
@@ -1239,24 +1248,30 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     e?.preventDefault();
     const m = selRef.current?.kind === 'moisture' ? findSel(planRef.current, selRef.current) : null;
     if (!m) return;
-    const val = parseReading(rd.val);
-    if (!Number.isFinite(val) || val > 100) { setRdErr('Enter the reading as a number from 0 to 100.'); return; }
+    const kind = m.kind || 'reading';
     const rhT = air.rh.trim();
     const tempT = air.temp.trim();
     const rhV = rhT === '' ? null : parseReading(rhT);
     if (rhV !== null && (!Number.isFinite(rhV) || rhV > 100)) { setRdErr('Humidity is a number from 0 to 100.'); return; }
     const tempV = tempT === '' ? null : Number(tempT);
     if (tempV !== null && (!Number.isFinite(tempV) || tempV < -20 || tempV > 200)) { setRdErr('Temperature is a number in degrees F.'); return; }
+    let val = null; // an air point has no moisture value, only humidity and temperature
+    if (kind === 'air') {
+      if (rhV === null && tempV === null) { setRdErr('Enter the humidity or the temperature.'); return; }
+    } else {
+      val = parseReading(rd.val);
+      if (!Number.isFinite(val) || val > 100) { setRdErr('Enter the reading as a number from 0 to 100.'); return; }
+    }
     if (m.readings.length >= MAX_READINGS) { setRdErr(`A point holds up to ${MAX_READINGS} readings.`); return; }
     let pl = planRef.current;
     let dId = dayRef.current;
-    if (!dId) { const r = addDay(pl); pl = r.plan; dId = r.id; setDayId(r.id); } // the first reading starts Day 1, today
+    if (!dId) { const r = addDay(pl); pl = r.plan; dId = r.id; setDayId(r.id); } // the first reading starts the initial loss, today
     const nxt = andNext ? nextToRead(m.id, dId) : null;
     const rday = pl.days.find((d) => d.id === dId);
     commit({ ...pl, moisture: pl.moisture.map((x) => (x.id === m.id ? { ...x, readings: [...x.readings, makeReading({ val, rh: rhV, temp: tempV, note: rd.note, by: meRef.current, day: dId, at: atForDay(rday) })] } : x)) });
     setRd({ val: '', note: '' });
     setRdErr('');
-    setNumField('val');
+    setNumField(kind === 'air' ? 'rh' : 'val');
     if (nxt) gotoPoint(nxt.id); // rechecking: straight on to the next spot
     else closePopup(); // ready for the next spot
   }
@@ -1427,6 +1442,13 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     } else commit({ ...pl, moisture: pl.moisture.filter((m) => m.id !== f.id) });
     if (selRef.current && selRef.current.id === f.id) setSel(null);
   }, [sheetOpen, mp?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the day strip in the sheet keeps the day being logged in view
+  const stripRef = useRef(null);
+  useEffect(() => {
+    const el = stripRef.current;
+    const on = el && el.querySelector('.sk-sd.on');
+    if (el && on) el.scrollLeft = Math.max(0, on.offsetLeft - (el.clientWidth - on.offsetWidth) / 2);
+  }, [sheetOpen, mp?.id, dayId, plan.days.length]); // eslint-disable-line react-hooks/exhaustive-deps
   // keys go to the sheet: focus it so a keyboard can type the reading
   useEffect(() => {
     if (!sheetOpen || !armed) return;
@@ -1925,6 +1947,8 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
           const mpv = dayPlan.moisture.find((x) => x.id === mp.id) || mp;
           const st = moistureStatus(mpv, goal);
           const toRead = nextToRead(mp.id, dayRef.current);
+          const kind = mp.kind || 'reading';
+          const isAir = kind === 'air';
           const color = MOISTURE_COLORS[st.state];
           const short = MOISTURE_TYPES[mp.type].short;
           const roomHere = hitRoom(plan, mp.x, mp.y);
@@ -1934,9 +1958,29 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
           const nextPt = neighbour(mp.id, 1);
           const airGpp = gpp(air.temp.trim() === '' ? null : air.temp, air.rh.trim() === '' ? null : air.rh);
           const canDel = (r) => isStaffOffice || (!!r.by?.id && r.by.id === me.id);
-          const canSave = !!rd.val.trim();
-          const creating = !!freshRef.current && freshRef.current.id === mp.id && !mp.readings.length; // just dropped on the initial loss: no arrows, Save instead of close
+          const canSave = isAir ? !!(air.rh.trim() || air.temp.trim()) : !!rd.val.trim();
+          const creating = !!freshRef.current && freshRef.current.id === mp.id && !mp.readings.length; // just dropped on the initial loss: Save and close instead of arrows and X
           const setOpt = (patch) => { patchMoisture(mp.id, patch); setMoist((m) => ({ ...m, ...patch })); }; // the next point starts out like this one
+          const kindLocked = (k) => mp.readings.length > 0 && (k === 'air') !== isAir; // readings with a moisture value can't become air readings, or the other way round
+          const setKind = (k) => {
+            if (k === kind || kindLocked(k)) return;
+            patchMoisture(mp.id, { kind: k });
+            setNumField(k === 'air' ? 'rh' : 'val');
+            if (k === 'air' || isAir) setAir({ rh: '', temp: '' });
+          };
+          // the days of this point side by side: what was read on each, and where it stood
+          const tl = pointTimeline(plan, mp);
+          const cells = tl.length ? tl : [{ day: { id: 'new' }, name: 'Initial loss', date: todayKey(), reading: null, state: 'none', trend: null }];
+          const curId = curDay ? curDay.id : cells[0].day.id;
+          const cellText = (c) => {
+            const typed = c.day.id === curId ? (isAir ? (air.rh.trim() ? `${air.rh}% RH` : air.temp.trim() ? `${air.temp}°F` : '') : rd.val.trim() ? `${rd.val}${short}` : '') : '';
+            if (typed) return { text: typed, live: true };
+            const r = c.reading;
+            if (!r) return { text: '—' };
+            const t = r.val != null ? `${fmtReading(r.val)}${short}` : r.rh != null ? `${fmtReading(r.rh)}% RH` : `${fmtReading(r.temp)}°F`;
+            return { text: `${t}${c.trend ? ` ${TREND_MARK[c.trend]}` : ''}` };
+          };
+          const sub = [roomHere ? roomTitle(roomHere) : 'No room', kind !== 'reading' ? POINT_KINDS[kind] : goal != null ? `dry at ${fmtReading(goal)}${short}` : 'no dry standard yet'].join(' · ');
           const sheet = (
             <div className="sk-sheet" ref={popRef} tabIndex={-1} role="dialog" aria-label={`Moisture point ${mp.n}`} onKeyDown={sheetKey}
               style={phoneSheet ? { pointerEvents: armed ? 'auto' : 'none' } : { bottom: kbPad, maxHeight: `calc(100% - ${kbPad + 8}px)`, pointerEvents: armed ? 'auto' : 'none' }}>
@@ -1944,10 +1988,10 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                 {!creating && <button type="button" className="sk-nav" aria-label="Previous point" disabled={!prevPt} onClick={() => prevPt && gotoPoint(prevPt.id)}>{'‹'}</button>}
                 <div className="sk-sheet-title">
                   <strong><span className="sk-dot" style={{ background: color }} />Point {mp.n}</strong>
-                  <span className="muted">{roomHere ? roomTitle(roomHere) : 'No room'}</span>
+                  <span className="muted">{sub}</span>
                 </div>
                 {creating ? (
-                  <button type="button" className="sk-headsave" disabled={!canSave} onClick={() => addReading(null, false)}>Save</button>
+                  <button type="button" className="sk-headsave" disabled={!canSave} onClick={() => addReading(null, false)}>Save and close</button>
                 ) : (
                   <>
                     <button type="button" className="sk-nav" aria-label="Next point" disabled={!nextPt} onClick={() => nextPt && gotoPoint(nextPt.id)}>{'›'}</button>
@@ -1955,47 +1999,68 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                   </>
                 )}
               </div>
-              <div className="sk-last" style={{ borderLeftColor: color }}>
-                <strong>{curDay ? `${dayName(days, curDay.id)} · ${dateText(curDay.date)}` : 'Today'}</strong>
-                {st.latest
-                  ? <> · <strong style={{ color }}>{STATUS_TEXT[st.state]}</strong> {valueText(mp, st.latest)}{st.trend ? ` ${TREND_MARK[st.trend]}` : ''}{st.prev && <span className="muted"> (was {valueText(mp, st.prev)})</span>}</>
-                  : <> · <strong style={{ color }}>Not read yet</strong>{st.last && <span className="muted"> · last {valueText(mp, st.last)} on {dayName(days, st.last.day) || whenText(st.last.at)}</span>}</>}
-                {goal != null && <span className="muted"> · dry at {fmtReading(goal)}{short}</span>}
+              <div className="sk-strip" role="tablist" aria-label="Readings by day" ref={stripRef}>
+                {cells.map((c) => {
+                  const cur = c.day.id === curId;
+                  const v = cellText(c);
+                  return (
+                    <button key={c.day.id} type="button" role="tab" aria-selected={cur} className={`sk-sd${cur ? ' on' : ''}`} onClick={() => { if (c.day.id !== 'new') setDayId(c.day.id); }}>
+                      <span className="sk-sd-day">{c.name}</span>
+                      <span className="sk-sd-date">{dateText(c.date)}</span>
+                      <span className={`sk-sd-val${v.live ? ' live' : ''}`} style={v.live ? undefined : { color: MOISTURE_COLORS[c.state] }}>{v.text}</span>
+                    </button>
+                  );
+                })}
               </div>
-              <div className="sk-three">
-                <NumBox big label="Reading" value={rd.val} placeholder="0.0" unit={short.trim()} active={numField === 'val'} onPick={() => setNumField('val')} />
-                <NumBox label="RH %" value={air.rh} placeholder={'—'} active={numField === 'rh'} onPick={() => setNumField('rh')} />
-                <NumBox label={'Temp °F'} value={air.temp} placeholder={'—'} unit={airGpp != null ? `${Math.round(airGpp)} gpp` : ''} active={numField === 'temp'} onPick={() => setNumField('temp')} />
-              </div>
+              {isAir ? (
+                <div className="sk-three air">
+                  <NumBox big label="RH %" value={air.rh} placeholder={'—'} active={numField === 'rh'} onPick={() => setNumField('rh')} />
+                  <NumBox big label={'Temp °F'} value={air.temp} placeholder={'—'} unit={airGpp != null ? `${Math.round(airGpp)} gpp` : ''} active={numField === 'temp'} onPick={() => setNumField('temp')} />
+                </div>
+              ) : (
+                <div className="sk-three">
+                  <NumBox big label="Reading" value={rd.val} placeholder="0.0" unit={short.trim()} active={numField === 'val'} onPick={() => setNumField('val')} />
+                  <NumBox label="RH %" value={air.rh} placeholder={'—'} active={numField === 'rh'} onPick={() => setNumField('rh')} />
+                  <NumBox label={'Temp °F'} value={air.temp} placeholder={'—'} unit={airGpp != null ? `${Math.round(airGpp)} gpp` : ''} active={numField === 'temp'} onPick={() => setNumField('temp')} />
+                </div>
+              )}
               {rdErr && <div className="msg err" style={{ margin: 0 }}>{rdErr}</div>}
-              <div className={`sk-pad${toRead ? ' two' : ''}`} role="group" aria-label="Number pad">
+              <div className={`sk-pad${creating ? ' solo' : toRead ? ' two' : ''}`} role="group" aria-label="Number pad">
                 {['7', '8', '9'].map((k) => <button key={k} type="button" className="sk-key" onClick={() => padType(k)}>{k}</button>)}
                 {['4', '5', '6'].map((k) => <button key={k} type="button" className="sk-key" onClick={() => padType(k)}>{k}</button>)}
                 {['1', '2', '3'].map((k) => <button key={k} type="button" className="sk-key" onClick={() => padType(k)}>{k}</button>)}
                 <button type="button" className="sk-key" aria-label="Decimal point" onClick={() => padType('.')}>.</button>
                 <button type="button" className="sk-key" onClick={() => padType('0')}>0</button>
                 <button type="button" className="sk-key fn" aria-label="Backspace" onClick={() => padType('back')}>{'⌫'}</button>
-                <button type="button" className={`sk-save${toRead ? ' alt' : ''}`} disabled={!canSave} onClick={() => addReading(null, false)}>Save</button>
-                {toRead && <button type="button" className="sk-save next" aria-label="Save and go to the next point" disabled={!canSave} onClick={() => addReading(null, true)}><span>Save &amp; next</span><b className="sk-arrow" aria-hidden="true">{'›'}</b></button>}
+                {!creating && <button type="button" className={`sk-save${toRead ? ' alt' : ''}`} disabled={!canSave} onClick={() => addReading(null, false)}>Save</button>}
+                {!creating && toRead && <button type="button" className="sk-save next" aria-label="Save and go to the next point" disabled={!canSave} onClick={() => addReading(null, true)}><span>Save &amp; next</span><b className="sk-arrow" aria-hidden="true">{'›'}</b></button>}
               </div>
-              <div className="sk-setup">
-                <label className="sk-opt">Surface
-                  <select value={mp.surface} onChange={(e) => setOpt({ surface: e.target.value })}>
-                    {Object.entries(MOISTURE_SURFACES).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-                  </select>
-                </label>
-                <label className="sk-opt">Material
-                  <select value={mp.material} onChange={(e) => setOpt({ material: e.target.value })}>
-                    {Object.entries(MOISTURE_MATERIALS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-                  </select>
-                </label>
-                <label className="sk-opt">Meter reads
-                  <select value={mp.type} onChange={(e) => setOpt({ type: e.target.value })}>
-                    {Object.entries(MOISTURE_TYPES).map(([k, t]) => <option key={k} value={k}>{t.short.trim()}</option>)}
-                  </select>
-                </label>
+              <div className="sk-opt-label sk-kinds-label">Point type</div>
+              <div className="sk-kinds" role="group" aria-label="Point type">
+                {Object.entries(POINT_KINDS).map(([k, label]) => (
+                  <button key={k} type="button" className={kind === k ? 'on' : ''} aria-pressed={kind === k} disabled={kindLocked(k)} title={kindLocked(k) ? 'This point already has readings of another kind' : undefined} onClick={() => setKind(k)}>{label}</button>
+                ))}
               </div>
-              {mp.surface === 'wall' && (
+              {!isAir && (
+                <div className="sk-setup">
+                  <label className="sk-opt">Surface
+                    <select value={mp.surface} onChange={(e) => setOpt({ surface: e.target.value })}>
+                      {Object.entries(MOISTURE_SURFACES).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                    </select>
+                  </label>
+                  <label className="sk-opt">Material
+                    <select value={mp.material} onChange={(e) => setOpt({ material: e.target.value })}>
+                      {Object.entries(MOISTURE_MATERIALS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                    </select>
+                  </label>
+                  <label className="sk-opt">Meter reads
+                    <select value={mp.type} onChange={(e) => setOpt({ type: e.target.value })}>
+                      {Object.entries(MOISTURE_TYPES).map(([k, t]) => <option key={k} value={k}>{t.short.trim()}</option>)}
+                    </select>
+                  </label>
+                </div>
+              )}
+              {!isAir && mp.surface === 'wall' && (
                 <label className="sk-field">Height up the wall
                   <input key={`${mp.id}-h-${mp.h}`} inputMode="decimal" autoComplete="off" defaultValue={mp.h == null ? '' : fmtFeet(mp.h)} placeholder="2'"
                     onBlur={(e) => { const t = e.target.value.trim(); if (t === '') { if (mp.h != null) patchMoisture(mp.id, { h: null }); return; } const ft = parseFeet(t); if (Number.isFinite(ft) && ft <= 30) { if (ft !== mp.h) patchMoisture(mp.id, { h: Math.round(ft * 100) / 100 }); } else e.target.value = mp.h == null ? '' : fmtFeet(mp.h); }}
@@ -2014,10 +2079,10 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                       <ul className="sk-readings" aria-label="Readings at this point, newest first">
                         {ordered.map((r, i) => {
                           const before = i > 0 ? ordered[i - 1] : null;
-                          const tr = before ? (Math.abs(r.val - before.val) < 0.05 ? 'flat' : r.val < before.val ? 'down' : 'up') : null;
+                          const tr = before && before.val != null && r.val != null ? (Math.abs(r.val - before.val) < 0.05 ? 'flat' : r.val < before.val ? 'down' : 'up') : null;
                           return (
                             <li key={r.id}>
-                              <div><strong>{valueText(mp, r)}</strong>{tr ? ` ${TREND_MARK[tr]}` : ''} <span className="muted">{airText(r)}</span></div>
+                              <div><strong>{valueText(mp, r)}</strong>{tr ? ` ${TREND_MARK[tr]}` : ''} {r.val != null && <span className="muted">{airText(r)}</span>}</div>
                               <div className="muted">{dayName(days, r.day) ? `${dayName(days, r.day)} · ` : ''}{whenText(r.at)}{r.by?.name ? ` · ${r.by.name}` : ''}{r.note ? ` · ${r.note}` : ''}</div>
                               {canDel(r) && <button type="button" className="sk-x" aria-label="Delete this reading" onClick={() => patchMoisture(mp.id, { readings: mp.readings.filter((x) => x.id !== r.id) })}>{'×'}</button>}
                             </li>
@@ -2026,17 +2091,19 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                       </ul>
                     </>
                   )}
-                  <label className="sk-field">Dry standard for this point
-                    <input key={`${mp.id}-g-${mp.goal}-${mp.material}-${mp.type}`} inputMode="decimal" autoComplete="off" defaultValue={mp.goal == null ? '' : fmtReading(mp.goal)}
-                      placeholder={std && std.type === mp.type ? `job standard: ${fmtReading(std.val)}` : 'none'}
-                      onBlur={(e) => {
-                        const t = e.target.value.trim();
-                        if (t === '') { if (mp.goal != null) patchMoisture(mp.id, { goal: null }); return; }
-                        const v = parseReading(t);
-                        if (Number.isFinite(v) && v <= 100) { if (v !== mp.goal) patchMoisture(mp.id, { goal: v }); } else e.target.value = mp.goal == null ? '' : fmtReading(mp.goal);
-                      }}
-                      onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
-                  </label>
+                  {kind === 'reading' && (
+                    <label className="sk-field">Dry standard for this point
+                      <input key={`${mp.id}-g-${mp.goal}-${mp.material}-${mp.type}`} inputMode="decimal" autoComplete="off" defaultValue={mp.goal == null ? '' : fmtReading(mp.goal)}
+                        placeholder={std && std.type === mp.type ? `job standard: ${fmtReading(std.val)}` : 'none'}
+                        onBlur={(e) => {
+                          const t = e.target.value.trim();
+                          if (t === '') { if (mp.goal != null) patchMoisture(mp.id, { goal: null }); return; }
+                          const v = parseReading(t);
+                          if (Number.isFinite(v) && v <= 100) { if (v !== mp.goal) patchMoisture(mp.id, { goal: v }); } else e.target.value = mp.goal == null ? '' : fmtReading(mp.goal);
+                        }}
+                        onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
+                    </label>
+                  )}
                   <div className="sk-actions sk-actions-plain">
                     <button type="button" className="secondary" onClick={() => { setMoveId(mp.id); setPopup(null); }}>Move pin</button>
                     <button type="button" className="danger" onClick={() => { if (!mp.readings.length || window.confirm(`Delete point ${mp.n} and its ${mp.readings.length} reading${mp.readings.length === 1 ? '' : 's'}?`)) removeSelected(); }}>Delete point</button>
@@ -2056,7 +2123,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
         <div className="sketch-modal" role="presentation" onPointerDown={(e) => { if (e.target === e.currentTarget) setStdOpen(false); }}>
           <div className="sketch-modal-card sk-std" role="dialog" aria-label="Dry standards">
             <div className="sketch-pop-head"><strong>Dry standards for this sketch</strong><button type="button" className="sk-x" aria-label="Close" onClick={() => setStdOpen(false)}>{'\u00d7'}</button></div>
-            <p className="muted" style={{ margin: 0 }}>The reading of each material in an unaffected area. A point is dry when its latest reading is at or under its standard. A point can have its own standard under Point details.</p>
+            <p className="muted" style={{ margin: 0 }}>The reading of each material in an unaffected area. A point is dry when its latest reading is at or under its standard. A point can have its own standard under More in its sheet. Dry standard points on the plan are measured and used first.</p>
             <div className="sk-std-list">
               {Object.entries(MOISTURE_MATERIALS).map(([k, label]) => {
                 const st = plan.standards[k];
@@ -2069,6 +2136,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                     <select aria-label={`${label} reading type`} value={st ? st.type : 'mc'} disabled={!st} onChange={(e) => setStandard(k, fmtReading(st.val), e.target.value)}>
                       {Object.entries(MOISTURE_TYPES).map(([tk, t]) => <option key={tk} value={tk}>{t.label}</option>)}
                     </select>
+                    {Object.entries(MOISTURE_TYPES).map(([tk, t]) => { const mv = measuredStandard(plan, k, tk); return mv == null ? null : <div key={tk} className="sk-std-note">Measured {fmtReading(mv)}{t.short} at the dry standard points: used for {label.toLowerCase()} points</div>; })}
                   </div>
                 );
               })}
@@ -2095,7 +2163,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
         {plan.objects.length > 0 && <> · <span title={objectCounts(plan).map((c) => `${c.count} ${c.label.toLowerCase()}`).join(', ')}>{plan.objects.length} object{plan.objects.length === 1 ? '' : 's'}</span></>}
         {mode === 'moisture' && plan.moisture.length > 0 && (() => {
           const c = moistureCounts(dayPlan);
-          return <> · <strong>{c.points} moisture point{c.points === 1 ? '' : 's'}</strong>{c.wet > 0 && <> · <strong style={{ color: MOISTURE_COLORS.wet }}>{c.wet} wet</strong></>}{c.dry > 0 && <> · <strong style={{ color: MOISTURE_COLORS.dry }}>{c.dry} dry</strong></>}{c.none > 0 && <> · <strong>{c.none} to read</strong></>}</>;
+          return <>{c.points > 0 && <> · <strong>{c.points} moisture point{c.points === 1 ? '' : 's'}</strong></>}{c.standards > 0 && <> · <strong style={{ color: MOISTURE_COLORS.standard }}>{c.standards} dry standard{c.standards === 1 ? '' : 's'}</strong></>}{c.air > 0 && <> · <strong style={{ color: MOISTURE_COLORS.air }}>{c.air} air point{c.air === 1 ? '' : 's'}</strong></>}{c.wet > 0 && <> · <strong style={{ color: MOISTURE_COLORS.wet }}>{c.wet} wet</strong></>}{c.dry > 0 && <> · <strong style={{ color: MOISTURE_COLORS.dry }}>{c.dry} dry</strong></>}{c.none > 0 && <> · <strong>{c.none} to read</strong></>}</>;
         })()}
         {plan.sources.length > 0 && <> · <strong style={{ color: kindDot('source') }}>{plan.sources.length} source{plan.sources.length === 1 ? '' : 's'} of loss</strong></>}
         <span className="muted sk-hint"> · {tool === 'area' ? AREA_HINTS[areaKind] : HINTS[tool]}</span>
