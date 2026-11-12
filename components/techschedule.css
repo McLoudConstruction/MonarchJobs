@@ -1,0 +1,80 @@
+/* Technician schedule on a phone: a day as a vertical timeline. The page scrolls like time. */
+
+/* the page frame clips overflow, which would stop the header from sticking to the scrolling area */
+.shell-content:has(.tday) .page { overflow: visible; }
+
+.tday-head { position: sticky; top: 0; z-index: 10; margin: 0 -14px; padding: 10px 14px 8px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.tday-row { display: flex; align-items: center; gap: 6px; }
+.tday-arrow { flex: none; width: 38px; height: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 8px; background: var(--card-bg); color: var(--ink); font-size: 24px; line-height: 1; cursor: pointer; }
+.tday-arrow:active { background: var(--panel); }
+.tday-title { flex: 1; min-width: 0; line-height: 1.25; padding: 0 2px; }
+.tday-title strong { display: block; font-size: 15.5px; color: var(--heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tday-title span { display: block; font-size: 12px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tday-link { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--accent-text); cursor: pointer; }
+.tday-seg { margin-bottom: 0; flex: none; }
+.tday-seg button { padding: 9px 11px; }
+
+.tday-strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 8px; }
+.tday-chip { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 0 3px; border: 1px solid var(--line); border-radius: 8px; background: var(--card-bg); color: var(--ink-soft); font: inherit; cursor: pointer; min-width: 0; }
+.tday-chip small { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.tday-chip b { font-size: 16px; line-height: 1.2; color: var(--ink); }
+.tday-chip .dots { display: flex; gap: 2px; height: 5px; margin-top: 1px; }
+.tday-chip .dots i { width: 4px; height: 4px; border-radius: 50%; background: var(--accent-text); }
+.tday-chip.today b { color: var(--accent-text); }
+.tday-chip.on { background: var(--accent); border-color: var(--accent); }
+.tday-chip.on small, .tday-chip.on b { color: var(--accent-ink); }
+.tday-chip.on .dots i { background: var(--accent-ink); }
+
+.tday-empty { margin: 14px 0 0; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 8px; text-align: center; color: var(--ink-soft); font-size: 13px; }
+
+/* the timeline: hour labels on the left, a lane for appointments on the right */
+.tday-grid { position: relative; margin: 22px 0 24px; }
+.tday-hour { position: absolute; left: 0; width: 46px; text-align: right; transform: translateY(-50%); font-size: 11px; font-weight: 600; color: var(--ink-soft); }
+.tday-lane {
+  position: absolute; left: 54px; right: 0; top: 0; bottom: 0;
+  border-bottom: 1px solid var(--line);
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(color-mix(in srgb, var(--line) 45%, transparent) 1px, transparent 1px);
+  background-size: 100% var(--hour), 100% calc(var(--hour) / 2);
+}
+
+.tday-block {
+  position: absolute; box-sizing: border-box; overflow: hidden; display: block;
+  padding: 6px 9px; border-radius: 8px; border-left: 5px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--card-bg));
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.1);
+  color: var(--ink); text-decoration: none; font-size: 13px; line-height: 1.3;
+  -webkit-tap-highlight-color: transparent;
+}
+.tday-block:active { filter: brightness(0.96); }
+.tday-block > div, .tday-block > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tday-block .t { font-weight: 700; }
+.tday-block .who { font-weight: 600; }
+.tday-block .addr { color: var(--ink-soft); font-size: 12px; }
+.tday-block.short { display: flex; align-items: center; gap: 8px; padding: 2px 9px; }
+.tday-block.short .t { flex: none; }
+.tday-block.short .who { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.tday-block.s-on_the_way, .tweek-card.s-on_the_way { border-left-color: var(--warn-line); }
+.tday-block.s-started, .tweek-card.s-started { border-left-color: var(--ok); }
+.tday-block.s-finished, .tweek-card.s-finished { opacity: 0.55; border-left-color: var(--ink-soft); }
+.tday-block.flag, .tweek-card.flag { box-shadow: 0 0 0 2px var(--danger); }
+
+.tday-st { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 9px; font-size: 10.5px; font-weight: 700; line-height: 17px; vertical-align: 1px; background: var(--panel); color: var(--ink-soft); }
+.tday-st.s-on_the_way { background: var(--warn-bg); color: var(--warn-ink); }
+.tday-st.s-started { background: var(--ok-bg); color: var(--ok); }
+
+.tday-now { position: absolute; left: 0; right: 0; height: 0; border-top: 2px solid #d64545; z-index: 3; pointer-events: none; }
+.tday-now::after { content: ''; position: absolute; left: -4px; top: -5px; width: 8px; height: 8px; border-radius: 50%; background: #d64545; }
+.tday-now span { position: absolute; right: 100%; top: -9px; margin-right: 6px; padding: 0 5px; border-radius: 4px; background: #d64545; color: #fff; font-size: 10.5px; font-weight: 700; line-height: 16px; white-space: nowrap; }
+
+/* week list */
+.tweek { margin-top: 12px; }
+.tweek-day { margin-bottom: 14px; }
+.tweek-head { width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 6px 2px; margin-bottom: 4px; border: 0; border-bottom: 1px solid var(--line); background: none; font: inherit; color: var(--heading); font-weight: 700; font-size: 14px; cursor: pointer; text-align: left; }
+.tweek-head em { margin-left: 8px; padding: 1px 7px; border-radius: 9px; background: var(--accent); color: var(--accent-ink); font-size: 11px; font-style: normal; font-weight: 700; }
+.tweek-head small { color: var(--ink-soft); font-weight: 600; font-size: 12px; }
+.tweek-card { display: block; margin-bottom: 6px; padding: 8px 10px; border-left: 5px solid var(--accent); border-radius: 8px; background: color-mix(in srgb, var(--accent) 12%, var(--card-bg)); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06); color: var(--ink); text-decoration: none; font-size: 13px; line-height: 1.35; }
+.tweek-card .t { font-weight: 700; }
+.tweek-card .who { font-weight: 600; }
+.tweek-card .addr { color: var(--ink-soft); font-size: 12px; }

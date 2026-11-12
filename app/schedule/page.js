@@ -6,6 +6,8 @@ import AuthGate from '@/components/AuthGate';
 import { getSupabase } from '@/lib/supabaseClient';
 import { doubleBookedIds } from '@/lib/schedule';
 import WeekGrid from '@/components/WeekGrid';
+import TechSchedule from '@/components/TechSchedule';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { addDays, startOfDay, fmtDay, fmtTime, fmtDuration } from '@/lib/format';
 import { weekStartMonday } from '@/lib/weekGrid';
 import { staffName } from '@/lib/userDisplay';
@@ -118,6 +120,14 @@ function ScheduleInner({ staff }) {
   );
 }
 
+// Technicians on a phone get their own day timeline (only their visits, no tech filter);
+// everyone else, and desktops, keep the board and week timeline above.
+function ScheduleRouter({ staff }) {
+  const isMobile = useIsMobile();
+  if (isMobile && staff.role === 'tech') return <TechSchedule staff={staff} />;
+  return <ScheduleInner staff={staff} />;
+}
+
 export default function SchedulePage() {
-  return <AuthGate>{({ staff }) => <ScheduleInner staff={staff} />}</AuthGate>;
+  return <AuthGate>{({ staff }) => <ScheduleRouter staff={staff} />}</AuthGate>;
 }
