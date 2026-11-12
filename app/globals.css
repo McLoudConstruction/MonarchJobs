@@ -1825,3 +1825,6 @@ button.assign-btn:hover{ background: #d90000; border-color: #d90000; box-shadow:
   .moist-card .sketch-summary{ padding: 6px 14px 0; }
   .sketch[data-variant="moisture"]:not(.sketch-full) .sketch-stage{ height: calc(100vh - 190px); height: calc(100dvh - 190px); min-height: 360px; }
 }
+
+/* Moisture floorplan: no dragging the plan around; a vertical swipe on it scrolls the page, and a tap picks a room */
+.sketch[data-variant="moisture"] .sketch-canvas{ touch-action: pan-y; }

@@ -450,7 +450,22 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   // How far the floating toolbars reach into the drawing, so Fit uses only the space left over.
   // Fit the plan to the box. On the moisture floorplan a wide plan sits under the zoom buttons' column rather
   // than leaving a gap beside it, as long as it clears the buttons.
+  // On the moisture floorplan the plan sits at the top, right under the buttons, rather than centred in what is left
   function fitFor(W, H) {
+    const v = fitCore(W, H);
+    if (modeRef.current !== 'moisture') return v;
+    const fr = focusRef.current ? planRef.current.rooms.find((r) => r.id === focusRef.current) : null;
+    const b = fr ? polyBox(fr.pts) : planBounds(planRef.current);
+    if (!b) return v;
+    const ins = controlInset();
+    const row = !ins.right; // buttons stacked above the plan (phones)
+    if (!row) return v;
+    const want = (ins.top || 0) + 12;
+    const top = v.oy + b.minY * v.scale;
+    const bottom = v.oy + b.maxY * v.scale;
+    return bottom - top + want <= H - 8 ? { ...v, oy: v.oy + (want - top) } : v;
+  }
+  function fitCore(W, H) {
     const fr = focusRef.current ? planRef.current.rooms.find((r) => r.id === focusRef.current) : null;
     const b = fr ? polyBox(fr.pts) : planBounds(planRef.current);
     const ins = controlInset();
@@ -615,7 +630,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
       } else dragRef.current = null;
       return;
     }
-    if (t === 'moisture' && !layerRef.current.pins) { dragRef.current = { mode: 'pan', sx: p.x, sy: p.y, ox: v.ox, oy: v.oy }; return; } // points layer is off: just pan
+    if (t === 'moisture' && !layerRef.current.pins) { dragRef.current = null; return; } // points layer is off: taps do nothing
     if (t === 'moisture') { // a tap places a point or opens a pin; dragging pans, so a finger can move around without dropping points
       const fr = focusRef.current ? plan.rooms.find((r) => r.id === focusRef.current) : null;
       let hit = moveIdRef.current ? null : hitMoisture(plan, w.x, w.y, Math.max(tolFt, 18 / v.scale), surfaceRef.current);
@@ -810,8 +825,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
       const ny = snap(d.orig.y + (w.y - d.wy), 0.25);
       d.plan = { ...d.plan, sources: d.plan.sources.map((x) => (x.id === d.id ? { ...x, x: nx, y: ny } : x)) };
     } else if (d.mode === 'moist-tap') {
-      if (!d.moved && Math.hypot(p.x - d.sx, p.y - d.sy) > 8) d.moved = true; // a tap that wobbles is still a tap
-      if (d.moved) viewRef.current = { ...v, ox: d.ox + (p.x - d.sx), oy: d.oy + (p.y - d.sy) };
+      if (!d.moved && Math.hypot(p.x - d.sx, p.y - d.sy) > 8) d.moved = true; // a drag does nothing here (no panning); only a clean tap counts
     } else if (d.mode === 'missing') {
       const h = d.hit;
       const s = Math.max(0, Math.min(h.len, Math.round(((w.x - h.a[0]) * h.ux + (w.y - h.a[1]) * h.uy) / 0.25) * 0.25));
