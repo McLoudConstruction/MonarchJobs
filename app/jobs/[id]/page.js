@@ -18,7 +18,7 @@ import JobFab from '@/components/job/JobFab';
 import PhotoViewer from '@/components/job/PhotoViewer';
 import { UploadStatus } from '@/components/job/PhotoUi';
 import { usePhotoUploader } from '@/lib/usePhotoUploader';
-import { eventLabel, updateRecipients } from '@/lib/jobDocs';
+import { eventLabel, updateRecipients, INTERNAL_CATEGORIES } from '@/lib/jobDocs';
 import { fabActions, FAB_LABELS, FAB_HIDDEN_TABS } from '@/lib/jobFab';
 import { getSupabase } from '@/lib/supabaseClient';
 import { doubleBookedIds } from '@/lib/schedule';
@@ -231,13 +231,15 @@ function JobInner({ id, staff, token }) {
   const fabRun = {
     recheck: () => { openTab('moisture'); setMoistCmd({ type: 'recheck', n: Date.now() }); },
     sketch: () => openTab('sketch'),
+    otw: () => setOtwOpen(true),
     start: async () => {
       await apiFetch(`/api/visits/${dockVisit.id}/status`, token, { method: 'POST', body: JSON.stringify({ action: 'started' }) });
       await load();
     },
     complete: () => { openTab('updates'); setUpdCmd({ kind: 'internal', category: 'Completed Job', n: Date.now() }); },
+    internal: () => { openTab('updates'); setUpdCmd({ kind: 'internal', category: INTERNAL_CATEGORIES[0], n: Date.now() }); },
   };
-  const fabItems = fabKeys.map((key) => ({ key, label: FAB_LABELS[key], onClick: fabRun[key] }));
+  const fabItems = fabKeys.map((key) => ({ key, label: key === 'otw' && dockVisit?.status === 'on_the_way' ? 'Update ETA' : FAB_LABELS[key], onClick: fabRun[key] }));
   const contactName = [job.customer.first_name, job.customer.last_name].filter(Boolean).join(' ').trim();
   const anyFlag = visits.some((v) => flagged.has(v.id) && v.status !== 'cancelled');
 
