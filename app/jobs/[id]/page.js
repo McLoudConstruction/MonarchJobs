@@ -254,6 +254,8 @@ function JobInner({ id, staff, token }) {
         })}
       </div>
 
+      {tab === 'overview' && dockVisit && <VisitDock inline visit={dockVisit} token={token} onOtw={() => setOtwOpen(true)} onDone={load} />}
+
       {tab === 'overview' && (
         <div className="job-overview">
           <div className="card">
@@ -465,13 +467,6 @@ function JobInner({ id, staff, token }) {
           ))}
           {events.length === 0 && <p className="muted">No history yet.</p>}
         </div>
-      )}
-
-      {dockVisit && (
-        <>
-          <div className="dock-spacer mobile-only" />
-          <VisitDock visit={dockVisit} token={token} onOtw={() => setOtwOpen(true)} onDone={load} />
-        </>
       )}
 
       <input

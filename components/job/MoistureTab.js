@@ -97,8 +97,8 @@ export default function MoistureTab({ sketches, startId = null, onActive, staff 
   const noRooms = loaded && !loaded.plan.rooms.length;
 
   return (
-    <div className="card sketch-card">
-      <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+    <div className="card sketch-card moist-card">
+      <div className="row moist-head" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
         <div className="sketch-picker" role="tablist" aria-label="Floorplans">
           {sketches.map((s) => (
             <button key={s.id} type="button" role="tab" aria-selected={s.id === activeId} className={s.id === activeId ? 'on' : ''} onClick={() => setActiveId(s.id)}>{s.name}</button>

@@ -476,9 +476,11 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     const r = stage.getBoundingClientRect();
     const tl = stage.querySelector('.sketch-over-tl')?.getBoundingClientRect();
     const tr = stage.querySelector('.sketch-over-tr')?.getBoundingClientRect();
+    // on phones the moisture buttons are a row under the top bar rather than a column down the side: the plan goes below both
+    const row = !!tr && tr.width > tr.height * 1.5;
     return {
-      top: tl ? Math.max(0, tl.bottom - r.top) : 0,
-      right: tr ? Math.max(0, r.right - tr.left) : 0,
+      top: Math.max(tl ? Math.max(0, tl.bottom - r.top) : 0, row ? Math.max(0, tr.bottom - r.top + 4) : 0),
+      right: tr && !row ? Math.max(0, r.right - tr.left) : 0,
     };
   }
   function fit() {
@@ -1127,12 +1129,14 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     focusRef.current = rm.id;
     setFocusId(rm.id);
     fit();
+    setTimeout(fit, 80); // again once the Back button has made the top bar taller
   }
   function exitRoom() {
     setMoveId(null); setSel(null); setPopup(null);
     focusRef.current = null;
     setFocusId(null);
     fit();
+    setTimeout(fit, 80);
   }
   // the next point (after this one, wrapping round) with no reading yet on the day being logged
   function nextToRead(id, dId) {
@@ -1348,6 +1352,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
       {!full && headSlot && createPortal(headBtns, headSlot)}
 
       <div className="sketch-stage" ref={wrapRef}>
+        <div className={variant === 'moisture' ? 'sk-topstack' : 'sk-topfrag'}>
         <div className="sketch-over sketch-over-tl">
           {mode === 'draw' && (<div className="sketch-tools" role="toolbar" aria-label="Sketch tools">
             {TOOLS.map(([k, label, key]) => (k === 'object' ? (
@@ -1525,6 +1530,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
           <button type="button" className="sk-icon" onClick={() => zoomCenter(1.3)} aria-label="Zoom in" title="Zoom in"><PlusIcon /></button>
           <button type="button" className="sk-icon" onClick={() => zoomCenter(1 / 1.3)} aria-label="Zoom out" title="Zoom out"><MinusIcon /></button>
           <button type="button" className="sk-icon" onClick={fit} aria-label="Fit to screen" title="Fit to screen"><FitIcon /></button>
+        </div>
         </div>
 
         <canvas

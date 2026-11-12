@@ -5,9 +5,9 @@ import { apiFetch } from '@/lib/useAuth';
 import { fmtTime } from '@/lib/format';
 
 // The phone's action bar: one big button for the next step of the visit, pinned above the bottom
-// navigation where a thumb reaches it. On the way opens the minutes popup (onOtw); Start and Finish
+// navigation where a thumb reaches it (inline: sits in the page, under the tab bar). On the way opens the minutes popup (onOtw); Start and Finish
 // go straight to the server. Shown on phones only; desktops use the buttons in the page.
-export default function VisitDock({ visit, token, onOtw, onDone }) {
+export default function VisitDock({ visit, token, onOtw, onDone, inline = false }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
 
@@ -31,7 +31,7 @@ export default function VisitDock({ visit, token, onOtw, onDone }) {
   if (!status) return null;
 
   return (
-    <div className="visit-dock mobile-only">
+    <div className={`visit-dock mobile-only${inline ? ' inline' : ''}`}>
       <div className="dock-status">{status}</div>
       {msg && <div className="msg err" style={{ margin: '0 0 6px' }}>{msg}</div>}
       <div className="dock-buttons">
