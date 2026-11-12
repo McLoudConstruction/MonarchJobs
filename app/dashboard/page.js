@@ -22,7 +22,7 @@ function DashboardInner({ staff }) {
     const from = startOfDay(new Date());
     const to = addDays(from, 1);
     sb.from('job_visits')
-      .select('id,tech_id,starts_at,ends_at,duration_minutes,status,job:jobs(id,job_number,job_type,loss_summary,warning,customer:customers(display_name),address:addresses(street,city,gate_code,warnings))')
+      .select('id,tech_id,starts_at,ends_at,duration_minutes,status,job:jobs(id,job_number,job_type,loss_summary,customer:customers(display_name),address:addresses(street,city,gate_code))')
       .gte('starts_at', from.toISOString()).lt('starts_at', to.toISOString()).neq('status', 'cancelled').order('starts_at')
       .then(({ data }) => {
         const all = data || [];
@@ -64,7 +64,6 @@ function DashboardInner({ staff }) {
           <Link key={v.id} href={`/jobs/${v.job.id}`} className="list-item">
             <div className="title">{fmtTime(v.starts_at)} · {fmtDuration(v.duration_minutes)} · #{v.job.job_number} {v.job.customer?.display_name}</div>
             <div className="meta">{JOB_TYPES[v.job.job_type]} · {v.job.address?.street}, {v.job.address?.city}</div>
-            {(v.job.address?.warnings || v.job.warning) && <div className="badge warn">Warning: {[v.job.address?.warnings, v.job.warning].filter(Boolean).join(' / ')}</div>}
             {v.job.loss_summary && <div className="meta">{v.job.loss_summary}</div>}
           </Link>
         ))}
