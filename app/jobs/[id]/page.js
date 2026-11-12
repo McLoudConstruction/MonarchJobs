@@ -12,6 +12,7 @@ import VisitDock from '@/components/VisitDock';
 import EstimateCard from '@/components/EstimateCard';
 import PhotosTab from '@/components/job/PhotosTab';
 import SketchTab from '@/components/job/SketchTab';
+import MoistureTab from '@/components/job/MoistureTab';
 import UpdatesTab from '@/components/job/UpdatesTab';
 import PhotoViewer from '@/components/job/PhotoViewer';
 import { UploadStatus } from '@/components/job/PhotoUi';
@@ -28,6 +29,7 @@ const JOB_TABS = [
   ['details', 'Details'],
   ['photos', 'Photos'],
   ['sketch', 'Sketch'],
+  ['moisture', 'Moisture'],
   ['updates', 'Updates'],
   ['estimate', 'Estimate'],
   ['history', 'History'],
@@ -58,6 +60,7 @@ function JobInner({ id, staff, token }) {
   const [form, setForm] = useState(null);
   const [visitEdit, setVisitEdit] = useState(null); // visit object, or {} for new
   const [tab, setTab] = useState('overview');
+  const [sketchId, setSketchId] = useState(null); // the sketch both the Sketch and Moisture tabs have open
   const [photos, setPhotos] = useState([]);
   const [sketches, setSketches] = useState([]);
   const [updates, setUpdates] = useState([]);
@@ -394,8 +397,22 @@ function JobInner({ id, staff, token }) {
             onReload={reloadSketches}
             onAddRoomPhoto={addRoomPhoto}
             onViewPhotos={(list) => list.length && openViewer(list, list[0].id)}
+            startId={sketchId}
+            onActive={setSketchId}
+            onOpenMoisture={() => openTab('moisture')}
           />
         </>
+      )}
+
+      {tab === 'moisture' && (
+        <MoistureTab
+          sketches={sketches}
+          startId={sketchId}
+          onActive={setSketchId}
+          staff={staff}
+          staffList={staffList}
+          onOpenSketch={() => openTab('sketch')}
+        />
       )}
 
       {tab === 'updates' && (

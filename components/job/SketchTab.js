@@ -9,8 +9,10 @@ const SAVE_DELAY_MS = 1200;
 
 // Sketch tab: pick or add a sketch (for example one per floor), draw on it, and it saves itself.
 // Photos can be attached to a room: they are ordinary job photos that remember sketch + room.
-export default function SketchTab({ jobId, sketches, photos, isOffice, staff = null, staffList = [], logEvent, onReload, onAddRoomPhoto, onViewPhotos }) {
-  const [activeId, setActiveId] = useState(null);
+export default function SketchTab({ jobId, sketches, photos, isOffice, staff = null, staffList = [], logEvent, onReload, onAddRoomPhoto, onViewPhotos, startId = null, onActive, onOpenMoisture }) {
+  const [activeId, setActiveId] = useState(startId);
+  const [moving, setMoving] = useState(false);
+  const [roomCount, setRoomCount] = useState(0); // rooms on the sketch as it is now, drawn or not yet saved
   const [loaded, setLoaded] = useState(null); // { id, name, plan }
   const [loadErr, setLoadErr] = useState('');
   const [save, setSave] = useState({ state: 'idle', text: '' });
@@ -29,6 +31,8 @@ export default function SketchTab({ jobId, sketches, photos, isOffice, staff = n
     if (!sketches.length) { setActiveId(null); return; }
     if (!sketches.some((s) => s.id === activeId)) setActiveId(sketches[0].id);
   }, [sketches, activeId]);
+
+  useEffect(() => { if (activeId) onActive?.(activeId); }, [activeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const flush = useCallback(async () => {
     clearTimeout(timer.current);
@@ -80,7 +84,9 @@ export default function SketchTab({ jobId, sketches, photos, isOffice, staff = n
     if (error || !data) { setLoadErr(error?.message || 'Could not open this sketch.'); return; }
     stamps.current[data.id] = data.updated_at;
     setSave({ state: 'idle', text: '' });
-    setLoaded({ id: data.id, name: data.name, plan: normalizePlan(data.plan) });
+    const plan = normalizePlan(data.plan);
+    setRoomCount(plan.rooms.length);
+    setLoaded({ id: data.id, name: data.name, plan });
   }, []);
 
   useEffect(() => {
@@ -126,13 +132,25 @@ export default function SketchTab({ jobId, sketches, photos, isOffice, staff = n
     await onReload();
   }
 
+  // save what is pending, wait for it to land, then open the Moisture tab on this sketch
+  async function moveToMoisture() {
+    setMoving(true);
+    for (let i = 0; i < 40 && (pending.current || saving.current); i += 1) {
+      await flush();
+      if (saving.current) await new Promise((r) => setTimeout(r, 150));
+    }
+    setMoving(false);
+    if (save.state === 'conflict') return; // the sketch on screen was not saved; the banner says so
+    onOpenMoisture?.();
+  }
+
   const counts = loaded ? roomPhotoCounts(photos, loaded.id) : {};
 
   if (!sketches.length) {
     return (
       <div className="card">
         <h2>Sketch</h2>
-        <p className="hint">Draw the rooms for this job: any shape, with angled walls, wall breaks, sizes, notes and photos on each room. Mark where the water went with the Water tool and the wet square footage is worked out for each room. Place moisture points where readings were taken and log each recheck. Shortcuts: V select, R room, B wall break, C corner, W water, P moisture point.</p>
+        <p className="hint">Draw the rooms for this job: any shape, with angled walls, wall breaks, sizes, notes and photos on each room. Mark where the water went with the Water tool and the wet square footage is worked out for each room. When the sketch is done, move to the Moisture tab to log readings. Shortcuts: V select, R room, B wall break, C corner, W water.</p>
         {loadErr && <div className="msg err">{loadErr}</div>}
         <form className="row" onSubmit={addSketch}>
           <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Name, for example Main floor" maxLength={60} style={{ flex: 1, minWidth: 180 }} aria-label="Sketch name" />
@@ -182,7 +200,7 @@ export default function SketchTab({ jobId, sketches, photos, isOffice, staff = n
             staffList={staffList}
             onComment={(c) => logEvent('sketch_comment', { sketch: loaded.name, action: c.action, tagged: c.tags })}
             photoCounts={counts}
-            onChange={(plan) => queueSave(loaded.id, plan)}
+            onChange={(plan) => { setRoomCount(plan.rooms.length); queueSave(loaded.id, plan); }}
             onAddRoomPhoto={(room) => onAddRoomPhoto(loaded.id, room)}
             onViewRoomPhotos={(room) => onViewPhotos(photos.filter((p) => !p.archived_at && p.sketch_id === loaded.id && p.room_key === room.id))}
           />
@@ -190,6 +208,11 @@ export default function SketchTab({ jobId, sketches, photos, isOffice, staff = n
             <label className="muted" htmlFor="sk-name">Sketch name</label>
             <input id="sk-name" key={loaded.id + loaded.name} defaultValue={loaded.name} maxLength={60} onBlur={(e) => rename(e.target.value)} style={{ maxWidth: 240 }} />
             {isOffice && <button type="button" className="danger small" onClick={remove}>Delete sketch</button>}
+            {onOpenMoisture && (
+              <button type="button" className="primary sk-to-moisture" style={{ marginLeft: 'auto' }} disabled={moving || !roomCount || save.state === 'error' || save.state === 'conflict'} onClick={moveToMoisture} title={roomCount ? 'Saves the sketch and opens the floorplan for readings' : 'Draw at least one room first'}>
+                {moving ? 'Saving...' : 'Move to moisture \u2192'}
+              </button>
+            )}
           </div>
         </>
       )}

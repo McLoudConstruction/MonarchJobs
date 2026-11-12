@@ -19,6 +19,7 @@ import { OBJECT_TYPES, OBJECT_GROUPS, MAX_OBJECTS, makeObject, objectCounts, isI
 import { placeObject, hitObject, nearestWall, wallSpan } from '@/lib/sketchObjects';
 import { jpegToPdf } from '@/lib/pdfImage';
 import { moistureLogCsv } from '@/lib/moistureLog';
+import { areaLayers } from '@/lib/moistureLayers';
 import { hitComment, tagsFromText, segments, timeAgo, logEntry, withLog, canDeleteComment, activity, MAX_COMMENTS, MAX_REPLIES } from '@/lib/sketchComments';
 import MentionBox from '@/components/job/MentionBox';
 
@@ -54,7 +55,6 @@ const AREA_HINTS = {
   smoke: 'Draw around what the smoke reached. Choose the surfaces it is on.',
   source: 'Tap where the loss started.',
 };
-let rememberedMode = 'draw'; // the mode stays when the tech opens another sketch (each one remounts the canvas)
 const SURFACE_VIEWS = [['all', 'All surfaces'], ['floor', 'Floor'], ['wall', 'Walls'], ['ceiling', 'Ceiling']];
 const KIND_ORDER = ['water', 'source', 'growth', 'smoke'];
 const kindDot = (kind) => areaStyle({ kind, cat: 2 }).line;
@@ -123,7 +123,15 @@ const FitIcon = () => <Ico><rect x="3.5" y="3.5" width="9" height="9" rx="1" /><
 // The drawing board. Works in feet. The parent owns saving: onChange gets the whole new plan after
 // each finished change. The plan prop is read once (the parent remounts this with a new key to
 // switch sketches).
-export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts = {}, onAddRoomPhoto, onViewRoomPhotos, exportName = 'sketch', headSlot = null, staff = null, staffList = [], onComment = null }) {
+function LayersIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" aria-hidden="true" style={{ marginRight: 6, verticalAlign: '-3px' }}>
+      <path d="M12 3l9 5-9 5-9-5 9-5z" /><path d="M3 12.5l9 5 9-5" /><path d="M3 17l9 5 9-5" />
+    </svg>
+  );
+}
+
+export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, onChange, photoCounts = {}, onAddRoomPhoto, onViewRoomPhotos, exportName = 'sketch', headSlot = null, staff = null, staffList = [], onComment = null }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const rootRef = useRef(null);
@@ -142,7 +150,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   const countsRef = useRef(photoCounts);
   const rafRef = useRef(0);
 
-  const [tool, setTool] = useState(rememberedMode === 'moisture' ? 'moisture' : 'select');
+  const [tool, setTool] = useState(variant === 'moisture' ? 'moisture' : 'select');
   const [sel, setSel] = useState(null); // { kind: 'room' | 'mark' | 'area' | 'source', id, vi?, ei? }
   const [color, setColor] = useState(MARK_COLORS[0]);
   const [areaKind, setAreaKind] = useState('water'); // what the Affected areas tool is marking
@@ -158,7 +166,12 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   const [air, setAir] = useState({ rh: '', temp: '' }); // humidity and temperature carry over to the next reading: the air is the same
   const [rdErr, setRdErr] = useState('');
   const [stdOpen, setStdOpen] = useState(false); // the dry standards list
-  const [mode, setMode] = useState(rememberedMode); // 'draw' builds the sketch; 'moisture' logs readings on it and leaves the drawing alone
+  const mode = variant === 'moisture' ? 'moisture' : 'draw'; // the Sketch tab draws; the Moisture tab logs readings on a plain floorplan and leaves the drawing alone
+  const [hidden, setHidden] = useState(() => new Set()); // moisture floorplan: affected-area layers switched off
+  const [showPins, setShowPins] = useState(true);
+  const [layersOpen, setLayersOpen] = useState(false);
+  const layerRef = useRef({ hidden: new Set(), pins: true });
+  layerRef.current = { hidden, pins: showPins };
   const [moistOpen, setMoistOpen] = useState(false); // the options for the next point are unfolded
   const [moveId, setMoveId] = useState(null); // a moisture point waiting to be put somewhere else
   const [kb, setKb] = useState(0); // how far the phone keyboard covers the bottom of the sketch, in pixels
@@ -230,6 +243,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       affected: totalsRef.current.totals.rooms, draft: d?.draft || null, hover: d ? null : hoverRef.current,
       pending: toolRef.current === 'corner' ? lastCornerRef.current : null,
       meId: meRef.current.id, commentDraft: cmDraftRef.current,
+      ...(modeRef.current === 'moisture' ? { plain: true, grid: false, comments: false, hiddenAreas: layerRef.current.hidden, moisture: layerRef.current.pins } : { moisture: false }),
       ghost: d?.ghost || ((toolRef.current === 'object' || toolRef.current === 'missing') && !d ? ghostRef.current : null),
     });
   }, []);
@@ -240,7 +254,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
 
   useEffect(() => { countsRef.current = photoCounts; schedule(); }, [photoCounts, schedule]);
   useEffect(() => { schedule(); setDimErr(''); }, [sel, schedule]);
-  useEffect(() => { schedule(); }, [surfaceView, moistLabels, schedule]);
+  useEffect(() => { schedule(); }, [surfaceView, moistLabels, hidden, showPins, schedule]);
   const moistSelId = sel?.kind === 'moisture' ? sel.id : null;
   useEffect(() => { setRd({ val: '', note: '' }); setRdErr(''); }, [moistSelId]);
   // the phone keyboard slides over the bottom of the page: measure how much, so the entry sheet can sit above it
@@ -273,9 +287,10 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       c.height = Math.round(H * dpr);
       c.style.width = `${W}px`;
       c.style.height = `${H}px`;
+      const resized = sizeRef.current.W !== W || sizeRef.current.H !== H;
       sizeRef.current = { W, H };
-      if (!fittedRef.current) {
-        viewRef.current = fitView(planBounds(planRef.current), W, H, 24, controlInset());
+      if (!fittedRef.current || (resized && modeRef.current === 'moisture')) { // the floorplan always fits the screen it is on
+        viewRef.current = fitFor(W, H);
         fittedRef.current = true;
       }
       draw();
@@ -410,6 +425,27 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   }
   const zoomCenter = (f) => zoomAt(f, sizeRef.current.W / 2, sizeRef.current.H / 2);
   // How far the floating toolbars reach into the drawing, so Fit uses only the space left over.
+  // Fit the plan to the box. On the moisture floorplan a wide plan sits under the zoom buttons' column rather
+  // than leaving a gap beside it, as long as it clears the buttons.
+  function fitFor(W, H) {
+    const b = planBounds(planRef.current);
+    const ins = controlInset();
+    const base = fitView(b, W, H, 24, ins);
+    if (modeRef.current !== 'moisture' || !ins.right) return base;
+    const wrap = wrapRef.current;
+    const tr = wrap?.querySelector('.sketch-over-tr');
+    const clear = tr && wrap ? tr.getBoundingClientRect().bottom - wrap.getBoundingClientRect().top + 8 : 0;
+    // full width, but below the button column; keep whichever gives the bigger plan
+    const wide = fitView(b, W, H, 16, { top: Math.max(ins.top || 0, clear), right: 0 });
+    const free = fitView(b, W, H, 16, { top: ins.top || 0, right: 0 }); // same size, centred in the whole box
+    if (b && Math.abs(free.scale - wide.scale) < 0.01) {
+      const planTop = free.oy + b.minY * free.scale;
+      free.oy += Math.max(0, clear - planTop); // nudged down only as far as needed to clear the buttons
+      const planBottom = free.oy + b.maxY * free.scale;
+      if (planBottom <= H - 16) return free.scale > base.scale ? free : base;
+    }
+    return wide.scale > base.scale ? wide : base;
+  }
   function controlInset() {
     const stage = wrapRef.current;
     if (!stage) return {};
@@ -422,7 +458,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     };
   }
   function fit() {
-    viewRef.current = fitView(planBounds(planRef.current), sizeRef.current.W, sizeRef.current.H, 24, controlInset());
+    viewRef.current = fitFor(sizeRef.current.W, sizeRef.current.H);
     schedule();
   }
 
@@ -553,6 +589,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       } else dragRef.current = null;
       return;
     }
+    if (t === 'moisture' && !layerRef.current.pins) { dragRef.current = { mode: 'pan', sx: p.x, sy: p.y, ox: v.ox, oy: v.oy }; return; } // points layer is off: just pan
     if (t === 'moisture') { // a tap places a point or opens a pin; dragging pans, so a finger can move around without dropping points
       const hit = moveIdRef.current ? null : hitMoisture(plan, w.x, w.y, Math.max(tolFt, 18 / v.scale), surfaceRef.current);
       dragRef.current = { mode: 'moist-tap', sx: p.x, sy: p.y, ox: v.ox, oy: v.oy, wx: w.x, wy: w.y, hitId: hit ? hit.id : null, hadPopup, moved: false };
@@ -1019,7 +1056,6 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       if (fullRef.current) exitFull();
       return;
     }
-    if (k === 'p') { e.preventDefault(); switchMode(modeRef.current === 'draw' ? 'moisture' : 'draw'); return; }
     if (modeRef.current === 'draw' && KEYS[k]) { e.preventDefault(); setTool(KEYS[k]); setTextDraft(null); if (k === 'w') setAreaKind('water'); }
   };
   useEffect(() => {
@@ -1061,16 +1097,6 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     setMoveId(null);
     setSel({ kind: 'moisture', id });
     openPopup(0, 0);
-  }
-  function switchMode(next) {
-    if (next === modeRef.current) return;
-    rememberedMode = next;
-    setMode(next);
-    setTool(next === 'moisture' ? 'moisture' : 'select');
-    setSel(null); setPopup(null); setTextDraft(null); setCmDraft(null); setMoveId(null); setMoistOpen(false);
-    lastCornerRef.current = null;
-    if (next === 'moisture' && !fullRef.current && typeof window !== 'undefined' && window.innerWidth < 700) enterFull(); // phones get the whole screen
-    setTimeout(() => fit(), 150); // keep the drawing clear of the controls along the top
   }
   function addReading(e, andNext = false) {
     e?.preventDefault();
@@ -1118,7 +1144,9 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, W, H);
     const view = fitView(b, W, H, 60);
-    drawPlan(ctx, plan, view, { W, H, counts: {}, affected: totalsFor(plan).rooms, surface: 'all', grid: true, comments: false });
+    drawPlan(ctx, plan, view, modeRef.current === 'moisture'
+      ? { W, H, surface: 'all', plain: true, grid: false, comments: false, hiddenAreas: hidden, moisture: showPins, moistLabels: true }
+      : { W, H, counts: {}, affected: totalsFor(plan).rooms, surface: 'all', grid: true, comments: false, moisture: false });
     return out;
   }
   function download(blob, ext, suffix = '') {
@@ -1228,6 +1256,9 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     setMenuOpen(false);
   }
 
+  const layerList = areaLayers(plan);
+  const toggleLayer = (id) => setHidden((h) => { const n = new Set(h); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+
   const closeBtn = <button type="button" className="sk-x" aria-label="Close" onClick={closePopup}>{'\u00d7'}</button>;
 
   const headBtns = (
@@ -1238,16 +1269,12 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   );
 
   return (
-    <div className={`sketch${full ? ' sketch-full' : ''}${mode === 'moisture' ? ' mode-moisture' : ''}`} ref={rootRef} tabIndex={-1}>
+    <div className={`sketch${full ? ' sketch-full' : ''}${mode === 'moisture' ? ' mode-moisture' : ''}`} data-variant={variant} ref={rootRef} tabIndex={-1}>
       {(full || !headSlot) && <div className="sketch-head-inline">{headBtns}</div>}
       {!full && headSlot && createPortal(headBtns, headSlot)}
 
       <div className="sketch-stage" ref={wrapRef}>
         <div className="sketch-over sketch-over-tl">
-          <div className="sk-mode" role="tablist" aria-label="Sketch mode">
-            <button type="button" role="tab" aria-selected={mode === 'draw'} className={mode === 'draw' ? 'on' : ''} onClick={() => switchMode('draw')} title="Build the sketch">Draw</button>
-            <button type="button" role="tab" aria-selected={mode === 'moisture'} className={mode === 'moisture' ? 'on' : ''} onClick={() => switchMode('moisture')} title="Log moisture readings (P)">Moisture{plan.moisture.length ? ` (${plan.moisture.length})` : ''}</button>
-          </div>
           {mode === 'draw' && (<div className="sketch-tools" role="toolbar" aria-label="Sketch tools">
             {TOOLS.map(([k, label, key]) => (k === 'object' ? (
               <div key={k} className="sketch-menu">
@@ -1304,9 +1331,25 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
           </div>)}
           {mode === 'moisture' && !sheetOpen && (
             <div className="sk-moist-bar">
-              <button type="button" className="sk-next" aria-expanded={moistOpen} onClick={() => setMoistOpen(!moistOpen)}>
+              <div className="sk-bar-row">
+              <button type="button" className="sk-layers-btn" aria-expanded={layersOpen} onClick={() => { setLayersOpen(!layersOpen); setMoistOpen(false); }} title="Layers">
+                <LayersIcon />Layers{hidden.size ? ` (${layerList.length - hidden.size}/${layerList.length})` : ''}
+              </button>
+              <button type="button" className="sk-next" aria-expanded={moistOpen} onClick={() => { setMoistOpen(!moistOpen); setLayersOpen(false); }}>
                 New point: {MOISTURE_SURFACES[moist.surface]} · {MOISTURE_MATERIALS[moist.material]} · {MOISTURE_TYPES[moist.type].short.trim()}<span className="sk-caret" aria-hidden="true" />
               </button>
+              </div>
+              {layersOpen && (
+                <div className="sk-moist-opts sk-layers" role="group" aria-label="Layers">
+                  <label className="sk-layer locked"><input type="checkbox" checked readOnly disabled /><span className="sk-sw" style={{ background: '#fff', borderColor: '#2f4858' }} /><span className="sk-layer-name">Floorplan<small>rooms, doors, windows</small></span></label>
+                  {layerList.map((l) => (
+                    <label key={l.id} className="sk-layer"><input type="checkbox" checked={!hidden.has(l.id)} onChange={() => toggleLayer(l.id)} /><span className="sk-sw" style={{ background: l.color }} /><span className="sk-layer-name">{l.name}<small>{l.detail}</small></span></label>
+                  ))}
+                  <label className="sk-layer"><input type="checkbox" checked={showPins} onChange={() => setShowPins(!showPins)} /><span className="sk-sw pin" /><span className="sk-layer-name">Moisture points<small>{plan.moisture.length} point{plan.moisture.length === 1 ? '' : 's'}</small></span></label>
+                  {!layerList.length && <div className="muted" style={{ fontSize: 13 }}>Affected areas drawn on the Sketch tab show up here as layers.</div>}
+                  <div className="chips"><button type="button" onClick={() => setHidden(new Set())}>Show all</button><button type="button" onClick={() => setHidden(new Set(layerList.map((l) => l.id)))}>Hide areas</button></div>
+                </div>
+              )}
               {moistOpen && (
                 <div className="sk-moist-opts">
                   <div className="sk-opt-label">New points go on the</div>
@@ -1394,7 +1437,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
           onContextMenu={(e) => e.preventDefault()}
           aria-label="Sketch drawing area"
         />
-        {mode === 'moisture' && !plan.moisture.length && !sheetOpen && !moveId && <div className="sk-tip">Tap the sketch where you took a reading</div>}
+        {mode === 'moisture' && !plan.moisture.length && !sheetOpen && !moveId && <div className="sk-tip">Tap the plan to log a reading</div>}
         {moveId && (
           <div className="sk-movebar" role="status">
             <span>Tap where point {plan.moisture.find((m) => m.id === moveId)?.n} should go</span>
@@ -1771,7 +1814,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
             <div className="sketch-pop-head"><strong>Export sketch</strong><button type="button" className="sk-x" aria-label="Close" onClick={() => setExportOpen(false)}>{'\u00d7'}</button></div>
             <button type="button" className="secondary" onClick={() => exportAs('png')}>Export as PNG</button>
             <button type="button" className="secondary" onClick={() => exportAs('pdf')}>Export as PDF</button>
-            <button type="button" className="secondary" disabled={!plan.moisture.length} onClick={() => exportAs('csv')} title="Every reading at every point, oldest first">Moisture log (CSV)</button>
+            {mode === 'moisture' && <button type="button" className="secondary" disabled={!plan.moisture.length} onClick={() => exportAs('csv')} title="Every reading at every point, oldest first">Moisture log (CSV)</button>}
           </div>
         </div>
       )}
@@ -1781,7 +1824,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
           <span key={kd}> · <strong style={{ color: kindDot(kd) }}>{AREA_KINDS[kd]} {surfaceText(totals.total[kd])} sq ft</strong></span>
         ))}
         {plan.objects.length > 0 && <> · <span title={objectCounts(plan).map((c) => `${c.count} ${c.label.toLowerCase()}`).join(', ')}>{plan.objects.length} object{plan.objects.length === 1 ? '' : 's'}</span></>}
-        {plan.moisture.length > 0 && (() => {
+        {mode === 'moisture' && plan.moisture.length > 0 && (() => {
           const c = moistureCounts(plan);
           return <> · <strong>{c.points} moisture point{c.points === 1 ? '' : 's'}</strong>{c.wet > 0 && <> · <strong style={{ color: MOISTURE_COLORS.wet }}>{c.wet} wet</strong></>}{c.dry > 0 && <> · <strong style={{ color: MOISTURE_COLORS.dry }}>{c.dry} dry</strong></>}</>;
         })()}

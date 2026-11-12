@@ -202,3 +202,37 @@ test('csv cells are quoted, and cannot run as a spreadsheet formula', () => {
   assert.equal(csvCell(-5), '-5');
   assert.equal(csvCell(null), '');
 });
+
+test('areaLayers: one layer per affected area, named by kind and room', async () => {
+  const { areaLayers } = await import('../lib/moistureLayers.js');
+  const { emptyPlan, newArea } = await import('../lib/sketch.js');
+  const plan = emptyPlan();
+  plan.rooms.push({ id: 'r1', label: 'Kitchen', pts: [[0, 0], [12, 0], [12, 10], [0, 10]] });
+  plan.rooms.push({ id: 'r2', label: 'Hall', pts: [[12, 0], [20, 0], [20, 10], [12, 10]] });
+  const sq = (x, y) => [[x, y], [x + 4, y], [x + 4, y + 4], [x, y + 4]];
+  plan.areas.push({ ...newArea(sq(1, 1), { kind: 'water', cat: 2, smooth: false, surfaces: ['floor', 'wall'] }), id: 'a1' });
+  plan.areas.push({ ...newArea(sq(14, 2), { kind: 'water', cat: 2, smooth: false, surfaces: ['floor'] }), id: 'a2' });
+  plan.areas.push({ ...newArea(sq(6, 5), { kind: 'water', cat: 2, smooth: false, surfaces: ['floor'] }), id: 'a3' });
+  const layers = areaLayers(plan);
+  assert.equal(layers.length, 3);
+  assert.deepEqual(layers.map((l) => l.id), ['a1', 'a2', 'a3']);
+  assert.match(layers[1].name, /Hall/);
+  assert.equal(layers[0].detail, 'floor + wall');
+  assert.notEqual(layers[0].name, layers[2].name); // two cat 2 areas in the Kitchen are numbered apart
+  assert.equal(areaLayers(emptyPlan()).length, 0);
+});
+
+test('drawPlan: plain floorplan hides areas switched off', async () => {
+  const { drawPlan } = await import('../lib/sketchDraw.js');
+  const { emptyPlan, newArea } = await import('../lib/sketch.js');
+  const plan = emptyPlan();
+  plan.rooms.push({ id: 'r1', label: 'Kitchen', pts: [[0, 0], [12, 0], [12, 10], [0, 10]] });
+  plan.areas.push({ ...newArea([[1, 1], [5, 1], [5, 5], [1, 5]], { kind: 'water', cat: 1, smooth: false }), id: 'a1' });
+  const count = (opts) => {
+    let n = 0;
+    const ctx = new Proxy({}, { get: (_, k) => (k === 'fill' ? () => { n += 1; } : k === 'measureText' ? () => ({ width: 10 }) : k === 'createLinearGradient' || k === 'createPattern' ? () => ({ addColorStop() {} }) : () => {}), set: () => true });
+    drawPlan(ctx, plan, { scale: 10, ox: 0, oy: 0 }, { W: 300, H: 200, plain: true, grid: false, ...opts });
+    return n;
+  };
+  assert.ok(count({}) > count({ hiddenAreas: new Set(['a1']) }));
+});
