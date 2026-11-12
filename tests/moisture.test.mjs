@@ -286,6 +286,7 @@ test('days: old readings are filed by date, a day view shows what was read that 
   assert.equal(plan.days.length, 3, 'a day for each date with readings');
   assert.deepEqual(plan.days.map((d) => d.date), ['2026-11-10', '2026-11-11', '2026-11-12']);
   const [d1, d2, d3] = plan.days;
+  assert.equal(dayName(plan.days, d1.id), 'Initial loss');
   assert.equal(dayName(plan.days, d2.id), 'Day 2');
   assert.equal(countOnDay(plan, d2.id), 1);
   // Day 2: point 1 read (22, down from 40, still wet), point 2 not read yet
@@ -306,7 +307,7 @@ test('days: old readings are filed by date, a day view shows what was read that 
   assert.equal(addDay(more.plan, '2026-11-13').added, false);
   // the summary has a column per day and a final status
   const rows = moistureSummaryCsv(plan).trim().split('\r\n');
-  assert.match(rows[0], /Day 1 \(Nov 10\),Day 2 \(Nov 11\),Day 3 \(Nov 12\),Status/);
+  assert.match(rows[0], /Initial loss \(Nov 10\),Day 2 \(Nov 11\),Day 3 \(Nov 12\),Status/);
   assert.match(rows[1], /,40,22,11,Dry$/);
   assert.match(rows[2], /,35,,,/);
   // it survives a save and load

@@ -1850,7 +1850,7 @@ button.assign-btn:hover{ background: #d90000; border-color: #d90000; box-shadow:
 .sk-num.big .sk-num-val{ font-size: 28px; }
 .sk-num-val.ph{ color: var(--ink-soft); opacity: .55; font-weight: 600; }
 .sk-num-unit{ position: absolute; right: 8px; bottom: 6px; font-size: 11.5px; font-weight: 700; color: var(--ink-soft); }
-.sk-caret{ display: inline-block; width: 2px; height: 1.05em; margin-left: 2px; background: var(--accent); animation: sk-blink 1s steps(2) infinite; }
+.sk-cursor{ display: inline-block; width: 2px; height: 1.05em; margin-left: 2px; background: var(--accent); animation: sk-blink 1s steps(2) infinite; }
 @keyframes sk-blink{ 50%{ opacity: 0; } }
 
 /* the number pad: digits on the left, Save on the right */
@@ -1859,8 +1859,8 @@ button.assign-btn:hover{ background: #d90000; border-color: #d90000; box-shadow:
 .sk-sheet .sk-key:active{ background: rgba(120,130,140,0.25); }
 .sk-sheet .sk-key.fn{ font-size: 20px; }
 .sk-sheet .sk-save{ grid-column: 4; grid-row: 1 / span 4; min-height: 0; padding: 0 6px; border: 0; border-radius: 12px; background: var(--accent); color: var(--accent-ink); font: inherit; font-size: 17px; font-weight: 700; cursor: pointer; }
-.sk-pad.two .sk-save{ grid-row: 1 / span 2; }
-.sk-pad.two .sk-save.next{ grid-row: 3 / span 2; }
+.sk-pad.two .sk-save{ grid-row: 1; }
+.sk-pad.two .sk-save.next{ grid-row: 2 / span 3; }
 .sk-sheet .sk-pad.two .sk-save.alt{ background: var(--card-bg); color: var(--ink); border: 1px solid var(--line); }
 .sk-sheet .sk-save:disabled{ opacity: .4; cursor: default; }
 
@@ -1870,3 +1870,11 @@ button.assign-btn:hover{ background: #d90000; border-color: #d90000; box-shadow:
 .sk-setup .sk-opt select{ min-height: 44px; padding: 6px 8px; font-size: 15px; text-overflow: ellipsis; }
 .sk-sheet .sk-field{ font-size: 11px; }
 .sk-sheet .sk-field input{ min-height: 44px; }
+
+/* Save & next: the big block, label on one line with a large arrow under it */
+.sk-sheet .sk-save.next{ display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; white-space: nowrap; font-size: 16px; }
+.sk-arrow{ font-size: 40px; line-height: .8; font-weight: 600; }
+/* a new point on the initial loss: Save sits where the close button was */
+.sk-sheet .sk-headsave{ flex: none; min-height: 44px; padding: 0 20px; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-ink); font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
+.sk-sheet .sk-headsave:disabled{ opacity: .4; cursor: default; }
+.sk-sheet button, .sk-sheet .sk-num{ -webkit-tap-highlight-color: transparent; }

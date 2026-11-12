@@ -88,7 +88,7 @@ function NumBox({ label, value, placeholder, unit, active, big, onPick }) {
   return (
     <button type="button" className={`sk-num${big ? ' big' : ''}${active ? ' on' : ''}`} aria-pressed={active} aria-label={`${label}${value ? ` ${value}` : ' (empty)'}`} onClick={onPick}>
       <span className="sk-num-label">{label}</span>
-      <span className={`sk-num-val${value ? '' : ' ph'}`}>{value || placeholder}{active && <span className="sk-caret" aria-hidden="true" />}</span>
+      <span className={`sk-num-val${value ? '' : ' ph'}`}>{value || placeholder}{active && <span className="sk-cursor" aria-hidden="true" />}</span>
       {unit && <span className="sk-num-unit">{unit}</span>}
     </button>
   );
@@ -163,6 +163,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   const lastCornerRef = useRef(null); // Add corner: the point the last click added, { roomId, x, y }
   const pointers = useRef(new Map());
   const undoRef = useRef([]);
+  const freshRef = useRef(null); // a point just dropped on the initial loss and not saved yet: { id, undoLen }
   const redoRef = useRef([]);
   const sizeRef = useRef({ W: 300, H: 400 });
   const countsRef = useRef(photoCounts);
@@ -926,7 +927,10 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
       } else if (!d.hadPopup && plan.moisture.length < MAX_MOISTURE && pointInPoly(plan.rooms.find((r) => r.id === focusRef.current)?.pts || [], d.wx, d.wy)) { // the tap that only closed the sheet does not also drop a point; points go in this room only
         const m = moistRef.current;
         const pt = makeMoisture(nextNumber(plan.moisture), snap(d.wx, 0.25), snap(d.wy, 0.25), { surface: m.surface, material: m.material, type: m.type });
+        const initial = !plan.days.length || dayRef.current === plan.days[0].id;
+        const undoLen = undoRef.current.length;
         commit({ ...plan, moisture: [...plan.moisture, pt] });
+        freshRef.current = initial ? { id: pt.id, undoLen } : null; // a new point on the initial loss only stays once a reading is saved
         setSel({ kind: 'moisture', id: pt.id });
         openPopup(0, 0);
       }
@@ -1402,6 +1406,27 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     revealRef.current = null;
     if (r) setTimeout(() => r.sc.scrollTo({ top: r.from, behavior: 'smooth' }), 30);
   }, [pageSheet]);
+  // a new point on the initial loss that is closed without a reading goes away, as if it was never dropped
+  useEffect(() => {
+    const f = freshRef.current;
+    if (!f || (sheetOpen && mp && mp.id === f.id)) return;
+    freshRef.current = null;
+    const pl = planRef.current;
+    const pt = pl.moisture.find((m) => m.id === f.id);
+    if (!pt || pt.readings.length) return;
+    const before = undoRef.current[f.undoLen];
+    if (before && !before.moisture.some((m) => m.id === f.id)) { // back to exactly how it was, with no trace in undo
+      undoRef.current.length = f.undoLen;
+      redoRef.current = [];
+      planRef.current = before;
+      setCanUndo(undoRef.current.length > 0);
+      setCanRedo(false);
+      onChange?.(before);
+      bump((n) => n + 1);
+      schedule();
+    } else commit({ ...pl, moisture: pl.moisture.filter((m) => m.id !== f.id) });
+    if (selRef.current && selRef.current.id === f.id) setSel(null);
+  }, [sheetOpen, mp?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   // keys go to the sheet: focus it so a keyboard can type the reading
   useEffect(() => {
     if (!sheetOpen || !armed) return;
@@ -1526,7 +1551,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
               )}
               <div className="sk-bar-row">
                 <button type="button" className="sk-day-btn" aria-expanded={dayOpen} onClick={() => { setDayOpen(!dayOpen); setLayersOpen(false); setMoistOpen(false); }}>
-                  {curDay ? `Day ${days.indexOf(curDay) + 1} \u00b7 ${dateText(curDay.date)}` : 'Day 1 \u00b7 today'}<span className="sk-caret" aria-hidden="true" />
+                  {curDay ? `${dayName(days, curDay.id)} \u00b7 ${dateText(curDay.date)}` : 'Initial loss \u00b7 today'}<span className="sk-caret" aria-hidden="true" />
                 </button>
                 <button type="button" className="sk-iconbtn" aria-label="Layers" aria-expanded={layersOpen} title={hidden.size ? `Layers (${layerList.length - hidden.size} of ${layerList.length} areas shown)` : 'Layers'} onClick={() => { setLayersOpen(!layersOpen); setMoistOpen(false); setDayOpen(false); }}>
                   <LayersIcon />{hidden.size > 0 && <span className="sk-dotmark" aria-hidden="true" />}
@@ -1540,13 +1565,13 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
               )}
               {dayOpen && (
                 <div className="sk-moist-opts sk-layers" role="group" aria-label="Days">
-                  {days.map((d, i) => (
+                  {days.map((d) => (
                     <button key={d.id} type="button" className={`sk-dayrow${d === curDay ? ' on' : ''}`} onClick={() => { setDayId(d.id); setDayOpen(false); }}>
-                      <span><strong>Day {i + 1}</strong> {dateText(d.date)}</span>
+                      <span><strong>{dayName(days, d.id)}</strong> {dateText(d.date)}</span>
                       <span className="muted">{countOnDay(plan, d.id)} of {plan.moisture.length} read</span>
                     </button>
                   ))}
-                  {!days.length && <div className="muted" style={{ fontSize: 13 }}>The first reading you save starts Day 1.</div>}
+                  {!days.length && <div className="muted" style={{ fontSize: 13 }}>The first reading you save starts the initial loss day.</div>}
                   <div className="sk-addday">
                     <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} aria-label="Date for the new day" />
                     <button type="button" className="primary small" disabled={!newDate} onClick={() => startDay(newDate)}>Add day</button>
@@ -1910,18 +1935,25 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
           const airGpp = gpp(air.temp.trim() === '' ? null : air.temp, air.rh.trim() === '' ? null : air.rh);
           const canDel = (r) => isStaffOffice || (!!r.by?.id && r.by.id === me.id);
           const canSave = !!rd.val.trim();
+          const creating = !!freshRef.current && freshRef.current.id === mp.id && !mp.readings.length; // just dropped on the initial loss: no arrows, Save instead of close
           const setOpt = (patch) => { patchMoisture(mp.id, patch); setMoist((m) => ({ ...m, ...patch })); }; // the next point starts out like this one
           const sheet = (
             <div className="sk-sheet" ref={popRef} tabIndex={-1} role="dialog" aria-label={`Moisture point ${mp.n}`} onKeyDown={sheetKey}
               style={phoneSheet ? { pointerEvents: armed ? 'auto' : 'none' } : { bottom: kbPad, maxHeight: `calc(100% - ${kbPad + 8}px)`, pointerEvents: armed ? 'auto' : 'none' }}>
               <div className="sk-sheet-head">
-                <button type="button" className="sk-nav" aria-label="Previous point" disabled={!prevPt} onClick={() => prevPt && gotoPoint(prevPt.id)}>{'‹'}</button>
+                {!creating && <button type="button" className="sk-nav" aria-label="Previous point" disabled={!prevPt} onClick={() => prevPt && gotoPoint(prevPt.id)}>{'‹'}</button>}
                 <div className="sk-sheet-title">
                   <strong><span className="sk-dot" style={{ background: color }} />Point {mp.n}</strong>
                   <span className="muted">{roomHere ? roomTitle(roomHere) : 'No room'}</span>
                 </div>
-                <button type="button" className="sk-nav" aria-label="Next point" disabled={!nextPt} onClick={() => nextPt && gotoPoint(nextPt.id)}>{'›'}</button>
-                <button type="button" className="sk-nav" aria-label="Close" onClick={closePopup}>{'×'}</button>
+                {creating ? (
+                  <button type="button" className="sk-headsave" disabled={!canSave} onClick={() => addReading(null, false)}>Save</button>
+                ) : (
+                  <>
+                    <button type="button" className="sk-nav" aria-label="Next point" disabled={!nextPt} onClick={() => nextPt && gotoPoint(nextPt.id)}>{'›'}</button>
+                    <button type="button" className="sk-nav" aria-label="Close" onClick={closePopup}>{'×'}</button>
+                  </>
+                )}
               </div>
               <div className="sk-last" style={{ borderLeftColor: color }}>
                 <strong>{curDay ? `${dayName(days, curDay.id)} · ${dateText(curDay.date)}` : 'Today'}</strong>
@@ -1944,7 +1976,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                 <button type="button" className="sk-key" onClick={() => padType('0')}>0</button>
                 <button type="button" className="sk-key fn" aria-label="Backspace" onClick={() => padType('back')}>{'⌫'}</button>
                 <button type="button" className={`sk-save${toRead ? ' alt' : ''}`} disabled={!canSave} onClick={() => addReading(null, false)}>Save</button>
-                {toRead && <button type="button" className="sk-save next" disabled={!canSave} onClick={() => addReading(null, true)}>Save &amp; next {'›'}</button>}
+                {toRead && <button type="button" className="sk-save next" aria-label="Save and go to the next point" disabled={!canSave} onClick={() => addReading(null, true)}><span>Save &amp; next</span><b className="sk-arrow" aria-hidden="true">{'›'}</b></button>}
               </div>
               <div className="sk-setup">
                 <label className="sk-opt">Surface
