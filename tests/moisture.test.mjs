@@ -181,15 +181,15 @@ test('the moisture log has one row per reading, oldest first, with room, standar
   };
   const rows = moistureLogRows(plan);
   assert.equal(rows.length, 3);
-  assert.deepEqual(rows.map((r) => r[0]), [1, 2, 2], 'same time: lower point number first, then the later date');
-  assert.equal(rows[1][1], 'Kitchen');
-  assert.equal(rows[1][3], 2);
-  assert.equal(rows[1][10], 'Wet');
-  assert.equal(rows[2][10], 'Dry');
-  assert.equal(rows[0][9], '', 'no standard for hardwood');
-  assert.equal(rows[0][10], '');
+  assert.deepEqual(rows.map((r) => r[1]), [1, 2, 2], 'same time: lower point number first, then the later date');
+  assert.equal(rows[1][2], 'Kitchen');
+  assert.equal(rows[1][4], 2);
+  assert.equal(rows[1][11], 'Wet');
+  assert.equal(rows[2][11], 'Dry');
+  assert.equal(rows[0][10], '', 'no standard for hardwood');
+  assert.equal(rows[0][11], '');
   const csv = moistureLogCsv(plan);
-  assert.ok(csv.startsWith('﻿Point,Room,Surface'));
+  assert.ok(csv.startsWith('\ufeffDay,Point,Room,Surface'));
   assert.ok(csv.includes('"behind ""fridge"", left"'));
   assert.equal(csv.trim().split('\r\n').length, 4);
   assert.equal(moistureLogCsv(base()).trim().split('\r\n').length, 1, 'just the header when there are no readings');
@@ -270,4 +270,45 @@ test('room type: standard types, Other with its own text, bad values dropped', a
   assert.deepEqual(p.rooms.map((r) => r.type), ['bedroom', 'other', '', 'kitchen']);
   assert.deepEqual(p.rooms.map(roomTitle), ['Bedroom', 'Sunroom', 'Room 3', 'Kitchen']);
   assert.equal(p.rooms[3].other, '');
+});
+
+test('days: old readings are filed by date, a day view shows what was read that day, the summary has a column per day', async () => {
+  const { normalizePlan } = await import('../lib/sketch.js');
+  const { dayView, addDay, dayName, countOnDay } = await import('../lib/moistureDays.js');
+  const { moistureSummaryCsv } = await import('../lib/moistureLog.js');
+  const at = (d) => `2026-11-${d}T15:00:00`;
+  let plan = normalizePlan({ v: 3, rooms: [{ id: 'r', label: 'Kitchen', pts: [[0, 0], [10, 0], [10, 10], [0, 10]] }],
+    standards: { drywall: { val: 12, type: 'mc' } },
+    moisture: [
+      { id: 'p1', n: 1, x: 2, y: 2, material: 'drywall', readings: [{ id: 'a', at: at('10'), val: 40 }, { id: 'b', at: at('11'), val: 22 }, { id: 'c', at: at('12'), val: 11 }] },
+      { id: 'p2', n: 2, x: 4, y: 4, material: 'drywall', readings: [{ id: 'd', at: at('10'), val: 35 }] },
+    ] });
+  assert.equal(plan.days.length, 3, 'a day for each date with readings');
+  assert.deepEqual(plan.days.map((d) => d.date), ['2026-11-10', '2026-11-11', '2026-11-12']);
+  const [d1, d2, d3] = plan.days;
+  assert.equal(dayName(plan.days, d2.id), 'Day 2');
+  assert.equal(countOnDay(plan, d2.id), 1);
+  // Day 2: point 1 read (22, down from 40, still wet), point 2 not read yet
+  const v2 = dayView(plan, d2.id);
+  const s1 = moistureStatus(v2.moisture[0], goalFor(v2, v2.moisture[0]));
+  assert.equal(s1.state, 'wet'); assert.equal(s1.trend, 'down'); assert.equal(s1.latest.val, 22);
+  const s2 = moistureStatus(v2.moisture[1], goalFor(v2, v2.moisture[1]));
+  assert.equal(s2.state, 'none'); assert.equal(s2.last.val, 35);
+  // Day 3: point 1 is dry
+  const v3 = dayView(plan, d3.id);
+  assert.equal(moistureStatus(v3.moisture[0], goalFor(v3, v3.moisture[0])).state, 'dry');
+  assert.equal(moistureCounts(v3).none, 1);
+  // Day 1 only knows Day 1
+  assert.equal(dayView(plan, d1.id).moisture[0].readings.length, 1);
+  // adding a day: a new date is added in order, an existing date is reused
+  const more = addDay(plan, '2026-11-13');
+  assert.ok(more.added); assert.equal(more.plan.days.length, 4);
+  assert.equal(addDay(more.plan, '2026-11-13').added, false);
+  // the summary has a column per day and a final status
+  const rows = moistureSummaryCsv(plan).trim().split('\r\n');
+  assert.match(rows[0], /Day 1 \(Nov 10\),Day 2 \(Nov 11\),Day 3 \(Nov 12\),Status/);
+  assert.match(rows[1], /,40,22,11,Dry$/);
+  assert.match(rows[2], /,35,,,/);
+  // it survives a save and load
+  assert.equal(normalizePlan(JSON.parse(JSON.stringify(plan))).days.length, 3);
 });

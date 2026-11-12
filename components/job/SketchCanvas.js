@@ -18,7 +18,8 @@ import {
 import { OBJECT_TYPES, OBJECT_GROUPS, MAX_OBJECTS, makeObject, objectCounts, isInches, inchesText, parseInches } from '@/lib/objectTypes';
 import { placeObject, hitObject, nearestWall, wallSpan } from '@/lib/sketchObjects';
 import { jpegToPdf } from '@/lib/pdfImage';
-import { moistureLogCsv } from '@/lib/moistureLog';
+import { moistureLogCsv, moistureSummaryCsv } from '@/lib/moistureLog';
+import { addDay, atForDay, countOnDay, dateText, dayName, dayView, removeDay, todayKey } from '@/lib/moistureDays';
 import { areaLayers } from '@/lib/moistureLayers';
 import { hitComment, tagsFromText, segments, timeAgo, logEntry, withLog, canDeleteComment, activity, MAX_COMMENTS, MAX_REPLIES } from '@/lib/sketchComments';
 import MentionBox from '@/components/job/MentionBox';
@@ -45,7 +46,7 @@ const HINTS = {
   corner: 'Hover a wall and click to add a corner. To cut off a corner of a room, click one wall, then click the wall next to it. The tool stays on, so keep clicking. Esc starts over.',
   area: 'Pick what to mark and which surfaces it is on, then draw around it. It is cleaned up when you let go.',
   object: 'Pick an object, then click to place it. Doors, windows and outlets snap to the wall; cabinets and fixtures sit flush against it. Hold Alt to place freely. Esc stops. Click one with Select to edit it.',
-  moisture: 'Tap the sketch where the reading was taken, then type it. Drag to move around, pinch to zoom. Tap a pin to add the next reading at that spot, and use the arrows to step through the points.',
+  moisture: 'Tap a room to zoom in, then tap where the reading was taken and type it. Use the Day button to start a new day of readings; tap a pin to add that day\'s reading at the spot.',
   text: 'Tap where the note should go, then type it.',
   comment: 'Tap the spot the comment is about, then type. Type @ to tag a teammate. Tap a comment pin to read, reply or resolve it.',
 };
@@ -123,9 +124,17 @@ const FitIcon = () => <Ico><rect x="3.5" y="3.5" width="9" height="9" rx="1" /><
 // The drawing board. Works in feet. The parent owns saving: onChange gets the whole new plan after
 // each finished change. The plan prop is read once (the parent remounts this with a new key to
 // switch sketches).
+function GearIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <path d="M4 7h10M18 7h2M4 17h2M10 17h10" /><circle cx="16" cy="7" r="2" /><circle cx="8" cy="17" r="2" />
+    </svg>
+  );
+}
+
 function LayersIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" aria-hidden="true" style={{ marginRight: 6, verticalAlign: '-3px' }}>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" aria-hidden="true" style={{ verticalAlign: '-3px' }}>
       <path d="M12 3l9 5-9 5-9-5 9-5z" /><path d="M3 12.5l9 5 9-5" /><path d="M3 17l9 5 9-5" />
     </svg>
   );
@@ -169,6 +178,11 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   const mode = variant === 'moisture' ? 'moisture' : 'draw'; // the Sketch tab draws; the Moisture tab logs readings on a plain floorplan and leaves the drawing alone
   const [hidden, setHidden] = useState(() => new Set()); // moisture floorplan: affected-area layers switched off
   const [showPins, setShowPins] = useState(true);
+  const [dayId, setDayId] = useState(null); // moisture floorplan: the day being viewed and logged
+  const [dayOpen, setDayOpen] = useState(false);
+  const [newDate, setNewDate] = useState(() => todayKey());
+  const dayRef = useRef(null);
+  const dvRef = useRef({ src: null, day: null, out: null });
   const [focusId, setFocusId] = useState(null); // moisture floorplan: the room zoomed into, the rest greyed out
   const focusRef = useRef(null);
   focusRef.current = focusId;
@@ -241,8 +255,13 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     const d = dragRef.current;
     const committed = planRef.current;
     if (totalsRef.current.plan !== committed) totalsRef.current = { plan: committed, totals: affectedTotals(committed) };
-    drawPlan(ctx, d?.plan || committed, viewRef.current, {
-      W: sizeRef.current.W, H: sizeRef.current.H, selection: selRef.current, counts: countsRef.current, surface: surfaceRef.current, moistLabels: moistLabelsRef.current,
+    let shown = d?.plan || committed;
+    if (modeRef.current === 'moisture') { // the floorplan as it stood on the day being viewed
+      if (dvRef.current.src !== shown || dvRef.current.day !== dayRef.current) dvRef.current = { src: shown, day: dayRef.current, out: dayView(shown, dayRef.current) };
+      shown = dvRef.current.out;
+    }
+    drawPlan(ctx, shown, viewRef.current, {
+      W: sizeRef.current.W, H: sizeRef.current.H, selection: selRef.current, counts: countsRef.current, surface: surfaceRef.current, moistLabels: moistLabelsRef.current && !!focusRef.current,
       affected: totalsRef.current.totals.rooms, draft: d?.draft || null, hover: d ? null : hoverRef.current,
       pending: toolRef.current === 'corner' ? lastCornerRef.current : null,
       meId: meRef.current.id, commentDraft: cmDraftRef.current,
@@ -257,7 +276,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
 
   useEffect(() => { countsRef.current = photoCounts; schedule(); }, [photoCounts, schedule]);
   useEffect(() => { schedule(); setDimErr(''); }, [sel, schedule]);
-  useEffect(() => { schedule(); }, [surfaceView, moistLabels, hidden, showPins, focusId, schedule]);
+  useEffect(() => { schedule(); }, [surfaceView, moistLabels, hidden, showPins, focusId, dayId, schedule]);
   const moistSelId = sel?.kind === 'moisture' ? sel.id : null;
   useEffect(() => { setRd({ val: '', note: '' }); setRdErr(''); }, [moistSelId]);
   // the phone keyboard slides over the bottom of the page: measure how much, so the entry sheet can sit above it
@@ -1115,6 +1134,27 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     setFocusId(null);
     fit();
   }
+  // the next point (after this one, wrapping round) with no reading yet on the day being logged
+  function nextToRead(id, dId) {
+    const list = [...planRef.current.moisture].sort((a, b) => a.n - b.n);
+    const i = list.findIndex((m) => m.id === id);
+    for (let k = 1; k < list.length; k += 1) {
+      const c = list[(i + k) % list.length];
+      if (!c.readings.some((r) => r.day === dId)) return c;
+    }
+    return null;
+  }
+  function startDay(date) {
+    const r = addDay(planRef.current, date);
+    if (r.added) commit(r.plan);
+    setDayId(r.id);
+    setDayOpen(false);
+  }
+  function deleteDay(id) {
+    if (countOnDay(planRef.current, id) && !window.confirm('This day has readings. Delete the day and every reading on it?')) return;
+    commit(removeDay(planRef.current, id));
+    setDayId(null);
+  }
   function gotoPoint(id) {
     const pt = planRef.current.moisture.find((m) => m.id === id);
     const rm = pt && focusRef.current ? hitRoom(planRef.current, pt.x, pt.y) : null;
@@ -1136,8 +1176,12 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     const tempV = tempT === '' ? null : Number(tempT);
     if (tempV !== null && (!Number.isFinite(tempV) || tempV < -20 || tempV > 200)) { setRdErr('Temperature is a number in degrees F.'); return; }
     if (m.readings.length >= MAX_READINGS) { setRdErr(`A point holds up to ${MAX_READINGS} readings.`); return; }
-    const nxt = andNext ? neighbour(m.id, 1) : null;
-    patchMoisture(m.id, { readings: [...m.readings, makeReading({ val, rh: rhV, temp: tempV, note: rd.note, by: meRef.current })] });
+    let pl = planRef.current;
+    let dId = dayRef.current;
+    if (!dId) { const r = addDay(pl); pl = r.plan; dId = r.id; setDayId(r.id); } // the first reading starts Day 1, today
+    const nxt = andNext ? nextToRead(m.id, dId) : null;
+    const rday = pl.days.find((d) => d.id === dId);
+    commit({ ...pl, moisture: pl.moisture.map((x) => (x.id === m.id ? { ...x, readings: [...x.readings, makeReading({ val, rh: rhV, temp: tempV, note: rd.note, by: meRef.current, day: dId, at: atForDay(rday) })] } : x)) });
     setRd({ val: '', note: '' });
     setRdErr('');
     if (nxt) gotoPoint(nxt.id); // rechecking: straight on to the next spot
@@ -1158,7 +1202,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
 
   // ---- export ------------------------------------------------------------
   function renderExport() {
-    const plan = planRef.current;
+    const plan = modeRef.current === 'moisture' ? dayView(planRef.current, dayRef.current) : planRef.current; // the day on screen
     const b = planBounds(plan);
     if (!b) return null;
     const W = 1600;
@@ -1186,6 +1230,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   }
   function exportAs(kind) {
     setExportOpen(false);
+    if (kind === 'summary') { download(new Blob([moistureSummaryCsv(planRef.current)], { type: 'text/csv;charset=utf-8' }), 'csv', '-moisture-summary'); return; }
     if (kind === 'csv') { download(new Blob([moistureLogCsv(planRef.current)], { type: 'text/csv;charset=utf-8' }), 'csv', '-moisture-log'); return; }
     const out = renderExport();
     if (!out) return;
@@ -1200,6 +1245,10 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     }, 'image/jpeg', 0.92);
   }
   const plan = planRef.current;
+  const days = plan.days || [];
+  const curDay = days.find((d) => d.id === dayId) || days[days.length - 1] || null;
+  dayRef.current = curDay ? curDay.id : null;
+  const dayPlan = dayView(plan, dayRef.current);
   const hasContent = !!(plan.rooms.length || plan.marks.length || plan.areas.length || plan.sources.length || plan.objects.length || plan.moisture.length || plan.comments.length);
   const total = totalArea(plan);
   const totals = totalsFor(plan);
@@ -1363,13 +1412,35 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                 </div>
               )}
               <div className="sk-bar-row">
-              <button type="button" className="sk-layers-btn" aria-expanded={layersOpen} onClick={() => { setLayersOpen(!layersOpen); setMoistOpen(false); }} title="Layers">
-                <LayersIcon />Layers{hidden.size ? ` (${layerList.length - hidden.size}/${layerList.length})` : ''}
-              </button>
-              <button type="button" className="sk-next" aria-expanded={moistOpen} onClick={() => { setMoistOpen(!moistOpen); setLayersOpen(false); }}>
-                New point: {MOISTURE_SURFACES[moist.surface]} · {MOISTURE_MATERIALS[moist.material]} · {MOISTURE_TYPES[moist.type].short.trim()}<span className="sk-caret" aria-hidden="true" />
-              </button>
+                <button type="button" className="sk-day-btn" aria-expanded={dayOpen} onClick={() => { setDayOpen(!dayOpen); setLayersOpen(false); setMoistOpen(false); }}>
+                  {curDay ? `Day ${days.indexOf(curDay) + 1} \u00b7 ${dateText(curDay.date)}` : 'Day 1 \u00b7 today'}<span className="sk-caret" aria-hidden="true" />
+                </button>
+                <button type="button" className="sk-iconbtn" aria-label="Layers" aria-expanded={layersOpen} title={hidden.size ? `Layers (${layerList.length - hidden.size} of ${layerList.length} areas shown)` : 'Layers'} onClick={() => { setLayersOpen(!layersOpen); setMoistOpen(false); setDayOpen(false); }}>
+                  <LayersIcon />{hidden.size > 0 && <span className="sk-dotmark" aria-hidden="true" />}
+                </button>
+                <button type="button" className="sk-iconbtn" aria-label="New point settings" aria-expanded={moistOpen} title={`New points: ${MOISTURE_SURFACES[moist.surface]} \u00b7 ${MOISTURE_MATERIALS[moist.material]} \u00b7 ${MOISTURE_TYPES[moist.type].short.trim()}`} onClick={() => { setMoistOpen(!moistOpen); setLayersOpen(false); setDayOpen(false); }}>
+                  <GearIcon />
+                </button>
               </div>
+              {curDay && curDay === days[days.length - 1] && curDay.date !== todayKey() && (
+                <div className="sk-bar-row"><button type="button" className="sk-newday" onClick={() => startDay(todayKey())}>Start Day {days.length + 1} (today)</button></div>
+              )}
+              {dayOpen && (
+                <div className="sk-moist-opts sk-layers" role="group" aria-label="Days">
+                  {days.map((d, i) => (
+                    <button key={d.id} type="button" className={`sk-dayrow${d === curDay ? ' on' : ''}`} onClick={() => { setDayId(d.id); setDayOpen(false); }}>
+                      <span><strong>Day {i + 1}</strong> {dateText(d.date)}</span>
+                      <span className="muted">{countOnDay(plan, d.id)} of {plan.moisture.length} read</span>
+                    </button>
+                  ))}
+                  {!days.length && <div className="muted" style={{ fontSize: 13 }}>The first reading you save starts Day 1.</div>}
+                  <div className="sk-addday">
+                    <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} aria-label="Date for the new day" />
+                    <button type="button" className="primary small" disabled={!newDate} onClick={() => startDay(newDate)}>Add day</button>
+                  </div>
+                  {curDay && <button type="button" className="danger small" onClick={() => deleteDay(curDay.id)}>Delete {dayName(days, curDay.id)}</button>}
+                </div>
+              )}
               {layersOpen && (
                 <div className="sk-moist-opts sk-layers" role="group" aria-label="Layers">
                   <label className="sk-layer locked"><input type="checkbox" checked readOnly disabled /><span className="sk-sw" style={{ background: '#fff', borderColor: '#2f4858' }} /><span className="sk-layer-name">Floorplan<small>rooms, doors, windows</small></span></label>
@@ -1383,7 +1454,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
               )}
               {moistOpen && (
                 <div className="sk-moist-opts">
-                  <div className="sk-opt-label">New points go on the</div>
+                  <div className="sk-opt-label">New points: {MOISTURE_SURFACES[moist.surface]} \u00b7 {MOISTURE_MATERIALS[moist.material]} \u00b7 {MOISTURE_TYPES[moist.type].short.trim()}</div>
                   <SurfacePick value={moist.surface} onChange={(v) => setMoist({ ...moist, surface: v })} />
                   <label className="sk-opt">Material
                     <select value={moist.material} onChange={(e) => setMoist({ ...moist, material: e.target.value })}>
@@ -1712,7 +1783,9 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
 
         {sheetOpen && (() => {
           const goal = goalFor(plan, mp);
-          const st = moistureStatus(mp, goal);
+          const mpv = dayPlan.moisture.find((x) => x.id === mp.id) || mp;
+          const st = moistureStatus(mpv, goal);
+          const toRead = nextToRead(mp.id, dayRef.current);
           const color = MOISTURE_COLORS[st.state];
           const short = MOISTURE_TYPES[mp.type].short;
           const roomHere = hitRoom(plan, mp.x, mp.y);
@@ -1733,13 +1806,13 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                 <button type="button" className="sk-nav" aria-label="Next point" disabled={!nextPt} onClick={() => nextPt && gotoPoint(nextPt.id)}>{'›'}</button>
                 <button type="button" className="sk-nav" aria-label="Close" onClick={closePopup}>{'×'}</button>
               </div>
-              {(st.latest || goal != null) && (
-                <div className="sk-last" style={{ borderLeftColor: color }}>
-                  <strong style={{ color }}>{STATUS_TEXT[st.state]}</strong>
-                  {st.latest && <> · last {valueText(mp, st.latest)}{st.trend ? ` ${TREND_MARK[st.trend]}` : ''} <span className="muted">{whenText(st.latest.at)}</span></>}
-                  {goal != null && <span className="muted"> · dry standard {fmtReading(goal)}{short}</span>}
-                </div>
-              )}
+              <div className="sk-last" style={{ borderLeftColor: color }}>
+                <strong>{curDay ? `${dayName(days, curDay.id)} · ${dateText(curDay.date)}` : 'Today'}</strong>
+                {st.latest
+                  ? <> · <strong style={{ color }}>{STATUS_TEXT[st.state]}</strong> {valueText(mp, st.latest)}{st.trend ? ` ${TREND_MARK[st.trend]}` : ''}{st.prev && <span className="muted"> (was {valueText(mp, st.prev)})</span>}</>
+                  : <> · <strong style={{ color }}>Not read yet</strong>{st.last && <span className="muted"> · last {valueText(mp, st.last)} on {dayName(days, st.last.day) || whenText(st.last.at)}</span>}</>}
+                {goal != null && <span className="muted"> · dry standard {fmtReading(goal)}{short}</span>}
+              </div>
               <form key={mp.id} className="sk-rd-form" onSubmit={(e) => addReading(e, false)}>
                 <div className="sk-three">
                   <label className="sk-field big">Reading
@@ -1759,7 +1832,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                 {rdErr && <div className="msg err" style={{ margin: 0 }}>{rdErr}</div>}
                 <div className="sk-actions">
                   <button className="primary" disabled={!rd.val.trim()}>Save reading</button>
-                  {nextPt && <button type="button" className="secondary" disabled={!rd.val.trim()} onClick={() => addReading(null, true)}>Save &amp; next {'›'}</button>}
+                  {toRead && <button type="button" className="secondary" disabled={!rd.val.trim()} onClick={() => addReading(null, true)}>Save &amp; next {'›'}</button>}
                 </div>
               </form>
               <details className="sk-more">
@@ -1778,7 +1851,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                           return (
                             <li key={r.id}>
                               <div><strong>{valueText(mp, r)}</strong>{tr ? ` ${TREND_MARK[tr]}` : ''} <span className="muted">{airText(r)}</span></div>
-                              <div className="muted">{whenText(r.at)}{r.by?.name ? ` · ${r.by.name}` : ''}{r.note ? ` · ${r.note}` : ''}</div>
+                              <div className="muted">{dayName(days, r.day) ? `${dayName(days, r.day)} · ` : ''}{whenText(r.at)}{r.by?.name ? ` · ${r.by.name}` : ''}{r.note ? ` · ${r.note}` : ''}</div>
                               {canDel(r) && <button type="button" className="sk-x" aria-label="Delete this reading" onClick={() => patchMoisture(mp.id, { readings: mp.readings.filter((x) => x.id !== r.id) })}>{'×'}</button>}
                             </li>
                           );
@@ -1857,7 +1930,8 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
             <div className="sketch-pop-head"><strong>Export sketch</strong><button type="button" className="sk-x" aria-label="Close" onClick={() => setExportOpen(false)}>{'\u00d7'}</button></div>
             <button type="button" className="secondary" onClick={() => exportAs('png')}>Export as PNG</button>
             <button type="button" className="secondary" onClick={() => exportAs('pdf')}>Export as PDF</button>
-            {mode === 'moisture' && <button type="button" className="secondary" disabled={!plan.moisture.length} onClick={() => exportAs('csv')} title="Every reading at every point, oldest first">Moisture log (CSV)</button>}
+            {mode === 'moisture' && <button type="button" className="secondary" disabled={!plan.moisture.length} onClick={() => exportAs('summary')} title="One row per point, one column per day">Daily summary (CSV)</button>}
+            {mode === 'moisture' && <button type="button" className="secondary" disabled={!plan.moisture.length} onClick={() => exportAs('csv')} title="Every reading at every point, oldest first">Full moisture log (CSV)</button>}
           </div>
         </div>
       )}
@@ -1868,8 +1942,8 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
         ))}
         {plan.objects.length > 0 && <> · <span title={objectCounts(plan).map((c) => `${c.count} ${c.label.toLowerCase()}`).join(', ')}>{plan.objects.length} object{plan.objects.length === 1 ? '' : 's'}</span></>}
         {mode === 'moisture' && plan.moisture.length > 0 && (() => {
-          const c = moistureCounts(plan);
-          return <> · <strong>{c.points} moisture point{c.points === 1 ? '' : 's'}</strong>{c.wet > 0 && <> · <strong style={{ color: MOISTURE_COLORS.wet }}>{c.wet} wet</strong></>}{c.dry > 0 && <> · <strong style={{ color: MOISTURE_COLORS.dry }}>{c.dry} dry</strong></>}</>;
+          const c = moistureCounts(dayPlan);
+          return <> · <strong>{c.points} moisture point{c.points === 1 ? '' : 's'}</strong>{c.wet > 0 && <> · <strong style={{ color: MOISTURE_COLORS.wet }}>{c.wet} wet</strong></>}{c.dry > 0 && <> · <strong style={{ color: MOISTURE_COLORS.dry }}>{c.dry} dry</strong></>}{c.none > 0 && <> · <strong>{c.none} to read</strong></>}</>;
         })()}
         {plan.sources.length > 0 && <> · <strong style={{ color: kindDot('source') }}>{plan.sources.length} source{plan.sources.length === 1 ? '' : 's'} of loss</strong></>}
         <span className="muted sk-hint"> · {tool === 'area' ? AREA_HINTS[areaKind] : HINTS[tool]}</span>
