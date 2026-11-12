@@ -12,6 +12,8 @@ import { FlashOnIcon, FlashOffIcon, FlipCameraIcon, EditIcon } from '@/component
 //
 // Props: open, onClose, uploader (the job's shared photo uploader). Pick a folder first (none is chosen
 // when it opens); each accepted photo is uploaded in the background, in order, while the camera stays open.
+// Optional: fixedKind puts every photo in that folder and hides the folder picker (an update being
+// written has no folder choice); onUploaded(rows) is called with the saved photo rows after each upload.
 
 const MAX_DIGITAL_ZOOM = 5;
 const ZOOM_PRESETS = [0.5, 1, 2, 5];
@@ -48,8 +50,10 @@ async function openStream(facingMode) {
 
 const FOLDER_OPTIONS = PHOTO_KIND_KEYS.map((k) => ({ value: k, label: PHOTO_KINDS[k] }));
 
-export default function CameraCapture({ open, onClose, uploader }) {
-  const [kind, setKind] = useState(null);
+export default function CameraCapture({ open, onClose, uploader, fixedKind = null, onUploaded = null }) {
+  const [kind, setKind] = useState(fixedKind);
+  const uploadedRef = useRef(onUploaded);
+  uploadedRef.current = onUploaded;
   const [sheetOpen, setSheetOpen] = useState(false);
   const [shots, setShots] = useState([]); // { id, file, kind, status }
   const queue = useRef(Promise.resolve());
@@ -60,10 +64,13 @@ export default function CameraCapture({ open, onClose, uploader }) {
 
   // one at a time, in the order taken, so a burst of shots does not overload the phone or connection
   function enqueue(shot) {
-    queue.current = queue.current.then(() => uploader.upload([shot.file], {
-      kind: shot.kind,
-      onItem: (_f, status) => setShots((list) => list.map((x) => (x.id === shot.id ? { ...x, status } : x))),
-    })).catch(() => {});
+    queue.current = queue.current.then(async () => {
+      const rows = await uploader.upload([shot.file], {
+        kind: shot.kind,
+        onItem: (_f, status) => setShots((list) => list.map((x) => (x.id === shot.id ? { ...x, status } : x))),
+      });
+      if (rows?.length) uploadedRef.current?.(rows);
+    }).catch(() => {});
   }
   function onPhotoAccepted(file) {
     const shot = { id: ++seq.current, file, kind, status: 'waiting' };
@@ -76,7 +83,7 @@ export default function CameraCapture({ open, onClose, uploader }) {
       enqueue(x);
     });
   }
-  useEffect(() => { if (open) { setKind(null); setShots([]); setSheetOpen(true); } }, [open]);
+  useEffect(() => { if (open) { setKind(fixedKind); setShots([]); setSheetOpen(!fixedKind); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -501,7 +508,7 @@ export default function CameraCapture({ open, onClose, uploader }) {
       {!reviewFile && (
         <div className="camera-controls">
           <div className="camera-controls-left">
-            <FolderPicker destination={destination} />
+            {!fixedKind && <FolderPicker destination={destination} />}
           </div>
           <button
             type="button"

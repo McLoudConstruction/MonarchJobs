@@ -150,7 +150,7 @@ function LayersIcon() {
   );
 }
 
-export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, onChange, photoCounts = {}, onAddRoomPhoto, onViewRoomPhotos, exportName = 'sketch', headSlot = null, staff = null, staffList = [], onComment = null }) {
+export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, onChange, photoCounts = {}, onAddRoomPhoto, onViewRoomPhotos, exportName = 'sketch', headSlot = null, staff = null, staffList = [], onComment = null, command = null, onCommandDone = null }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const rootRef = useRef(null);
@@ -193,6 +193,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   const [dayOpen, setDayOpen] = useState(false);
   const [recheck, setRecheck] = useState(null); // id of the day being rechecked: the tech is in "recheck mode" until they tap Finish
   const [recheckDone, setRecheckDone] = useState(null); // { name, read, total } shown after Finish recheck
+  const [rcNote, setRcNote] = useState(''); // why a recheck asked for from outside (the phone's action button) did not start
   const [newDate, setNewDate] = useState(() => todayKey());
   const dayRef = useRef(null);
   const dvRef = useRef({ src: null, day: null, out: null });
@@ -1245,6 +1246,23 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     setRecheckDone({ name: d ? dayName(planRef.current.days, d.id) : 'Recheck', ...c });
   }
   useEffect(() => { if (recheck && dayId !== recheck) setRecheck(null); }, [dayId, recheck]);
+  // "Start recheck" from the job page's action button: same rules as the button on the floorplan
+  useEffect(() => {
+    if (!command || command.type !== 'recheck' || mode !== 'moisture') return;
+    const p = planRef.current;
+    const ds = p.days || [];
+    const real = p.moisture.filter((m) => m.kind !== 'standard').length;
+    const today = ds.find((d) => d.date === todayKey());
+    if (!ds.length || !real) setRcNote('No readings yet. Place the first points, then recheck on a later day.');
+    else if (today && ds[0] && today.id === ds[0].id) setRcNote('The loss started today, so log the first readings. A recheck starts from the next day.');
+    else startRecheck();
+    onCommandDone?.();
+  }, [command]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!rcNote) return undefined;
+    const t = setTimeout(() => setRcNote(''), 6000);
+    return () => clearTimeout(t);
+  }, [rcNote]);
   useEffect(() => {
     if (!recheckDone) return undefined;
     const t = setTimeout(() => setRecheckDone(null), 8000);
@@ -1801,6 +1819,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
         {mode === 'moisture' && !sheetOpen && !moveId && (focusId
           ? !plan.moisture.some((m) => pointInPoly(plan.rooms.find((r) => r.id === focusId)?.pts || [], m.x, m.y)) && <div className="sk-tip">Tap the room to log a reading</div>
           : !plan.moisture.length && <div className="sk-tip">Tap a room to zoom in and log readings</div>)}
+        {rcNote && <div className="sk-tip" role="status" style={{ bottom: 70 }}>{rcNote}</div>}
         {moveId && (
           <div className="sk-movebar" role="status">
             <span>Tap where point {plan.moisture.find((m) => m.id === moveId)?.n} should go</span>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import PopupModal from '@/components/PopupModal';
 import PhotoAttach from '@/components/job/PhotoAttach';
 import { PhotoGrid } from '@/components/job/PhotoUi';
@@ -81,7 +81,7 @@ function SendDialog({ update, recipients, token, jobId, onClose, onDone }) {
 
 // Updates tab. Internal notes are for staff only. Progress updates are written for the customer:
 // saved as a draft, then sent as a link by text and email.
-export default function UpdatesTab({ jobId, updates, photos, isOffice, staff, token, authorName, logEvent, onReload, uploader, onOpenPhotos, recipients, baseUrl }) {
+export default function UpdatesTab({ jobId, updates, photos, isOffice, staff, token, authorName, logEvent, onReload, uploader, onOpenPhotos, recipients, baseUrl, command = null, onCommandDone = null }) {
   const [mode, setMode] = useState('internal'); // internal | progress
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -101,6 +101,16 @@ export default function UpdatesTab({ jobId, updates, photos, isOffice, staff, to
   const canEdit = (u) => u.status !== 'sent' && (isOffice || u.created_by === staff.id);
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  // The phone's action button can open a new internal note with a category already chosen (Complete Job).
+  // A note being typed keeps its text and photos; anything else is replaced by the new note.
+  useEffect(() => {
+    if (!command || command.kind !== 'internal') return;
+    setMode('internal');
+    setErr('');
+    setForm((f) => (f && f.kind === 'internal' && !f.id ? { ...f, category: command.category } : { ...blank('internal'), category: command.category }));
+    onCommandDone?.();
+  }, [command]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function openNew(kind, seed = {}) {
     setMode(kind);
@@ -195,7 +205,7 @@ export default function UpdatesTab({ jobId, updates, photos, isOffice, staff, to
               <div className="field"><label>What happens next (optional)</label><textarea value={form.next_steps} onChange={set('next_steps')} maxLength={2000} placeholder="Next visit, drying check, what we need from you" /></div>
             </>
           )}
-          <PhotoAttach photos={photos} ids={form.photo_ids} onChange={(photo_ids) => setForm((f) => ({ ...f, photo_ids }))} uploader={uploader} onOpen={onOpenPhotos} />
+          <PhotoAttach photos={photos} ids={form.photo_ids} onChange={(photo_ids) => setForm((f) => (f ? { ...f, photo_ids } : f))} uploader={uploader} onOpen={onOpenPhotos} />
           {err && <div className="msg err">{err}</div>}
           <div className="row">
             <button className="primary" disabled={saving || uploader.busy}>{saving ? 'Saving...' : form.kind === 'internal' ? (form.id ? 'Save changes' : 'Post note') : 'Save draft'}</button>

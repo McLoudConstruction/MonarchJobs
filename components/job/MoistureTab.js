@@ -9,7 +9,7 @@ const SAVE_DELAY_MS = 1200;
 
 // Moisture tab: the sketch as a plain floorplan with a layer per affected area. Tap to place a reading point,
 // tap a pin to log a recheck. Points live in the sketch's plan, so they save the same way the sketch does.
-export default function MoistureTab({ sketches, startId = null, onActive, staff = null, staffList = [], onOpenSketch }) {
+export default function MoistureTab({ sketches, startId = null, onActive, staff = null, staffList = [], onOpenSketch, command = null, onCommandDone = null }) {
   const [activeId, setActiveId] = useState(startId);
   const [loaded, setLoaded] = useState(null); // { id, name, plan }
   const [loadErr, setLoadErr] = useState('');
@@ -133,6 +133,8 @@ export default function MoistureTab({ sketches, startId = null, onActive, staff 
           staff={staff}
           staffList={staffList}
           onChange={(plan) => queueSave(loaded.id, plan)}
+          command={command}
+          onCommandDone={onCommandDone}
         />
       )}
     </div>

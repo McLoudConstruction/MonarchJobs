@@ -14,15 +14,18 @@ import PhotosTab from '@/components/job/PhotosTab';
 import SketchTab from '@/components/job/SketchTab';
 import MoistureTab from '@/components/job/MoistureTab';
 import UpdatesTab from '@/components/job/UpdatesTab';
+import JobFab from '@/components/job/JobFab';
 import PhotoViewer from '@/components/job/PhotoViewer';
 import { UploadStatus } from '@/components/job/PhotoUi';
 import { usePhotoUploader } from '@/lib/usePhotoUploader';
 import { eventLabel, updateRecipients } from '@/lib/jobDocs';
+import { fabActions, FAB_LABELS, FAB_HIDDEN_TABS } from '@/lib/jobFab';
 import { getSupabase } from '@/lib/supabaseClient';
 import { doubleBookedIds } from '@/lib/schedule';
 import { fmtDateTime, fmtDuration, JOB_STATUS, JOB_TYPES, addressLine } from '@/lib/format';
 import { displayPhone, telHref } from '@/lib/phone';
 import { staffName, displayNameFor } from '@/lib/userDisplay';
+import { apiFetch } from '@/lib/useAuth';
 
 const JOB_TABS = [
   ['overview', 'Overview'],
@@ -70,6 +73,9 @@ function JobInner({ id, staff, token }) {
   const roomTarget = useRef(null);
   const [otwOpen, setOtwOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
+  // one-shot requests from the phone's action button to a tab: { n } objects, cleared by the tab once it has acted
+  const [moistCmd, setMoistCmd] = useState(null);
+  const [updCmd, setUpdCmd] = useState(null);
 
   // keep the open tab across refreshes and back/forward (#overview, #photos, #sketch ...)
   useEffect(() => {
@@ -79,6 +85,11 @@ function JobInner({ id, staff, token }) {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
   const openTab = (k) => { setTab(k); window.history.replaceState(null, '', `#${k}`); };
+  // a request left over for a tab that is no longer open is dropped
+  useEffect(() => {
+    if (tab !== 'moisture') setMoistCmd(null);
+    if (tab !== 'updates') setUpdCmd(null);
+  }, [tab]);
 
   const load = useCallback(async () => {
     const sb = getSupabase();
@@ -215,6 +226,18 @@ function JobInner({ id, staff, token }) {
   const unassignedVisit = isOffice ? visits.find((v) => v.status === 'scheduled' && !v.tech_id) : null;
   // the phone's action bar follows the visit under way, otherwise the next one waiting
   const dockVisit = visits.find((v) => v.status === 'started' && (isOffice || v.tech_id === staff.id)) || otwVisit;
+  // phone action button: Start Recheck / Start Sketch / Start Job, which becomes Complete Job once the visit is under way
+  const fabKeys = FAB_HIDDEN_TABS.includes(tab) ? [] : fabActions({ hasSketch: sketches.length > 0, visitStatus: dockVisit?.status || null, docsMissing });
+  const fabRun = {
+    recheck: () => { openTab('moisture'); setMoistCmd({ type: 'recheck', n: Date.now() }); },
+    sketch: () => openTab('sketch'),
+    start: async () => {
+      await apiFetch(`/api/visits/${dockVisit.id}/status`, token, { method: 'POST', body: JSON.stringify({ action: 'started' }) });
+      await load();
+    },
+    complete: () => { openTab('updates'); setUpdCmd({ kind: 'internal', category: 'Completed Job', n: Date.now() }); },
+  };
+  const fabItems = fabKeys.map((key) => ({ key, label: FAB_LABELS[key], onClick: fabRun[key] }));
   const contactName = [job.customer.first_name, job.customer.last_name].filter(Boolean).join(' ').trim();
   const anyFlag = visits.some((v) => flagged.has(v.id) && v.status !== 'cancelled');
 
@@ -414,6 +437,8 @@ function JobInner({ id, staff, token }) {
           staff={staff}
           staffList={staffList}
           onOpenSketch={() => openTab('sketch')}
+          command={moistCmd}
+          onCommandDone={() => setMoistCmd(null)}
         />
       )}
 
@@ -435,6 +460,8 @@ function JobInner({ id, staff, token }) {
             contacts.filter((c) => jobContactIds.includes(c.id)),
           )}
           baseUrl={typeof window === 'undefined' ? '' : window.location.origin}
+          command={updCmd}
+          onCommandDone={() => setUpdCmd(null)}
         />
       )}
 
@@ -468,6 +495,8 @@ function JobInner({ id, staff, token }) {
           {events.length === 0 && <p className="muted">No history yet.</p>}
         </div>
       )}
+
+      <JobFab items={fabItems} />
 
       <input
         ref={roomInput}

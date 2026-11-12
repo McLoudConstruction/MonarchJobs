@@ -1919,3 +1919,39 @@ button.assign-btn:hover{ background: #d90000; border-color: #d90000; box-shadow:
 .sk-recheck.on.all .sk-rc-bar b{ background: #2b8a3e; }
 .sk-recheck.done{ border-color: #2b8a3e; }
 .sk-pastday{ padding: 8px 10px; border-radius: 10px; background: #fff4e6; border: 1px solid #ffa94d; color: #7c4a03; font-size: 13px; line-height: 1.35; }
+
+/* ---------- Phones: fixed page zoom ---------- */
+/* iOS zooms the page when a field under 16px is focused, so every field is 16px on touch screens
+   and the zoom stays put while typing. The big reading box keeps its larger size. */
+html{ touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+@media (pointer: coarse), (max-width: 899px){
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="button"]):not([type="submit"]),
+  textarea, select{ font-size: 16px !important; }
+  .sk-field.big input{ font-size: 24px !important; }
+}
+
+/* ---------- Phones: job action button ---------- */
+.job-fab{ display: none; }
+@media (max-width: 899px){
+  .job-fab{ display: block; }
+  .job-fab-scrim{ position: fixed; inset: 0; z-index: 47; background: rgba(0,0,0,0.35); }
+  .job-fab-btn{
+    position: fixed; right: 16px; bottom: calc(64px + env(safe-area-inset-bottom) + 16px); z-index: 49;
+    width: 56px; height: 56px; padding: 0; border-radius: 50%; border: 0;
+    background: var(--accent); color: var(--accent-ink); box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+    font: inherit; font-size: 32px; font-weight: 400; line-height: 1; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .job-fab-btn span{ display: block; transition: transform .15s ease; margin-top: -2px; }
+  .job-fab-btn.open span{ transform: rotate(45deg); }
+  .job-fab-menu{
+    position: fixed; right: 16px; bottom: calc(64px + env(safe-area-inset-bottom) + 84px); z-index: 49;
+    display: flex; flex-direction: column; align-items: stretch; gap: 8px; min-width: 190px;
+  }
+  .job-fab-item{
+    min-height: 48px; padding: 0 20px; border-radius: 24px; border: 1px solid var(--line);
+    background: var(--card-bg); color: var(--heading); box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+    font: inherit; font-size: 16px; font-weight: 700; text-align: left; cursor: pointer;
+  }
+  .job-fab-item:disabled{ opacity: 0.6; }
+}
