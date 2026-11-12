@@ -1955,3 +1955,11 @@ html{ touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adju
   }
   .job-fab-item:disabled{ opacity: 0.6; }
 }
+
+/* ---------- iPhone: dark header runs under the status bar ---------- */
+/* With viewport-fit=cover the page reaches the top edge, so the header carries the notch padding
+   itself and iOS sees dark, not the light page, behind the clock. Full-screen overlays that start at
+   the top clear the notch the same way. */
+.shell-topbar-mobile{ padding-top: calc(8px + env(safe-area-inset-top)); }
+.pv-top{ padding-top: max(10px, env(safe-area-inset-top)); }
+.sketch-full, .sketch:fullscreen{ padding-top: max(10px, env(safe-area-inset-top)); }
