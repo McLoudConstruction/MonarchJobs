@@ -1880,9 +1880,9 @@ button.assign-btn:hover{ background: #d90000; border-color: #d90000; box-shadow:
 .sk-sheet button, .sk-sheet .sk-num{ -webkit-tap-highlight-color: transparent; }
 
 /* The day strip: the point across every day, replacing the one-line status */
-.sk-strip{ position: relative; display: flex; align-items: stretch; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; margin: 0 -14px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+.sk-strip{ flex: 0 0 auto; min-height: max-content; position: relative; display: flex; align-items: stretch; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; margin: 0 -14px; padding: 0 14px; border-bottom: 1px solid var(--line); }
 .sk-strip::-webkit-scrollbar{ display: none; }
-.sk-sheet .sk-sd{ position: relative; flex: 1 0 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 0; min-width: 92px; padding: 6px 14px 8px 0; margin-right: 14px; border: 0; border-right: 1px solid var(--line); border-radius: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.sk-sheet .sk-sd{ position: relative; flex: 1 0 auto; align-self: stretch; display: flex; flex-direction: column; align-items: flex-start; gap: 0; min-width: 92px; padding: 6px 14px 8px 0; margin-right: 14px; border: 0; border-right: 1px solid var(--line); border-radius: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 .sk-sheet .sk-sd:last-child{ border-right: 0; margin-right: 0; }
 .sk-sd-day{ font-size: 12px; font-weight: 700; color: var(--ink-soft); line-height: 1.25; }
 .sk-sd-date{ font-size: 11px; color: var(--ink-soft); opacity: .8; line-height: 1.25; }
