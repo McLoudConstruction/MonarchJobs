@@ -1207,7 +1207,7 @@ a.stat-tile:hover{ border-color: var(--accent); }
 .sketch-tools button:disabled{ opacity: 0.4; cursor: not-allowed; }
 .sketch-stage{ position: relative; width: 100%; height: min(62vh, 560px); min-height: 320px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
 .sketch-canvas{ display: block; touch-action: none; user-select: none; -webkit-user-select: none; cursor: default; }
-.sketch-canvas.tool-room, .sketch-canvas.tool-pen, .sketch-canvas.tool-text, .sketch-canvas.tool-area, .sketch-canvas.tool-break, .sketch-canvas.tool-corner{ cursor: crosshair; }
+.sketch-canvas.tool-moisture, .sketch-canvas.tool-room, .sketch-canvas.tool-pen, .sketch-canvas.tool-text, .sketch-canvas.tool-area, .sketch-canvas.tool-break, .sketch-canvas.tool-corner{ cursor: crosshair; }
 .sketch-canvas.tool-pan{ cursor: grab; }
 .sketch-summary{ margin: 8px 0; font-size: 13px; font-weight: 600; }
 .sketch-summary .muted{ font-weight: 400; }
@@ -1708,3 +1708,13 @@ button.assign-btn:hover{ background: #d90000; border-color: #d90000; box-shadow:
 .push-nudge span{ flex: 1; min-width: 0; }
 .push-nudge a{ color: var(--accent-text); font-weight: 700; text-decoration: none; white-space: nowrap; }
 .push-nudge button{ background: none; border: none; color: var(--ink-soft); font-size: 20px; line-height: 1; cursor: pointer; padding: 0 4px; }
+
+/* moisture points: reading history in the editor, and the dry standards list */
+.sk-readings{ list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 190px; overflow: auto; }
+.sk-readings li{ position: relative; padding: 6px 26px 6px 8px; border: 1px solid var(--line); border-radius: 7px; font-size: 12.5px; }
+.sk-readings li .sk-x{ position: absolute; top: 4px; right: 4px; }
+.sk-gpp{ padding: 5px 0; font-size: 13px; }
+.sk-std{ width: min(520px, 94vw); max-height: 86vh; overflow: auto; }
+.sk-std-list{ display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.sk-std-row{ display: grid; grid-template-columns: 1fr 70px minmax(0, 1.4fr); gap: 8px; align-items: center; font-size: 13px; }
+.sk-std-row input, .sk-std-row select{ padding: 5px 8px; font-size: 13px; min-width: 0; }

@@ -5,15 +5,20 @@ import { createPortal } from 'react-dom';
 import { staffName } from '@/lib/userDisplay';
 import {
   AREA_KINDS, MARK_COLORS, MAX_MARKS, MAX_ROOMS, MAX_AREAS, MAX_SOURCES, MIN_ROOM, MAX_ROOM, ROOM_PRESETS, SURFACES, WALL_HEIGHTS, WATER_CATS,
-  addCornerCut, affectedTotals, carveRooms, cleanSurfaces, cleanWater, dropStraightPoints, edgeLength, fitView, hitMarkAt, hitRoom, hitSource,
+  addCornerCut, affectedTotals, carveRooms, cleanSurfaces, cleanWater, dropStraightPoints, edgeLength, fitView, heightFor, hitMarkAt, hitRoom, hitSource,
   insertBreak, isRect, makeId, moveEdgeSnapped, moveVertex, nearestAnchor, nearestEdge, nearestVertex, newArea, newRoom, newSource, normalizePlan, placeGrowth,
   parseFeet, pickArea, planBounds, rectPts, removeVertex, resizeRect, roomAreaText, roomBox, roomSizeText, setEdgeLength,
   simplifyStroke, snap, snapOnEdge, surfaceText, tidyPts, toScreen, toWorld, totalArea, translatePts, fmtFeet,
 } from '@/lib/sketch';
 import { drawPlan, areaStyle, WATER_LINE } from '@/lib/sketchDraw';
+import {
+  MAX_MOISTURE, MAX_READINGS, MOISTURE_COLORS, MOISTURE_MATERIALS, MOISTURE_SURFACES, MOISTURE_TYPES, STATUS_TEXT, TREND_MARK,
+  airText, fmtReading, goalFor, gpp, hitMoisture, makeMoisture, makeReading, moistureCounts, moistureStatus, nextNumber, parseReading, sortedReadings, valueText,
+} from '@/lib/moisture';
 import { OBJECT_TYPES, OBJECT_GROUPS, MAX_OBJECTS, makeObject, objectCounts, isInches, inchesText, parseInches } from '@/lib/objectTypes';
 import { placeObject, hitObject, nearestWall, wallSpan } from '@/lib/sketchObjects';
 import { jpegToPdf } from '@/lib/pdfImage';
+import { moistureLogCsv } from '@/lib/moistureLog';
 import { hitComment, tagsFromText, segments, timeAgo, logEntry, withLog, canDeleteComment, activity, MAX_COMMENTS, MAX_REPLIES } from '@/lib/sketchComments';
 import MentionBox from '@/components/job/MentionBox';
 
@@ -26,10 +31,11 @@ const TOOLS = [
   ['missing', 'Missing wall', 'M'],
   ['area', 'Affected areas', 'W'],
   ['object', 'Objects', 'O'],
+  ['moisture', 'Moisture', 'P'],
   ['text', 'Text', 'T'],
   ['comment', 'Comment', 'K'],
 ];
-const KEYS = { v: 'select', r: 'room', b: 'break', c: 'corner', m: 'missing', w: 'area', o: 'object', t: 'text', k: 'comment' };
+const KEYS = { v: 'select', r: 'room', b: 'break', c: 'corner', m: 'missing', w: 'area', o: 'object', p: 'moisture', t: 'text', k: 'comment' };
 const HINTS = {
   select: 'Click a room to select it. Drag a wall to slide it along its neighbours, or drag a corner to make an angle. Hold Ctrl and drag a corner or wall to start a new room there. Double-click a corner, or press Delete with it selected, to remove it.',
   missing: 'Click a wall to mark all of it as missing (open to the next space), or drag along a wall to mark just that stretch. Click a missing wall with Select to change or delete it.',
@@ -39,6 +45,7 @@ const HINTS = {
   corner: 'Hover a wall and click to add a corner. To cut off a corner of a room, click one wall, then click the wall next to it. The tool stays on, so keep clicking. Esc starts over.',
   area: 'Pick what to mark and which surfaces it is on, then draw around it. It is cleaned up when you let go.',
   object: 'Pick an object, then click to place it. Doors, windows and outlets snap to the wall; cabinets and fixtures sit flush against it. Hold Alt to place freely. Esc stops. Click one with Select to edit it.',
+  moisture: 'Pick the surface, material and meter scale, then tap where the reading was taken. Type the reading and humidity and press Enter. To take the same spot again later, tap its pin and add a new reading.',
   text: 'Tap where the note should go, then type it.',
   comment: 'Tap the spot the comment is about, then type. Type @ to tag a teammate. Tap a comment pin to read, reply or resolve it.',
 };
@@ -67,6 +74,16 @@ function SurfaceChips({ value, onChange }) {
     </div>
   );
 }
+function SurfacePick({ value, onChange }) {
+  return (
+    <div className="chips" role="group" aria-label="Surface the reading is on">
+      {Object.entries(MOISTURE_SURFACES).map(([k, label]) => (
+        <button key={k} type="button" className={value === k ? 'on' : ''} aria-pressed={value === k} onClick={() => onChange(k)}>{label}</button>
+      ))}
+    </div>
+  );
+}
+const whenText = (iso) => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 function CatChips({ value, onChange }) {
   return (
     <div className="chips" role="group" aria-label="Water category">
@@ -135,6 +152,12 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   const [surfaces, setSurfaces] = useState(['floor']); // surfaces for the next thing drawn
   const [wallHeight, setWallHeight] = useState(2);
   const [surfaceView, setSurfaceView] = useState('all'); // which surface to show: all, floor, wall, ceiling
+  const [moist, setMoist] = useState({ surface: 'floor', material: 'drywall', type: 'mc' }); // what the next moisture point is
+  const [moistLabels, setMoistLabels] = useState(true); // show the reading beside each moisture pin
+  const [rd, setRd] = useState({ val: '', note: '' }); // the reading being typed
+  const [air, setAir] = useState({ rh: '', temp: '' }); // humidity and temperature carry over to the next reading: the air is the same
+  const [rdErr, setRdErr] = useState('');
+  const [stdOpen, setStdOpen] = useState(false); // the dry standards list
   const [menuOpen, setMenuOpen] = useState(false);
   const [popH, setPopH] = useState(320); // measured height of the open popup, so it can be kept on the sketch
   const [objMenu, setObjMenu] = useState(false);
@@ -168,6 +191,10 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   areaRef.current = { kind: areaKind, cat: waterCat, mode: areaMode, surfaces, height: wallHeight, auto: growthAuto };
   const surfaceRef = useRef('all');
   surfaceRef.current = surfaceView;
+  const moistRef = useRef(moist);
+  moistRef.current = moist;
+  const moistLabelsRef = useRef(true);
+  moistLabelsRef.current = moistLabels;
   const popupRef = useRef(null);
   popupRef.current = popup;
   const fullRef = useRef(false);
@@ -189,7 +216,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     const committed = planRef.current;
     if (totalsRef.current.plan !== committed) totalsRef.current = { plan: committed, totals: affectedTotals(committed) };
     drawPlan(ctx, d?.plan || committed, viewRef.current, {
-      W: sizeRef.current.W, H: sizeRef.current.H, selection: selRef.current, counts: countsRef.current, surface: surfaceRef.current,
+      W: sizeRef.current.W, H: sizeRef.current.H, selection: selRef.current, counts: countsRef.current, surface: surfaceRef.current, moistLabels: moistLabelsRef.current,
       affected: totalsRef.current.totals.rooms, draft: d?.draft || null, hover: d ? null : hoverRef.current,
       pending: toolRef.current === 'corner' ? lastCornerRef.current : null,
       meId: meRef.current.id, commentDraft: cmDraftRef.current,
@@ -203,7 +230,9 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
 
   useEffect(() => { countsRef.current = photoCounts; schedule(); }, [photoCounts, schedule]);
   useEffect(() => { schedule(); setDimErr(''); }, [sel, schedule]);
-  useEffect(() => { schedule(); }, [surfaceView, schedule]);
+  useEffect(() => { schedule(); }, [surfaceView, moistLabels, schedule]);
+  const moistSelId = sel?.kind === 'moisture' ? sel.id : null;
+  useEffect(() => { setRd({ val: '', note: '' }); setRdErr(''); }, [moistSelId]);
   useEffect(() => { hoverRef.current = null; lastCornerRef.current = null; setPopup(null); setMenuOpen(false); setObjMenu(false); ghostRef.current = null; schedule(); }, [tool, schedule]);
 
   // size the canvas to its box, keep it crisp on high-density screens, and fit the drawing once
@@ -249,7 +278,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
 
   const findSel = (plan, s) => {
     if (!s) return null;
-    const list = s.kind === 'room' ? plan.rooms : s.kind === 'area' ? plan.areas : s.kind === 'source' ? plan.sources : s.kind === 'object' ? plan.objects : s.kind === 'comment' ? plan.comments : plan.marks;
+    const list = s.kind === 'room' ? plan.rooms : s.kind === 'area' ? plan.areas : s.kind === 'source' ? plan.sources : s.kind === 'object' ? plan.objects : s.kind === 'moisture' ? plan.moisture : s.kind === 'comment' ? plan.comments : plan.marks;
     return list.find((x) => x.id === s.id) || null;
   };
 
@@ -297,6 +326,9 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   function patchObject(id, patch) {
     commit({ ...planRef.current, objects: planRef.current.objects.map((o) => (o.id === id ? { ...o, ...patch } : o)) });
   }
+  function patchMoisture(id, patch) {
+    commit({ ...planRef.current, moisture: planRef.current.moisture.map((m) => (m.id === id ? { ...m, ...patch } : m)) });
+  }
   function duplicateObject(o) {
     const p = planRef.current;
     if (p.objects.length >= MAX_OBJECTS) return;
@@ -323,6 +355,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     else if (s.kind === 'area') commit({ ...p, areas: p.areas.filter((a) => a.id !== s.id) });
     else if (s.kind === 'source') commit({ ...p, sources: p.sources.filter((q) => q.id !== s.id) });
     else if (s.kind === 'object') commit({ ...p, objects: p.objects.filter((o) => o.id !== s.id) });
+    else if (s.kind === 'moisture') commit({ ...p, moisture: p.moisture.filter((m) => m.id !== s.id) });
     else if (s.kind === 'comment') {
       const c = p.comments.find((x) => x.id === s.id);
       if (!c || !canDeleteComment(c, meRef.current.id)) return; // only the author can delete
@@ -409,7 +442,8 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     canvasRef.current.setPointerCapture?.(e.pointerId);
     const p = local(e);
     pointers.current.set(e.pointerId, p);
-    if (popupRef.current) closePopup();
+    const hadPopup = !!popupRef.current;
+    if (hadPopup) closePopup();
     setMenuOpen(false); setObjMenu(false);
 
     if (pointers.current.size === 2) { // second finger: pinch and pan, drop whatever was being drawn
@@ -495,6 +529,26 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       } else dragRef.current = null;
       return;
     }
+    if (t === 'moisture') { // tap to place a point and write its first reading; tap an existing pin to add another reading
+      if (hadPopup) { dragRef.current = null; return; } // the tap that closes the editor does not also place a point
+      const hit = hitMoisture(plan, w.x, w.y, tolFt * 0.9, surfaceRef.current);
+      if (hit) {
+        setSel({ kind: 'moisture', id: hit.id });
+        dragRef.current = { mode: 'move-moist', id: hit.id, sx: p.x, sy: p.y, wx: w.x, wy: w.y, orig: { x: hit.x, y: hit.y }, plan, moved: false };
+        schedule();
+        return;
+      }
+      if (plan.moisture.length < MAX_MOISTURE) {
+        const m = moistRef.current;
+        const pt = makeMoisture(nextNumber(plan.moisture), snap(w.x, 0.25), snap(w.y, 0.25), { surface: m.surface, material: m.material, type: m.type });
+        commit({ ...plan, moisture: [...plan.moisture, pt] });
+        setSel({ kind: 'moisture', id: pt.id });
+        const at = toScreen(viewRef.current, pt.x, pt.y);
+        openPopup(at.x, at.y);
+      }
+      dragRef.current = null;
+      return;
+    }
     if (t === 'object') { // click to place; the tool stays on so several can go in a row
       if (plan.objects.length < MAX_OBJECTS) {
         const type = objTypeRef.current;
@@ -545,15 +599,19 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       return;
     }
     const filter = surfaceRef.current;
-    const pin = hitSource(plan, w.x, w.y, tolFt * 0.9, filter);
-    const obj = pin ? null : hitObject(plan, w.x, w.y, tolFt, filter);
-    const mark = pin || obj ? null : hitMarkAt(plan, w.x, w.y, tolFt * 0.6);
+    const mp = hitMoisture(plan, w.x, w.y, tolFt * 0.9, filter);
+    const pin = mp ? null : hitSource(plan, w.x, w.y, tolFt * 0.9, filter);
+    const obj = mp || pin ? null : hitObject(plan, w.x, w.y, tolFt, filter);
+    const mark = mp || pin || obj ? null : hitMarkAt(plan, w.x, w.y, tolFt * 0.6);
     const picked = pickArea(plan, w.x, w.y, edgeTol * 1.4, filter);
     const room = hitRoom(plan, w.x, w.y);
     // an affected area is picked by its edge, or anywhere on it when no room is under it, so a wet room can still be selected
     const area = picked && (picked.onEdge || !room || (cur && s.kind === 'area' && cur.id === picked.area.id)) ? picked.area : null;
     // a pin, pen stroke or note lying on a room wins over the room under it
-    if (pin) {
+    if (mp) {
+      setSel({ kind: 'moisture', id: mp.id });
+      dragRef.current = { mode: 'move-moist', id: mp.id, sx: p.x, sy: p.y, wx: w.x, wy: w.y, orig: { x: mp.x, y: mp.y }, plan, moved: false };
+    } else if (pin) {
       setSel({ kind: 'source', id: pin.id });
       dragRef.current = { mode: 'move-pin', id: pin.id, wx: w.x, wy: w.y, orig: { x: pin.x, y: pin.y }, plan, moved: false };
     } else if (obj) {
@@ -681,6 +739,13 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       const nx = snap(d.orig.x + (w.x - d.wx), 0.25);
       const ny = snap(d.orig.y + (w.y - d.wy), 0.25);
       d.plan = { ...d.plan, sources: d.plan.sources.map((x) => (x.id === d.id ? { ...x, x: nx, y: ny } : x)) };
+    } else if (d.mode === 'move-moist') {
+      if (!d.moved && Math.hypot(p.x - d.sx, p.y - d.sy) > 5) d.moved = true; // a tap that wobbles is still a tap
+      if (d.moved) {
+        const nx = snap(d.orig.x + (w.x - d.wx), 0.25);
+        const ny = snap(d.orig.y + (w.y - d.wy), 0.25);
+        d.plan = { ...d.plan, moisture: d.plan.moisture.map((x) => (x.id === d.id ? { ...x, x: nx, y: ny } : x)) };
+      }
     } else if (d.mode === 'missing') {
       const h = d.hit;
       const s = Math.max(0, Math.min(h.len, Math.round(((w.x - h.a[0]) * h.ux + (w.y - h.a[1]) * h.uy) / 0.25) * 0.25));
@@ -730,7 +795,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     dragRef.current = null;
     const plan = planRef.current;
     // a plain click on something (no drag) opens its editor next to the click
-    if (p && ['move-room', 'vertex', 'edge', 'move-mark', 'avertex', 'move-area', 'move-pin', 'move-obj', 'move-comment'].includes(d.mode) && !d.moved) openPopup(p.x, p.y);
+    if (p && ['move-room', 'vertex', 'edge', 'move-mark', 'avertex', 'move-area', 'move-pin', 'move-obj', 'move-moist', 'move-comment'].includes(d.mode) && !d.moved) openPopup(p.x, p.y);
 
     if (d.mode === 'missing') {
       const h = d.hit;
@@ -782,7 +847,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
       if (p && Math.hypot(p.x - d.sx, p.y - d.sy) < 8 && planRef.current.comments.length < MAX_COMMENTS) { setPopup(null); setSel(null); setCmDraft({ x: Math.round(d.wx * 100) / 100, y: Math.round(d.wy * 100) / 100, value: '' }); }
     } else if (d.mode === 'text') {
       if (p && Math.hypot(p.x - d.sx, p.y - d.sy) < 8) setTextDraft({ x: snap(d.wx, 0.25), y: snap(d.wy, 0.25), value: '' });
-    } else if (['move-room', 'vertex', 'edge', 'move-mark', 'avertex', 'move-area', 'move-pin', 'move-obj', 'move-comment'].includes(d.mode) && d.moved && d.plan) {
+    } else if (['move-room', 'vertex', 'edge', 'move-mark', 'avertex', 'move-area', 'move-pin', 'move-obj', 'move-moist', 'move-comment'].includes(d.mode) && d.moved && d.plan) {
       let next = d.plan;
       if (d.mode === 'vertex' || d.mode === 'edge') {
         // a corner or wall that now lines up with its neighbours leaves a stray point: drop it
@@ -960,6 +1025,39 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     patchRoom(selected.id, { pts: setEdgeLength(selected.pts, sel.ei, ft) });
   }
 
+  // ---- moisture readings -------------------------------------------------
+  const isStaffOffice = !!staff && staff.role !== 'tech';
+  function addReading(e) {
+    e?.preventDefault();
+    const m = selRef.current?.kind === 'moisture' ? findSel(planRef.current, selRef.current) : null;
+    if (!m) return;
+    const val = parseReading(rd.val);
+    if (!Number.isFinite(val) || val > 100) { setRdErr('Enter the reading as a number from 0 to 100.'); return; }
+    const rhT = air.rh.trim();
+    const tempT = air.temp.trim();
+    const rhV = rhT === '' ? null : parseReading(rhT);
+    if (rhV !== null && (!Number.isFinite(rhV) || rhV > 100)) { setRdErr('Humidity is a number from 0 to 100.'); return; }
+    const tempV = tempT === '' ? null : Number(tempT);
+    if (tempV !== null && (!Number.isFinite(tempV) || tempV < -20 || tempV > 200)) { setRdErr('Temperature is a number in degrees F.'); return; }
+    if (m.readings.length >= MAX_READINGS) { setRdErr(`A point holds up to ${MAX_READINGS} readings.`); return; }
+    patchMoisture(m.id, { readings: [...m.readings, makeReading({ val, rh: rhV, temp: tempV, note: rd.note, by: meRef.current })] });
+    setRd({ val: '', note: '' });
+    setRdErr('');
+    closePopup(); // ready for the next spot
+  }
+  function setStandard(key, valText, type) {
+    const t = valText.trim();
+    const std = { ...planRef.current.standards };
+    if (t === '') delete std[key];
+    else {
+      const v = parseReading(t);
+      if (!Number.isFinite(v) || v > 100) return false;
+      std[key] = { val: v, type };
+    }
+    commit({ ...planRef.current, standards: std });
+    return true;
+  }
+
   // ---- export ------------------------------------------------------------
   function renderExport() {
     const plan = planRef.current;
@@ -976,11 +1074,11 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     drawPlan(ctx, plan, view, { W, H, counts: {}, affected: totalsFor(plan).rooms, surface: 'all', grid: true, comments: false });
     return out;
   }
-  function download(blob, ext) {
+  function download(blob, ext, suffix = '') {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${exportName.replace(/[^a-z0-9-_]+/gi, '-').replace(/^-+|-+$/g, '') || 'sketch'}.${ext}`;
+    a.download = `${exportName.replace(/[^a-z0-9-_]+/gi, '-').replace(/^-+|-+$/g, '') || 'sketch'}${suffix}.${ext}`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -988,6 +1086,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   }
   function exportAs(kind) {
     setExportOpen(false);
+    if (kind === 'csv') { download(new Blob([moistureLogCsv(planRef.current)], { type: 'text/csv;charset=utf-8' }), 'csv', '-moisture-log'); return; }
     const out = renderExport();
     if (!out) return;
     if (kind === 'png') {
@@ -1001,7 +1100,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
     }, 'image/jpeg', 0.92);
   }
   const plan = planRef.current;
-  const hasContent = !!(plan.rooms.length || plan.marks.length || plan.areas.length || plan.sources.length || plan.objects.length || plan.comments.length);
+  const hasContent = !!(plan.rooms.length || plan.marks.length || plan.areas.length || plan.sources.length || plan.objects.length || plan.moisture.length || plan.comments.length);
   const total = totalArea(plan);
   const totals = totalsFor(plan);
   const room = selected && sel.kind === 'room' ? selected : null;
@@ -1009,6 +1108,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
   const obj = selected && sel.kind === 'object' ? selected : null;
   const area = selected && sel.kind === 'area' ? selected : null;
   const pin = selected && sel.kind === 'source' ? selected : null;
+  const mp = selected && sel.kind === 'moisture' ? selected : null;
   const cm = selected && sel.kind === 'comment' ? selected : null;
   const roomPhotos = room ? photoCounts[room.id] || 0 : 0;
   const rect = room ? isRect(room) : false;
@@ -1112,7 +1212,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
                 {label}
               </button>
             )))}
-            <select className="sketch-view" value={surfaceView} onChange={(e) => setSurfaceView(e.target.value)} aria-label="Surface to show" title="Which surface to show">
+            <select className="sketch-view" value={surfaceView} onChange={(e) => { setSurfaceView(e.target.value); if (e.target.value !== 'all') setMoist((m) => ({ ...m, surface: e.target.value })); }} aria-label="Surface to show" title="Which surface to show">
               {SURFACE_VIEWS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
             </select>
           </div>
@@ -1126,7 +1226,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
                   <button type="button" className={growthAuto ? '' : 'on'} aria-pressed={!growthAuto} onClick={() => setGrowthAuto(false)}>Manual</button>
                 </div>
               )}
-              {areaKind !== 'source' && !(areaKind === 'growth' && growthAuto) && <SurfaceChips value={surfaces} onChange={setSurfaces} />}
+              {areaKind !== 'source' && !(areaKind === 'growth' && growthAuto) && <SurfaceChips value={surfaces} onChange={(next) => { setSurfaces(next); setWallHeight((h) => heightFor(next, h)); }} />}
               {areaKind !== 'source' && (areaKind === 'growth' && growthAuto ? true : surfaces.includes('wall')) && (<><span className="muted">up the wall</span><HeightChips value={wallHeight} onChange={setWallHeight} /></>)}
               {areaKind === 'growth' && growthAuto && <span className="muted">Draw a line along a wall or a loop for the ceiling.</span>}
               {areaKind !== 'source' && (
@@ -1136,6 +1236,22 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
                   ))}
                 </div>
               )}
+            </div>
+          )}
+          {tool === 'moisture' && (
+            <div className="sketch-strip" aria-label="Moisture point options">
+              <span className="sk-strip-kind"><span className="sk-dot" style={{ background: MOISTURE_COLORS.unset }} /><strong>Moisture point</strong></span>
+              <SurfacePick value={moist.surface} onChange={(v) => setMoist({ ...moist, surface: v })} />
+              <select className="sketch-view" value={moist.material} onChange={(e) => setMoist({ ...moist, material: e.target.value })} aria-label="Material">
+                {Object.entries(MOISTURE_MATERIALS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+              </select>
+              <select className="sketch-view" value={moist.type} onChange={(e) => setMoist({ ...moist, type: e.target.value })} aria-label="Reading type">
+                {Object.entries(MOISTURE_TYPES).map(([k, t]) => <option key={k} value={k}>{t.label}</option>)}
+              </select>
+              <div className="chips" role="group" aria-label="Moisture options">
+                <button type="button" className={moistLabels ? 'on' : ''} aria-pressed={moistLabels} onClick={() => setMoistLabels(!moistLabels)} title="Show the reading beside each pin">Readings</button>
+                <button type="button" onClick={() => setStdOpen(true)} title="The dry standard for each material on this job">Dry standards</button>
+              </div>
             </div>
           )}
           {tool === 'object' && (
@@ -1263,7 +1379,7 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
                 </div>
                 {area.kind === 'water' && <CatChips value={area.cat} onChange={(n) => patchArea(area.id, { cat: n })} />}
                 <div className="muted sk-label">Surfaces</div>
-                <SurfaceChips value={area.surfaces} onChange={(next) => patchArea(area.id, { surfaces: next })} />
+                <SurfaceChips value={area.surfaces} onChange={(next) => patchArea(area.id, { surfaces: next, height: heightFor(next, area.height) })} />
                 {area.surfaces.includes('wall') && (<><div className="muted sk-label">Up the wall</div><HeightChips value={area.height} onChange={(h) => patchArea(area.id, { height: h })} /></>)}
                 <div className="muted">{areaStat ? `${surfaceText(areaStat)} sq ft` : 'Not inside any room yet.'} Drag the corners to adjust, or the shape to move it.</div>
                 <div className="row">
@@ -1286,6 +1402,100 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
                 <div className="row"><button type="button" className="danger small" onClick={removeSelected}>Delete</button></div>
               </>
             )}
+
+            {mp && (() => {
+              const goal = goalFor(plan, mp);
+              const st = moistureStatus(mp, goal);
+              const color = MOISTURE_COLORS[st.state];
+              const short = MOISTURE_TYPES[mp.type].short;
+              const roomHere = hitRoom(plan, mp.x, mp.y);
+              const ordered = sortedReadings(mp);
+              const std = plan.standards[mp.material];
+              const airGpp = gpp(air.temp.trim() === '' ? null : air.temp, air.rh.trim() === '' ? null : air.rh);
+              const canDel = (r) => isStaffOffice || (!!r.by?.id && r.by.id === me.id);
+              return (
+                <>
+                  <div className="sketch-pop-head"><strong><span className="sk-dot" style={{ background: color }} />Moisture point {mp.n}</strong>{closeBtn}</div>
+                  <div className="muted">{roomHere?.label || 'Not in a named room'} · {MOISTURE_MATERIALS[mp.material]} · {MOISTURE_SURFACES[mp.surface]}{mp.surface === 'wall' && mp.h != null ? ` at ${fmtFeet(mp.h)}` : ''}</div>
+                  <div className="sk-aff" style={{ color }}><strong>{STATUS_TEXT[st.state]}</strong>{goal != null ? ` · dry standard ${fmtReading(goal)}${short}` : ''}{st.trend ? ` · ${TREND_MARK[st.trend]} since the last reading` : ''}</div>
+                  <form key={mp.id} className="sk-rd-form" onSubmit={addReading}>
+                    <div className="grid2">
+                      <div className="field"><label htmlFor="sk-rd-val">Reading ({short.trim()})</label>
+                        <input id="sk-rd-val" autoFocus inputMode="decimal" value={rd.val} onChange={(e) => setRd({ ...rd, val: e.target.value })} placeholder="12.4" />
+                      </div>
+                      <div className="field"><label htmlFor="sk-rd-rh">Humidity (% RH)</label>
+                        <input id="sk-rd-rh" inputMode="decimal" value={air.rh} onChange={(e) => setAir({ ...air, rh: e.target.value })} placeholder="48" />
+                      </div>
+                    </div>
+                    <div className="grid2">
+                      <div className="field"><label htmlFor="sk-rd-temp">Temperature (&deg;F)</label>
+                        <input id="sk-rd-temp" inputMode="decimal" value={air.temp} onChange={(e) => setAir({ ...air, temp: e.target.value })} placeholder="72" />
+                      </div>
+                      <div className="field"><label>GPP</label><div className="muted sk-gpp">{airGpp != null ? Math.round(airGpp) : 'needs temp and RH'}</div></div>
+                    </div>
+                    <div className="field"><label htmlFor="sk-rd-note">Note</label>
+                      <input id="sk-rd-note" maxLength={80} value={rd.note} onChange={(e) => setRd({ ...rd, note: e.target.value })} placeholder="Behind the dishwasher..." />
+                    </div>
+                    {rdErr && <div className="msg err" style={{ margin: 0 }}>{rdErr}</div>}
+                    <div className="row"><button className="primary small" disabled={!rd.val.trim()}>Add reading</button></div>
+                  </form>
+                  {ordered.length > 0 && (
+                    <ul className="sk-readings" aria-label="Readings at this point, newest first">
+                      {ordered.map((r, i) => {
+                        const before = i > 0 ? ordered[i - 1] : null;
+                        const tr = before ? (Math.abs(r.val - before.val) < 0.05 ? 'flat' : r.val < before.val ? 'down' : 'up') : null;
+                        return (
+                          <li key={r.id}>
+                            <div><strong>{valueText(mp, r)}</strong>{tr ? ` ${TREND_MARK[tr]}` : ''} <span className="muted">{airText(r)}</span></div>
+                            <div className="muted">{whenText(r.at)}{r.by?.name ? ` · ${r.by.name}` : ''}{r.note ? ` · ${r.note}` : ''}</div>
+                            {canDel(r) && <button type="button" className="sk-x" aria-label="Delete this reading" onClick={() => patchMoisture(mp.id, { readings: mp.readings.filter((x) => x.id !== r.id) })}>{'\u00d7'}</button>}
+                          </li>
+                        );
+                      }).reverse()}
+                    </ul>
+                  )}
+                  <details className="sk-more">
+                    <summary>Point details</summary>
+                    <div className="muted sk-label">Surface</div>
+                    <SurfacePick value={mp.surface} onChange={(v) => patchMoisture(mp.id, { surface: v })} />
+                    <div className="grid2">
+                      <div className="field"><label htmlFor="sk-mp-mat">Material</label>
+                        <select id="sk-mp-mat" value={mp.material} onChange={(e) => patchMoisture(mp.id, { material: e.target.value })}>
+                          {Object.entries(MOISTURE_MATERIALS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                        </select>
+                      </div>
+                      <div className="field"><label htmlFor="sk-mp-type">Reading type</label>
+                        <select id="sk-mp-type" value={mp.type} onChange={(e) => patchMoisture(mp.id, { type: e.target.value })} title="Applies to every reading at this point">
+                          {Object.entries(MOISTURE_TYPES).map(([k, t]) => <option key={k} value={k}>{t.label}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid2">
+                      <div className="field"><label htmlFor="sk-mp-goal">Dry standard</label>
+                        <input id="sk-mp-goal" key={`${mp.id}-g-${mp.goal}-${mp.material}-${mp.type}`} inputMode="decimal" defaultValue={mp.goal == null ? '' : fmtReading(mp.goal)}
+                          placeholder={std && std.type === mp.type ? `job: ${fmtReading(std.val)}` : 'none'}
+                          onBlur={(e) => {
+                            const t = e.target.value.trim();
+                            if (t === '') { if (mp.goal != null) patchMoisture(mp.id, { goal: null }); return; }
+                            const v = parseReading(t);
+                            if (Number.isFinite(v) && v <= 100) { if (v !== mp.goal) patchMoisture(mp.id, { goal: v }); } else e.target.value = mp.goal == null ? '' : fmtReading(mp.goal);
+                          }}
+                          onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
+                      </div>
+                      {mp.surface === 'wall' && (
+                        <div className="field"><label htmlFor="sk-mp-h">Height up the wall</label>
+                          <input id="sk-mp-h" key={`${mp.id}-h-${mp.h}`} inputMode="decimal" defaultValue={mp.h == null ? '' : fmtFeet(mp.h)} placeholder="2'"
+                            onBlur={(e) => { const t = e.target.value.trim(); if (t === '') { if (mp.h != null) patchMoisture(mp.id, { h: null }); return; } const ft = parseFeet(t); if (Number.isFinite(ft) && ft <= 30) { if (ft !== mp.h) patchMoisture(mp.id, { h: Math.round(ft * 100) / 100 }); } else e.target.value = mp.h == null ? '' : fmtFeet(mp.h); }}
+                            onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
+                        </div>
+                      )}
+                    </div>
+                    <div className="muted">A point&apos;s own dry standard wins over the job standard for its material. Drag the pin to move it.</div>
+                  </details>
+                  <div className="row"><button type="button" className="danger small" onClick={() => { if (!mp.readings.length || window.confirm(`Delete point ${mp.n} and its ${mp.readings.length} reading${mp.readings.length === 1 ? '' : 's'}?`)) removeSelected(); }}>Delete point</button></div>
+                </>
+              );
+            })()}
 
             {obj && (() => {
               const ot = OBJECT_TYPES[obj.t];
@@ -1400,12 +1610,37 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
         )}
       </div>
 
+      {stdOpen && (
+        <div className="sketch-modal" role="presentation" onPointerDown={(e) => { if (e.target === e.currentTarget) setStdOpen(false); }}>
+          <div className="sketch-modal-card sk-std" role="dialog" aria-label="Dry standards">
+            <div className="sketch-pop-head"><strong>Dry standards for this sketch</strong><button type="button" className="sk-x" aria-label="Close" onClick={() => setStdOpen(false)}>{'\u00d7'}</button></div>
+            <p className="muted" style={{ margin: 0 }}>The reading of each material in an unaffected area. A point is dry when its latest reading is at or under its standard. A point can have its own standard under Point details.</p>
+            <div className="sk-std-list">
+              {Object.entries(MOISTURE_MATERIALS).map(([k, label]) => {
+                const st = plan.standards[k];
+                return (
+                  <div className="sk-std-row" key={`${k}-${st ? st.val : ''}-${st ? st.type : ''}`}>
+                    <span>{label}</span>
+                    <input inputMode="decimal" aria-label={`${label} dry standard`} defaultValue={st ? fmtReading(st.val) : ''} placeholder="none"
+                      onBlur={(e) => { if (!setStandard(k, e.target.value, st ? st.type : 'mc')) e.target.value = st ? fmtReading(st.val) : ''; }}
+                      onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
+                    <select aria-label={`${label} reading type`} value={st ? st.type : 'mc'} disabled={!st} onChange={(e) => setStandard(k, fmtReading(st.val), e.target.value)}>
+                      {Object.entries(MOISTURE_TYPES).map(([tk, t]) => <option key={tk} value={tk}>{t.label}</option>)}
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
       {exportOpen && (
         <div className="sketch-modal" role="presentation" onPointerDown={(e) => { if (e.target === e.currentTarget) setExportOpen(false); }}>
           <div className="sketch-modal-card" role="dialog" aria-label="Export sketch">
             <div className="sketch-pop-head"><strong>Export sketch</strong><button type="button" className="sk-x" aria-label="Close" onClick={() => setExportOpen(false)}>{'\u00d7'}</button></div>
             <button type="button" className="secondary" onClick={() => exportAs('png')}>Export as PNG</button>
             <button type="button" className="secondary" onClick={() => exportAs('pdf')}>Export as PDF</button>
+            <button type="button" className="secondary" disabled={!plan.moisture.length} onClick={() => exportAs('csv')} title="Every reading at every point, oldest first">Moisture log (CSV)</button>
           </div>
         </div>
       )}
@@ -1415,6 +1650,10 @@ export default function SketchCanvas({ plan: initialPlan, onChange, photoCounts 
           <span key={kd}> · <strong style={{ color: kindDot(kd) }}>{AREA_KINDS[kd]} {surfaceText(totals.total[kd])} sq ft</strong></span>
         ))}
         {plan.objects.length > 0 && <> · <span title={objectCounts(plan).map((c) => `${c.count} ${c.label.toLowerCase()}`).join(', ')}>{plan.objects.length} object{plan.objects.length === 1 ? '' : 's'}</span></>}
+        {plan.moisture.length > 0 && (() => {
+          const c = moistureCounts(plan);
+          return <> · <strong>{c.points} moisture point{c.points === 1 ? '' : 's'}</strong>{c.wet > 0 && <> · <strong style={{ color: MOISTURE_COLORS.wet }}>{c.wet} wet</strong></>}{c.dry > 0 && <> · <strong style={{ color: MOISTURE_COLORS.dry }}>{c.dry} dry</strong></>}</>;
+        })()}
         {plan.sources.length > 0 && <> · <strong style={{ color: kindDot('source') }}>{plan.sources.length} source{plan.sources.length === 1 ? '' : 's'} of loss</strong></>}
         <span className="muted"> · {tool === 'area' ? AREA_HINTS[areaKind] : HINTS[tool]}</span>
       </div>

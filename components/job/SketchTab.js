@@ -132,7 +132,7 @@ export default function SketchTab({ jobId, sketches, photos, isOffice, staff = n
     return (
       <div className="card">
         <h2>Sketch</h2>
-        <p className="hint">Draw the rooms for this job: any shape, with angled walls, wall breaks, sizes, notes and photos on each room. Mark where the water went with the Water tool and the wet square footage is worked out for each room. Shortcuts: V select, R room, B wall break, C corner, W water.</p>
+        <p className="hint">Draw the rooms for this job: any shape, with angled walls, wall breaks, sizes, notes and photos on each room. Mark where the water went with the Water tool and the wet square footage is worked out for each room. Place moisture points where readings were taken and log each recheck. Shortcuts: V select, R room, B wall break, C corner, W water, P moisture point.</p>
         {loadErr && <div className="msg err">{loadErr}</div>}
         <form className="row" onSubmit={addSketch}>
           <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Name, for example Main floor" maxLength={60} style={{ flex: 1, minWidth: 180 }} aria-label="Sketch name" />
