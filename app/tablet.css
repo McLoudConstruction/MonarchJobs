@@ -1,0 +1,224 @@
+/* ---------- iPad / tablet layouts ----------
+   A tablet is a touch screen (pointer: coarse) at least 700px wide and 600px tall. Phones in landscape
+   are under 600px tall, so they keep the phone layout; computers have a fine pointer and are untouched.
+   This file loads after globals.css, so the rules here win at equal specificity.
+
+   Portrait  (iPad 744-1024px wide): slim icon rail on the left instead of the bottom bar, full-width pages.
+   Landscape (iPad 1024-1366px wide): full sidebar with big labeled links, full-width pages, two-column
+                                      lead page and lists on wider iPads.
+   Everywhere: 52px+ tap targets, 16px text in fields, bigger tabs, rows and the Start / Finish bar. */
+
+/* ===== Shell: no phone top bar or bottom bar, a sidebar instead ===== */
+@media (pointer: coarse) and (min-width: 700px) and (min-height: 600px) {
+  :root { --tap: 52px; --tablet-gutter: 28px; }
+
+  .shell { flex-direction: row; }
+  .shell-topbar-mobile { display: none; }
+  .shell-bottomnav { display: none !important; }
+  .side { display: flex; }
+  .shell-body { flex: 1; min-width: 0; }
+  .shell-content { padding-bottom: env(safe-area-inset-bottom); padding-top: env(safe-area-inset-top); }
+
+  /* use the whole screen: no width cap, bigger gutters */
+  .page, .page.wide { max-width: none; padding: 26px var(--tablet-gutter) calc(48px + env(safe-area-inset-bottom)); }
+  .page h1 { font-size: 26px; margin-bottom: 6px; }
+  .page .sub { font-size: 16px; margin-bottom: 22px; }
+  .card h2 { font-size: 17px; }
+  .card .hint { font-size: 15px; }
+  .card { padding: 20px 22px; border-radius: 12px; }
+  .muted, .note { font-size: inherit; }
+  body { font-size: 16px; }
+
+  /* sidebar chrome */
+  .side { padding-top: calc(16px + env(safe-area-inset-top)); padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+  .side-link { min-height: 56px; border-radius: 12px; }
+  .side-account-toggle { min-height: 64px; border-radius: 12px; }
+  .side .shell-account-menu { border-radius: 12px; }
+  .shell-account-item { min-height: 52px; font-size: 16px; }
+  .shell-account-icon { width: 22px; height: 22px; }
+  .nav-count { font-size: 12px; min-width: 22px; line-height: 22px; border-radius: 11px; }
+
+  /* ===== Tap targets ===== */
+  :is(.btn, button.primary, button.secondary, button.danger, button.small, button.big, .btn-sm):not(:is(.sketch, .sketch-modal-card, .pv-overlay, .camera-overlay, .markup-actions, .wg-bar) *) {
+    min-height: var(--tap); padding: 12px 22px; font-size: 16px; border-radius: 10px;
+  }
+  :is(button.small, .btn-sm):not(:is(.sketch, .sketch-modal-card, .pv-overlay, .camera-overlay, .markup-actions, .wg-bar) *) {
+    min-height: 48px; padding: 10px 18px; font-size: 15px;
+  }
+  button.big:not(:is(.sketch, .pv-overlay, .camera-overlay) *) { min-height: 64px; font-size: 19px; border-radius: 12px; }
+  button.assign-btn { min-height: var(--tap); padding: 12px 24px; font-size: 16px; border-radius: 10px; }
+  .row { gap: 12px; }
+
+  /* fields */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not(:is(.sketch, .sketch-modal-card, .pv-overlay, .camera-overlay, .markup-actions) *),
+  select:not(:is(.sketch, .sketch-modal-card, .pv-overlay, .camera-overlay) *) {
+    min-height: var(--tap); padding: 12px 14px; border-radius: 10px;
+  }
+  textarea:not(:is(.sketch, .pv-overlay, .camera-overlay) *) { min-height: 120px; padding: 12px 14px; border-radius: 10px; }
+  .field label, label { font-size: 14px; margin: 14px 0 6px; }
+  .field { margin-bottom: 16px; }
+  .field .note { font-size: 13.5px; }
+  input[type="checkbox"], input[type="radio"] { width: 26px; height: 26px; flex: none; }
+  label.row { min-height: 44px; }
+
+  /* tabs: tall and spread out so a thumb never misses */
+  .tabs { gap: 30px; margin-bottom: 24px; }
+  .tabs button { min-height: 56px; padding: 14px 4px; font-size: 16px; }
+  .tab-count { font-size: 12.5px; padding: 2px 9px; }
+  .tab-section-btn { min-height: 48px; padding: 10px 18px; font-size: 15px; }
+  .toolbar { gap: 12px; margin-bottom: 18px; }
+  .toolbar input[type=search], .toolbar input[type=text] { min-width: 260px; }
+
+  /* list rows */
+  .list-item { padding: 18px 22px; border-radius: 12px; margin-bottom: 12px; }
+  .list-item .title { font-size: 17px; }
+  .list-item .meta { font-size: 14.5px; margin-top: 2px; }
+  .badge { font-size: 12.5px; padding: 3px 10px; }
+
+  /* lists fill the width: two columns whenever there is room for two readable rows */
+  .list-stack, .dash-section { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; align-items: start; }
+  .list-stack > .list-item, .dash-section > .list-item { margin-bottom: 0; }
+  .list-stack > :not(.list-item), .dash-section > :not(.list-item) { grid-column: 1 / -1; }
+
+  /* dashboard numbers */
+  .stat-row { gap: 14px; }
+  .stat-tile { flex: 1 1 200px; padding: 20px 22px; border-radius: 12px; }
+  .stat-num { font-size: 36px; }
+  .stat-label { font-size: 15px; margin-top: 6px; }
+
+  /* tables */
+  .data-table th, table.table th { font-size: 12px; padding: 12px 14px; }
+  .data-table td, table.table td { padding: 14px; font-size: 15px; }
+
+  /* ===== Job page ===== */
+  .job-overview { grid-template-columns: 1fr 1fr; gap: 16px; }
+  .job-overview .card { padding: 18px 22px; }
+  .job-overview .card h2 { font-size: 13px; margin-bottom: 8px; }
+  .job-overview .meta-line { font-size: 16px; margin-top: 6px; }
+  .job-overview .meta-line a, .job-overview .title a { display: inline-block; padding: 6px 0; }
+  .visit-row { padding: 16px 0; gap: 12px 18px; }
+  .visit-buttons, .visit-actions { gap: 12px; }
+
+  /* the Start / On the way / Finish bar, big enough for a gloved thumb */
+  .visit-dock.mobile-only { display: block; }
+  .visit-dock.inline { margin: 14px 0 20px; }
+  .dock-status { font-size: 13px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 8px; }
+  .dock-buttons { display: flex; gap: 14px; }
+  .dock-buttons button { flex: 1; min-height: 72px; font-size: 20px; font-weight: 700; border-radius: 14px; }
+
+  /* ===== Lead pages and the new-lead steps ===== */
+  .lead-layout { grid-template-columns: 1fr; gap: 20px; }
+  .lead-tab { max-width: none; }
+  .lead-form .card { padding: 18px 20px; margin-bottom: 14px; }
+  .lead-form .card h2, .wizard .lead-form .card h2 { font-size: 13px; margin-bottom: 12px; }
+  .lead-form .grid2, .wizard .lead-form .grid2 { grid-template-columns: 1fr 1fr; gap: 0 16px; }
+  .lead-form .field, .wizard .lead-form .field { margin-bottom: 16px; }
+  .lead-form .field label, .wizard .lead-form .field label { font-size: 14px; margin: 0 0 6px; }
+  .lead-form input, .lead-form select, .lead-form textarea,
+  .wizard .lead-form input, .wizard .lead-form select, .wizard .lead-form textarea { padding: 12px 14px; font-size: 16px; }
+  .lead-form textarea, .wizard .lead-form textarea { min-height: 110px; }
+  .lead-form .note { font-size: 13.5px; }
+  .lead-left > .card { padding: 18px 20px; margin-bottom: 14px; }
+  .lead-left > .card h2 { font-size: 15px; }
+  .lead-right .list-item { padding: 14px 16px; }
+  .wizard-steps button { min-height: 52px; padding: 10px 20px 8px 14px; font-size: 15px; border-radius: 10px; }
+  .wizard-num { width: 28px; height: 28px; font-size: 14px; }
+  .wizard-recap { font-size: 15.5px; padding: 12px 16px; }
+  .wizard-actions { gap: 14px; padding: 14px 0 4px; }
+  .wizard-actions button { min-width: 140px; }
+  .appt-split { grid-template-columns: 300px minmax(0, 1fr); }
+
+  /* ===== Schedule ===== */
+  .sched th { font-size: 12.5px; padding: 12px 8px; }
+  .sched td { padding: 10px; }
+  .visit { padding: 10px 12px; margin-bottom: 8px; font-size: 14.5px; min-height: 48px; }
+  .visit.compact { padding: 8px 12px; margin-bottom: 6px; }
+  .visit.compact > div { line-height: 1.4; }
+  .wg-bar { gap: 10px; padding: 10px 14px; }
+  .wg-bar select, .wg-bar button { min-height: 44px; padding: 8px 14px; font-size: 15px; }
+  .wg-bar .range { font-size: 15px; }
+  .wg-head > div { padding: 10px 6px; font-size: 15px; }
+  .wg-visit { font-size: 13.5px; padding: 4px 8px; }
+  .wg-gutter span { font-size: 12.5px; }
+  /* technician day view */
+  .tday-head { margin: 0 calc(var(--tablet-gutter) * -1); padding: 14px var(--tablet-gutter) 12px; }
+  .tday-arrow { width: 56px; height: 56px; font-size: 30px; border-radius: 12px; }
+  .tday-title strong { font-size: 20px; }
+  .tday-title span { font-size: 14px; }
+  .tday-seg button { min-height: 52px; padding: 12px 20px; font-size: 16px; }
+  .tday-strip { gap: 8px; margin-top: 12px; }
+  .tday-chip { padding: 10px 0 8px; border-radius: 12px; min-height: 68px; }
+  .tday-chip small { font-size: 12px; }
+  .tday-chip b { font-size: 20px; }
+  .tday-hour { font-size: 13px; }
+
+  /* ===== Photos, sketch, moisture: more screen for the work itself ===== */
+  .ph-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+  .ph-check { width: 32px; height: 32px; line-height: 32px; font-size: 16px; }
+  .ph-kind { font-size: 11.5px; padding: 3px 9px; }
+  .ph-cap { font-size: 13px; padding: 18px 8px 6px; }
+  .sketch-card { padding-bottom: 20px; }
+  .sketch-stage { height: calc(100vh - 300px); height: calc(100dvh - 300px); min-height: 460px; }
+  .sketch-tools { gap: 8px; }
+  .sketch-tools button { min-height: 48px; min-width: 48px; padding: 10px 14px; font-size: 15px; border-radius: 10px; }
+  .sketch-tools button.sk-icon { padding: 10px 12px; }
+  .sketch-view, .sketch-picker button { min-height: 48px; padding: 10px 14px; font-size: 15px; border-radius: 10px; }
+  .sketch-strip { gap: 10px 16px; padding: 10px 12px; }
+  .sketch-panel button { min-height: 48px; }
+  .sketch-pop { padding: 16px; gap: 12px; border-radius: 14px; }
+  .sketch-pop button { min-height: 48px; }
+  .sketch[data-variant="moisture"]:not(.sketch-full) .sketch-stage { height: calc(100vh - 260px); height: calc(100dvh - 260px); min-height: 460px; }
+  .sketch-full .sketch-stage, .sketch:fullscreen .sketch-stage { height: auto; min-height: 0; }
+
+  /* Photo viewer and camera */
+  .pv-nav { width: 64px; height: 64px; font-size: 40px; }
+  .pv-top button, .pv-bar button { min-height: 52px; padding: 10px 20px; font-size: 16px; }
+
+  /* Popups and sheets are wider and roomier on a big screen */
+  .bottom-sheet { max-width: 640px; }
+  .more-sheet-link { min-height: 60px; font-size: 17px; }
+
+  /* Floating job action button (portrait only; landscape has the buttons in the page) */
+  .job-fab-btn { width: 72px; height: 72px; font-size: 40px; right: 28px; bottom: calc(28px + env(safe-area-inset-bottom)); }
+  .job-fab-menu { right: 28px; bottom: calc(116px + env(safe-area-inset-bottom)); min-width: 240px; gap: 12px; }
+  .job-fab-item { min-height: 60px; font-size: 18px; border-radius: 30px; padding: 0 26px; }
+  .dock-spacer { height: 24px; }
+
+  /* Notifications page rows and switches */
+  .push-nudge { font-size: 15px; padding: 14px 18px; }
+  .push-nudge a, .push-nudge button { min-height: 44px; display: inline-flex; align-items: center; padding: 0 12px; }
+}
+
+/* ===== Portrait: slim icon rail so the page gets nearly the whole width ===== */
+@media (pointer: coarse) and (min-width: 700px) and (min-height: 600px) and (orientation: portrait) {
+  .side { width: 104px; padding-left: 8px; padding-right: 8px; }
+  .side-brand { padding: 4px 0 14px; text-align: center; }
+  .side-brand .brand { display: block; font-size: 11px; line-height: 1.25; letter-spacing: 0.06em; }
+  .side-search { display: none; }
+  .side-nav { gap: 6px; }
+  .side-link { flex-direction: column; justify-content: center; gap: 6px; min-height: 80px; padding: 10px 4px; font-size: 13px; text-align: center; line-height: 1.15; }
+  .side-icon { width: 30px; height: 30px; }
+  .side-link .nav-count { position: absolute; top: 6px; right: 10px; margin: 0; }
+  .side-account-toggle { justify-content: center; padding: 10px 0; }
+  .side-who { display: none; }
+  .side .shell-account-menu { left: 8px; min-width: 250px; }
+}
+
+/* ===== Landscape: full sidebar, roomier links ===== */
+@media (pointer: coarse) and (min-width: 700px) and (min-height: 600px) and (orientation: landscape) {
+  .side { width: 244px; padding-left: 12px; padding-right: 12px; }
+  .side-link { gap: 14px; padding: 0 16px; font-size: 17px; }
+  .side-icon { width: 24px; height: 24px; }
+  .side .jump-search-box { height: 48px; width: 100%; }
+  .side .jump-search-box input { min-height: 0; font-size: 16px; padding: 0; }
+  .side-who { font-size: 15px; }
+  .side-who small { font-size: 13px; }
+  :root { --tablet-gutter: 32px; }
+  .job-overview { gap: 18px; }
+}
+
+/* ===== Wide landscape (iPad Air / Pro): lead page goes two-column, job overview three-up ===== */
+@media (pointer: coarse) and (min-width: 1150px) and (min-height: 600px) {
+  .lead-layout { grid-template-columns: minmax(340px, 420px) minmax(0, 1fr); }
+  .list-stack, .dash-section { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); }
+}

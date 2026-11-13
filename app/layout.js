@@ -1,4 +1,5 @@
 import './globals.css';
+import './tablet.css';
 import { ThemeProvider } from '@/lib/useTheme';
 import ViewportLock from '@/components/ViewportLock';
 

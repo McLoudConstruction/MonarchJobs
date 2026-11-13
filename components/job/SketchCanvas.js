@@ -22,6 +22,11 @@ import { moistureLogCsv, moistureSummaryCsv } from '@/lib/moistureLog';
 import { renderMoistureReport } from '@/lib/moistureReport';
 import { addDay, atForDay, countOnDay, dateText, dayName, dayView, pointTimeline, removeDay, todayKey } from '@/lib/moistureDays';
 import { areaLayers } from '@/lib/moistureLayers';
+import {
+  EQUIPMENT_GROUPS, EQUIPMENT_ORDER, EQUIPMENT_TYPES, MAX_EQUIPMENT, countText, daysOnSite, equipmentActionsOnDay, equipmentCounts, equipmentOnPlan, equipmentOnSite,
+  hitEquipment, makeEquipment, moveUnit, nextEquipNumber, pickUpUnit, putBackUnit, unitAt, unitCode,
+} from '@/lib/equipment';
+import { buildEquipment, equipmentLogCsv, unitHistory } from '@/lib/equipmentLog';
 import { hitComment, tagsFromText, segments, timeAgo, logEntry, withLog, canDeleteComment, activity, MAX_COMMENTS, MAX_REPLIES } from '@/lib/sketchComments';
 import MentionBox from '@/components/job/MentionBox';
 
@@ -47,6 +52,7 @@ const HINTS = {
   corner: 'Hover a wall and click to add a corner. To cut off a corner of a room, click one wall, then click the wall next to it. The tool stays on, so keep clicking. Esc starts over.',
   area: 'Pick what to mark and which surfaces it is on, then draw around it. It is cleaned up when you let go.',
   object: 'Pick an object, then click to place it. Doors, windows and outlets snap to the wall; cabinets and fixtures sit flush against it. Hold Alt to place freely. Esc stops. Click one with Select to edit it.',
+  equipment: 'Pick the kind of equipment, tap a room to zoom in, then tap where it goes. Tap a unit to move it, pick it up or change it. Use the Day button for another day: where a unit stood on that day is kept.',
   moisture: 'Tap a room to zoom in, then tap where the reading was taken and type it. Use the Day button to start a new day of readings; tap a pin to add that day\'s reading at the spot.',
   text: 'Tap where the note should go, then type it.',
   comment: 'Tap the spot the comment is about, then type. Type @ to tag a teammate. Tap a comment pin to read, reply or resolve it.',
@@ -201,10 +207,22 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   const focusRef = useRef(null);
   focusRef.current = focusId;
   const [layersOpen, setLayersOpen] = useState(false);
-  const layerRef = useRef({ hidden: new Set(), pins: true });
-  layerRef.current = { hidden, pins: showPins };
+  const [showEquip, setShowEquip] = useState(true);
+  const layerRef = useRef({ hidden: new Set(), pins: true, equip: true });
+  layerRef.current = { hidden, pins: showPins, equip: showEquip };
   const [moistOpen, setMoistOpen] = useState(false); // the options for the next point are unfolded
   const [moveId, setMoveId] = useState(null); // a moisture point waiting to be put somewhere else
+  const [work, setWork] = useState('readings'); // moisture floorplan: what a tap does: log a reading, or place equipment
+  const workRef = useRef('readings');
+  workRef.current = work;
+  const [eqType, setEqType] = useState('airmover'); // what the next unit of equipment placed is
+  const eqTypeRef = useRef('airmover');
+  eqTypeRef.current = eqType;
+  const [moveEqId, setMoveEqId] = useState(null); // a unit of equipment waiting to be put somewhere else
+  const moveEqRef = useRef(null);
+  moveEqRef.current = moveEqId;
+  const [eqListOpen, setEqListOpen] = useState(false); // the list of what is on site
+  const [eqNote, setEqNote] = useState(''); // "AM 3 placed in Kitchen", for a moment
   const [kb, setKb] = useState(0); // how far the phone keyboard covers the bottom of the sketch, in pixels
   const [vvBox, setVvBox] = useState(null); // the part of the screen the phone keyboard leaves free: { top, height }
   const [numField, setNumField] = useState('val'); // which of Reading / RH / Temp the number pad types into
@@ -281,7 +299,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
       affected: totalsRef.current.totals.rooms, draft: d?.draft || null, hover: d ? null : hoverRef.current,
       pending: toolRef.current === 'corner' ? lastCornerRef.current : null,
       meId: meRef.current.id, commentDraft: cmDraftRef.current,
-      ...(modeRef.current === 'moisture' ? { plain: true, grid: false, comments: false, hiddenAreas: layerRef.current.hidden, moisture: layerRef.current.pins, focusRoom: focusRef.current } : { moisture: false }),
+      ...(modeRef.current === 'moisture' ? { plain: true, grid: false, comments: false, hiddenAreas: layerRef.current.hidden, moisture: layerRef.current.pins, focusRoom: focusRef.current, equipment: layerRef.current.equip, equipDay: dayRef.current, equipFaint: workRef.current !== 'equipment', moistFaint: workRef.current === 'equipment' } : { moisture: false }),
       ghost: d?.ghost || ((toolRef.current === 'object' || toolRef.current === 'missing') && !d ? ghostRef.current : null),
     });
   }, []);
@@ -292,7 +310,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
 
   useEffect(() => { countsRef.current = photoCounts; schedule(); }, [photoCounts, schedule]);
   useEffect(() => { schedule(); setDimErr(''); }, [sel, schedule]);
-  useEffect(() => { schedule(); }, [surfaceView, moistLabels, hidden, showPins, focusId, dayId, schedule]);
+  useEffect(() => { schedule(); }, [surfaceView, moistLabels, hidden, showPins, showEquip, work, focusId, dayId, schedule]);
   const moistSelId = sel?.kind === 'moisture' ? sel.id : null;
   const prevKindRef = useRef('reading');
   useEffect(() => {
@@ -372,7 +390,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
 
   const findSel = (plan, s) => {
     if (!s) return null;
-    const list = s.kind === 'room' ? plan.rooms : s.kind === 'area' ? plan.areas : s.kind === 'source' ? plan.sources : s.kind === 'object' ? plan.objects : s.kind === 'moisture' ? plan.moisture : s.kind === 'comment' ? plan.comments : plan.marks;
+    const list = s.kind === 'room' ? plan.rooms : s.kind === 'area' ? plan.areas : s.kind === 'source' ? plan.sources : s.kind === 'object' ? plan.objects : s.kind === 'moisture' ? plan.moisture : s.kind === 'equipment' ? plan.equipment : s.kind === 'comment' ? plan.comments : plan.marks;
     return list.find((x) => x.id === s.id) || null;
   };
 
@@ -450,6 +468,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     else if (s.kind === 'source') commit({ ...p, sources: p.sources.filter((q) => q.id !== s.id) });
     else if (s.kind === 'object') commit({ ...p, objects: p.objects.filter((o) => o.id !== s.id) });
     else if (s.kind === 'moisture') commit({ ...p, moisture: p.moisture.filter((m) => m.id !== s.id) });
+    else if (s.kind === 'equipment') commit({ ...p, equipment: p.equipment.filter((u) => u.id !== s.id) });
     else if (s.kind === 'comment') {
       const c = p.comments.find((x) => x.id === s.id);
       if (!c || !canDeleteComment(c, meRef.current.id)) return; // only the author can delete
@@ -676,6 +695,14 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
         ghostRef.current = null;
         schedule();
       } else dragRef.current = null;
+      return;
+    }
+    if (t === 'moisture' && workRef.current === 'equipment') { // equipment: a tap places a unit or opens one; a drag does nothing
+      if (!layerRef.current.equip) { dragRef.current = null; return; } // the equipment layer is off: taps do nothing
+      const fr = focusRef.current ? plan.rooms.find((r) => r.id === focusRef.current) : null;
+      let hit = moveEqRef.current ? null : hitEquipment(plan, dayRef.current, w.x, w.y, Math.max(tolFt, 26 / v.scale));
+      if (hit && fr && !pointInPoly(fr.pts, hit.x, hit.y)) hit = null; // units in the greyed-out rooms are not reachable
+      dragRef.current = { mode: 'moist-tap', equip: true, sx: p.x, sy: p.y, ox: v.ox, oy: v.oy, wx: w.x, wy: w.y, hitId: hit ? hit.u.id : null, hadPopup, moved: false };
       return;
     }
     if (t === 'moisture' && !layerRef.current.pins) { dragRef.current = null; return; } // points layer is off: taps do nothing
@@ -924,6 +951,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     const plan = planRef.current;
     if (d.mode === 'moist-tap') { // a tap, not a drag
       if (d.moved || !p) { schedule(); return; }
+      if (d.equip) { equipTap(d, plan); schedule(); return; }
       const mv = moveIdRef.current;
       if (mv) { // the tap says where the pin being moved goes
         commit({ ...plan, moisture: plan.moisture.map((m) => (m.id === mv ? { ...m, x: snap(d.wx, 0.25), y: snap(d.wy, 0.25) } : m)) });
@@ -1140,10 +1168,10 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
     if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); redo(); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if ((e.key === 'Delete' || e.key === 'Backspace') && selRef.current) { e.preventDefault(); removeSelected(); return; }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selRef.current && selRef.current.kind !== 'equipment') { e.preventDefault(); removeSelected(); return; } // equipment is deleted from its sheet, with a question first
     if (e.key === 'Escape') {
       if (popupRef.current) { closePopup(); return; }
-      if (modeRef.current === 'moisture') { if (moveIdRef.current) setMoveId(null); else if (focusRef.current) exitRoom(); return; } // Esc never leaves the mode by accident
+      if (modeRef.current === 'moisture') { if (moveIdRef.current) setMoveId(null); else if (moveEqRef.current) setMoveEqId(null); else if (focusRef.current) exitRoom(); return; } // Esc never leaves the mode by accident
       if (toolRef.current === 'corner' && lastCornerRef.current) { lastCornerRef.current = null; schedule(); return; } // drop the first click, stay in the tool
       if (dragRef.current) { dragRef.current = null; pointers.current.clear(); }
       if (textDraft) { setTextDraft(null); return; }
@@ -1269,7 +1297,9 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     return () => clearTimeout(t);
   }, [recheckDone]);
   function deleteDay(id) {
-    if (countOnDay(planRef.current, id) && !window.confirm('This day has readings. Delete the day and every reading on it?')) return;
+    const nRead = countOnDay(planRef.current, id);
+    const nEq = equipmentActionsOnDay(planRef.current, id);
+    if ((nRead || nEq) && !window.confirm(`This day has ${nRead && nEq ? 'readings and equipment records' : nRead ? 'readings' : 'equipment records'}. Delete the day and everything logged on it?`)) return;
     commit(removeDay(planRef.current, id));
     setDayId(null);
   }
@@ -1340,6 +1370,98 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     return true;
   }
 
+  // ---- equipment ---------------------------------------------------------
+  // what an equipment action is stamped with: the day on screen, when, and who
+  function eqStamp(pl) {
+    const day = pl.days.find((d) => d.id === dayRef.current) || null;
+    return { day: day ? day.id : null, at: atForDay(day), by: meRef.current };
+  }
+  function patchEquip(id, patch) {
+    commit({ ...planRef.current, equipment: planRef.current.equipment.map((u) => (u.id === id ? { ...u, ...patch } : u)) });
+  }
+  function switchWork(w) {
+    if (w === workRef.current) return;
+    setWork(w);
+    setSel(null); setPopup(null); setMoveId(null); setMoveEqId(null);
+    setDayOpen(false); setLayersOpen(false); setMoistOpen(false); setEqListOpen(false);
+    schedule();
+  }
+  function placeEquipment(pl0, x, y, rm) {
+    let pl = pl0;
+    let dId = dayRef.current;
+    if (!dId) { const r = addDay(pl); pl = r.plan; dId = r.id; dayRef.current = r.id; setDayId(r.id); } // the first thing logged starts the initial loss, today
+    const t = eqTypeRef.current;
+    const u = makeEquipment(t, nextEquipNumber(pl.equipment, t), snap(x, 0.25), snap(y, 0.25), eqStamp(pl));
+    commit({ ...pl, equipment: [...pl.equipment, u] });
+    setSel({ kind: 'equipment', id: u.id });
+    setEqNote(`${unitCode(u)} placed in ${roomTitle(rm)}`);
+  }
+  // a clean tap on the floorplan in equipment mode
+  function equipTap(d, pl) {
+    const mv = moveEqRef.current;
+    if (mv) { // the tap says where the unit being moved goes
+      const u = pl.equipment.find((x) => x.id === mv);
+      if (u && unitAt(pl, u, dayRef.current).state === 'on') {
+        const x = snap(d.wx, 0.25);
+        const y = snap(d.wy, 0.25);
+        commit({ ...pl, equipment: pl.equipment.map((q) => (q.id === mv ? moveUnit(pl, q, { x, y, ...eqStamp(pl) }) : q)) });
+        const rm = hitRoom(pl, x, y);
+        if (rm && focusRef.current && rm.id !== focusRef.current) { focusRef.current = rm.id; setFocusId(rm.id); fit(); } // moved into another room: follow it
+      }
+      setMoveEqId(null);
+      setSel({ kind: 'equipment', id: mv });
+      openPopup(0, 0);
+    } else if (d.hitId) {
+      setSel({ kind: 'equipment', id: d.hitId });
+      openPopup(0, 0);
+    } else if (!focusRef.current) { // the whole floorplan: a tap on a room zooms into it
+      const rm = !d.hadPopup ? hitRoom(pl, d.wx, d.wy) : null;
+      if (rm) enterRoom(rm);
+    } else {
+      const rm = pl.rooms.find((r) => r.id === focusRef.current);
+      if (!d.hadPopup && rm && pl.equipment.length < MAX_EQUIPMENT && pointInPoly(rm.pts, d.wx, d.wy)) placeEquipment(pl, d.wx, d.wy, rm); // the tap that only closed the sheet does not also place a unit
+    }
+  }
+  function equipChangeState(kind) { // 'pickup' | 'putback' for the unit in the sheet, on the day on screen
+    const s = selRef.current;
+    const pl = planRef.current;
+    const u = s && s.kind === 'equipment' ? pl.equipment.find((x) => x.id === s.id) : null;
+    if (!u) return;
+    const st = eqStamp(pl);
+    const next = kind === 'pickup' ? pickUpUnit(pl, u, st) : putBackUnit(pl, u, st);
+    if (next !== u) commit({ ...pl, equipment: pl.equipment.map((x) => (x.id === u.id ? next : x)) });
+    closePopup();
+    setSel(null);
+  }
+  function pickUpAll() {
+    const pl = planRef.current;
+    const on = equipmentOnSite(pl, dayRef.current);
+    if (!on.length) return;
+    const d = pl.days.find((x) => x.id === dayRef.current);
+    if (!window.confirm(`Pick up all ${on.length} unit${on.length === 1 ? '' : 's'} of equipment${d ? ` on ${dayName(pl.days, d.id)} (${dateText(d.date)})` : ''}? Each stays in the log with this pick-up date.`)) return;
+    const st = eqStamp(pl);
+    const ids = new Set(on.map((r) => r.u.id));
+    commit({ ...pl, equipment: pl.equipment.map((u) => (ids.has(u.id) ? pickUpUnit(pl, u, st) : u)) });
+    setEqListOpen(false);
+  }
+  function gotoUnit(id) {
+    const pl = planRef.current;
+    const u = pl.equipment.find((x) => x.id === id);
+    const st = u ? unitAt(pl, u, dayRef.current) : null;
+    if (!st || st.state === 'none') return;
+    const rm = hitRoom(pl, st.x, st.y);
+    if (rm && rm.id !== focusRef.current) { focusRef.current = rm.id; setFocusId(rm.id); fit(); }
+    setEqListOpen(false);
+    setMoveEqId(null);
+    setSel({ kind: 'equipment', id });
+    openPopup(0, 0);
+  }
+  useEffect(() => {
+    if (!eqNote) return undefined;
+    const t = setTimeout(() => setEqNote(''), 2600);
+    return () => clearTimeout(t);
+  }, [eqNote]);
+
   // ---- export ------------------------------------------------------------
   function renderExport() {
     const plan = modeRef.current === 'moisture' ? dayView(planRef.current, dayRef.current) : planRef.current; // the day on screen
@@ -1354,34 +1476,35 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     ctx.fillRect(0, 0, W, H);
     const view = fitView(b, W, H, 60);
     drawPlan(ctx, plan, view, modeRef.current === 'moisture'
-      ? { W, H, surface: 'all', plain: true, grid: false, comments: false, hiddenAreas: hidden, moisture: showPins, moistLabels: true }
+      ? { W, H, surface: 'all', plain: true, grid: false, comments: false, hiddenAreas: hidden, moisture: showPins, moistLabels: true, equipment: showEquip, equipDay: dayRef.current }
       : { W, H, counts: {}, affected: totalsFor(plan).rooms, surface: 'all', grid: true, comments: false, moisture: false });
     return out;
   }
-  // The customer report: the plan as of the latest day (every layer, numbered pins), then the tables and curves.
-  function exportReport() {
+  // The customer report: the plan as of the latest day (every layer, numbered pins), the equipment as placed on its busiest day, then the tables and curves.
+  async function exportReport() {
     const full = planRef.current;
     const ds = full.days || [];
     const plan = dayView(full, ds.length ? ds[ds.length - 1].id : null);
-    const b = planBounds(plan);
     const title = exportName.replace(/\s+moisture$/i, '');
-    const finish = (img) => {
-      const pdf = renderMoistureReport(full, { title, planImage: img, preparedAt: new Date() });
-      download(new Blob([pdf], { type: 'application/pdf' }), 'pdf', '-report');
-    };
-    if (!b) { finish(null); return; }
     const W = 900; // a smaller canvas keeps the pins and room names readable on the page
-    const H = Math.round(clampN(900 * ((b.maxY - b.minY + 4) / Math.max(b.maxX - b.minX + 4, 4)), 300, 800));
-    const out = document.createElement('canvas');
-    out.width = W; out.height = H;
-    const ctx = out.getContext('2d');
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, W, H);
-    drawPlan(ctx, plan, fitView(b, W, H, 60), { W, H, surface: 'all', plain: true, grid: false, comments: false, hiddenAreas: null, moisture: true, moistLabels: false });
-    out.toBlob(async (blob) => {
-      if (!blob) { finish(null); return; }
-      finish({ bytes: new Uint8Array(await blob.arrayBuffer()), w: W, h: H });
-    }, 'image/jpeg', 0.9);
+    const snapshot = async (pl, extra) => {
+      const b = planBounds(pl);
+      if (!b) return null;
+      const H = Math.round(clampN(900 * ((b.maxY - b.minY + 4) / Math.max(b.maxX - b.minX + 4, 4)), 300, 800));
+      const out = document.createElement('canvas');
+      out.width = W; out.height = H;
+      const ctx = out.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, W, H);
+      drawPlan(ctx, pl, fitView(b, W, H, 60), { W, H, surface: 'all', plain: true, grid: false, comments: false, hiddenAreas: null, moistLabels: false, ...extra });
+      const blob = await new Promise((res) => out.toBlob(res, 'image/jpeg', 0.9));
+      return blob ? { bytes: new Uint8Array(await blob.arrayBuffer()), w: W, h: H } : null;
+    };
+    const planImage = await snapshot(plan, { moisture: true });
+    const peak = buildEquipment(full).peak;
+    const equipImage = peak ? await snapshot(full, { moisture: false, equipment: true, equipDay: peak.day.id }) : null;
+    const pdf = renderMoistureReport(full, { title, planImage, equipImage, preparedAt: new Date() });
+    download(new Blob([pdf], { type: 'application/pdf' }), 'pdf', '-report');
   }
   function download(blob, ext, suffix = '') {
     const url = URL.createObjectURL(blob);
@@ -1398,6 +1521,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     if (kind === 'report') { exportReport(); return; }
     if (kind === 'summary') { download(new Blob([moistureSummaryCsv(planRef.current)], { type: 'text/csv;charset=utf-8' }), 'csv', '-moisture-summary'); return; }
     if (kind === 'csv') { download(new Blob([moistureLogCsv(planRef.current)], { type: 'text/csv;charset=utf-8' }), 'csv', '-moisture-log'); return; }
+    if (kind === 'equipment') { download(new Blob([equipmentLogCsv(planRef.current)], { type: 'text/csv;charset=utf-8' }), 'csv', '-equipment-log'); return; }
     const out = renderExport();
     if (!out) return;
     if (kind === 'png') {
@@ -1415,7 +1539,8 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   const curDay = days.find((d) => d.id === dayId) || days[days.length - 1] || null;
   dayRef.current = curDay ? curDay.id : null;
   const dayPlan = dayView(plan, dayRef.current);
-  const hasContent = !!(plan.rooms.length || plan.marks.length || plan.areas.length || plan.sources.length || plan.objects.length || plan.moisture.length || plan.comments.length);
+  const hasContent = !!(plan.rooms.length || plan.marks.length || plan.areas.length || plan.sources.length || plan.objects.length || plan.moisture.length || plan.equipment.length || plan.comments.length);
+  const eqCounts = equipmentCounts(plan, dayRef.current);
   const total = totalArea(plan);
   const totals = totalsFor(plan);
   const room = selected && sel.kind === 'room' ? selected : null;
@@ -1424,6 +1549,9 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   const area = selected && sel.kind === 'area' ? selected : null;
   const pin = selected && sel.kind === 'source' ? selected : null;
   const mp = selected && sel.kind === 'moisture' ? selected : null;
+  const eq = selected && sel.kind === 'equipment' ? selected : null;
+  const eqSt = eq ? (unitAt(plan, eq, dayRef.current).state !== 'none' ? unitAt(plan, eq, dayRef.current) : unitAt(plan, eq, null)) : null;
+  const tgt = mp ? { id: mp.id, x: mp.x, y: mp.y } : eq && eqSt ? { id: eq.id, x: eqSt.x, y: eqSt.y } : null; // the spot the open sheet is about
   const cm = selected && sel.kind === 'comment' ? selected : null;
   const roomPhotos = room ? photoCounts[room.id] || 0 : 0;
   const rect = room ? isRect(room) : false;
@@ -1431,13 +1559,13 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   const wallIdx = room && sel.ei != null && sel.ei < room.pts.length ? sel.ei : null;
   const wallLen = wallIdx != null ? edgeLength(room.pts, wallIdx) : 0;
   const roomAffected = room ? totals.rooms[room.id] : null;
-  const showPop = !!(popup && selected) && sel.kind !== 'moisture';
+  const showPop = !!(popup && selected) && sel.kind !== 'moisture' && sel.kind !== 'equipment';
   const areaStat = showPop && area ? affectedTotals({ ...plan, areas: [area] }).total[area.kind] : null;
   useLayoutEffect(() => {
     const h = popRef.current ? popRef.current.offsetHeight : 0;
     if (h && Math.abs(h - popH) > 1) setPopH(h);
   });
-  const sheetOpen = mode === 'moisture' && !!mp && !!popup;
+  const sheetOpen = mode === 'moisture' && !!tgt && !!popup;
   const kbPad = full ? kb : 0;
   const phoneSheet = sheetOpen && sizeRef.current.W < 520; // on a phone the entry sheet is a layer over the whole screen, not a box inside the plan
   const pageSheet = phoneSheet && !full; // ...and the page scrolls to keep the point above it
@@ -1448,14 +1576,14 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     if (!sheetOpen) return undefined;
     const t = setTimeout(() => setArmed(true), 400);
     return () => clearTimeout(t);
-  }, [sheetOpen, mp?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sheetOpen, tgt?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!sheetOpen || !mp || pageSheet) return;
+    if (!sheetOpen || !tgt || pageSheet) return;
     const { W, H } = sizeRef.current;
     const top = 64; // clear of the Draw / Moisture switch along the top
     const bottom = Math.max(top + 60, H - popH - kbPad - 16);
     const v = viewRef.current;
-    const at = toScreen(v, mp.x, mp.y);
+    const at = toScreen(v, tgt.x, tgt.y);
     let { ox, oy } = v;
     if (at.y > bottom || at.y < top) oy += (top + bottom) / 2 - at.y;
     if (at.x < 40 || at.x > W - 40) ox += W / 2 - at.x;
@@ -1466,11 +1594,11 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
       schedule();
     }
     // only when the sheet opens, changes height or moves to another point, so it never fights a drag
-  }, [sheetOpen, mp?.id, popH, kbPad, pageSheet]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sheetOpen, tgt?.id, popH, kbPad, pageSheet]); // eslint-disable-line react-hooks/exhaustive-deps
   // phone: scroll the page so the point being read stays above the sheet, and put the page back when the sheet closes
   const revealRef = useRef(null);
   useEffect(() => {
-    if (!pageSheet || !mp) return undefined;
+    if (!pageSheet || !tgt) return undefined;
     const t = setTimeout(() => {
       const sh = popRef.current;
       const cv = canvasRef.current;
@@ -1479,7 +1607,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
       while (sc && sc !== document.body && !(/(auto|scroll)/.test(getComputedStyle(sc).overflowY) && sc.scrollHeight > sc.clientHeight + 1)) sc = sc.parentElement; // the nearest box that really scrolls
       if (!sc || sc === document.body) sc = document.scrollingElement;
       if (!sc) return;
-      const at = toScreen(viewRef.current, mp.x, mp.y);
+      const at = toScreen(viewRef.current, tgt.x, tgt.y);
       const py = cv.getBoundingClientRect().top + at.y;
       const limit = sh.getBoundingClientRect().top - 34;
       const floor = (sc === document.scrollingElement ? 0 : sc.getBoundingClientRect().top) + 20;
@@ -1492,7 +1620,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
       sc.scrollTo({ top: to, behavior: 'smooth' });
     }, 90);
     return () => clearTimeout(t);
-  }, [pageSheet, mp?.id, popH]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pageSheet, tgt?.id, popH]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (pageSheet) return;
     const r = revealRef.current;
@@ -1532,7 +1660,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     if (!sheetOpen || !armed) return;
     const el = popRef.current;
     if (el && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
-  }, [sheetOpen, armed, mp?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sheetOpen, armed, tgt?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   // when the sheet closes, the map goes back to where it was, unless the tech has panned or zoomed since
   useEffect(() => {
     if (sheetOpen) return;
@@ -1656,11 +1784,67 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                 <button type="button" className="sk-iconbtn" aria-label="Layers" aria-expanded={layersOpen} title={hidden.size ? `Layers (${layerList.length - hidden.size} of ${layerList.length} areas shown)` : 'Layers'} onClick={() => { setLayersOpen(!layersOpen); setMoistOpen(false); setDayOpen(false); }}>
                   <LayersIcon />{hidden.size > 0 && <span className="sk-dotmark" aria-hidden="true" />}
                 </button>
-                <button type="button" className="sk-iconbtn" aria-label="New point settings" aria-expanded={moistOpen} title={`New points: ${MOISTURE_SURFACES[moist.surface]} \u00b7 ${MOISTURE_MATERIALS[moist.material]} \u00b7 ${MOISTURE_TYPES[moist.type].short.trim()}`} onClick={() => { setMoistOpen(!moistOpen); setLayersOpen(false); setDayOpen(false); }}>
+                <button type="button" className="sk-iconbtn" style={work === 'equipment' ? { display: 'none' } : undefined} aria-label="New point settings" aria-expanded={moistOpen} title={`New points: ${MOISTURE_SURFACES[moist.surface]} \u00b7 ${MOISTURE_MATERIALS[moist.material]} \u00b7 ${MOISTURE_TYPES[moist.type].short.trim()}`} onClick={() => { setMoistOpen(!moistOpen); setLayersOpen(false); setDayOpen(false); }}>
                   <GearIcon />
                 </button>
               </div>
-              {(() => {
+              <div className="sk-work" role="group" aria-label="What a tap does">
+                <button type="button" className={work === 'readings' ? 'on' : ''} aria-pressed={work === 'readings'} onClick={() => switchWork('readings')}>Readings</button>
+                <button type="button" className={work === 'equipment' ? 'on' : ''} aria-pressed={work === 'equipment'} onClick={() => switchWork('equipment')}>Equipment{eqCounts.total > 0 && <span className="sk-work-n">{eqCounts.total}</span>}</button>
+              </div>
+              {work === 'equipment' && (
+                <div className="sk-eq-bar">
+                  <div className="sk-eq-types" role="radiogroup" aria-label="Equipment to place">
+                    {EQUIPMENT_ORDER.map((t) => {
+                      const ty = EQUIPMENT_TYPES[t];
+                      return (
+                        <button key={t} type="button" role="radio" aria-checked={eqType === t} className={`sk-eq-chip${eqType === t ? ' on' : ''}`} style={{ '--eq': ty.color }} onClick={() => setEqType(t)}>
+                          <b>{ty.code}</b><span>{ty.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {days.length > 1 && curDay && curDay.date !== todayKey() && <div className="sk-pastday" role="note">Logging on {dayName(days, curDay.id)} ({dateText(curDay.date)}), not today. Use the Day button to change it.</div>}
+                  <button type="button" className="sk-eq-sum" aria-expanded={eqListOpen} onClick={() => { setEqListOpen(!eqListOpen); setDayOpen(false); setLayersOpen(false); }}>
+                    <span>{eqCounts.total ? countText(eqCounts) : 'No equipment on site yet'}</span><span className="sk-caret" aria-hidden="true" />
+                  </button>
+                  {eqListOpen && (
+                    <div className="sk-moist-opts sk-layers sk-eq-list" role="group" aria-label="Equipment on site">
+                      {(() => {
+                        const rows = equipmentOnPlan(plan, dayRef.current);
+                        if (!rows.length) return <div className="muted" style={{ fontSize: 13 }}>Nothing placed yet. Tap a room to zoom in, then tap where each piece goes.</div>;
+                        const groups = [];
+                        for (const r of rows) {
+                          const rm = hitRoom(plan, r.x, r.y);
+                          const key = rm ? rm.id : '_';
+                          let g = groups.find((x) => x.key === key);
+                          if (!g) { g = { key, rm, rows: [] }; groups.push(g); }
+                          g.rows.push(r);
+                        }
+                        groups.sort((a, b) => (a.rm ? a.rm.num || 0 : 1e9) - (b.rm ? b.rm.num || 0 : 1e9));
+                        return (
+                          <>
+                            {groups.map((g) => (
+                              <div key={g.key} className="sk-eq-grp">
+                                <div className="sk-opt-label">{g.rm ? roomTitle(g.rm) : 'Outside the rooms'} {'\u00b7'} {g.rows.filter((r) => r.state === 'on').length}</div>
+                                {g.rows.map((r) => (
+                                  <button key={r.u.id} type="button" className="sk-eq-row" onClick={() => gotoUnit(r.u.id)}>
+                                    <span className="sk-eq-tag" style={{ background: EQUIPMENT_TYPES[r.u.t].color }}>{unitCode(r.u)}</span>
+                                    <span className="sk-eq-name">{EQUIPMENT_TYPES[r.u.t].label}{r.u.label ? ` \u00b7 ${r.u.label}` : ''}</span>
+                                    {r.state === 'out' && <em>picked up</em>}
+                                  </button>
+                                ))}
+                              </div>
+                            ))}
+                            {eqCounts.total > 0 && <button type="button" className="danger small" onClick={pickUpAll}>Pick up all on site ({eqCounts.total})</button>}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+              )}
+              {work === 'readings' && (() => {
                 const first = days[0];
                 const todayDay = days.find((d) => d.date === todayKey());
                 const real = plan.moisture.filter((m) => m.kind !== 'standard').length;
@@ -1724,6 +1908,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                     <label key={l.id} className="sk-layer"><input type="checkbox" checked={!hidden.has(l.id)} onChange={() => toggleLayer(l.id)} /><span className="sk-sw" style={{ background: l.color }} /><span className="sk-layer-name">{l.name}<small>{l.detail}</small></span></label>
                   ))}
                   <label className="sk-layer"><input type="checkbox" checked={showPins} onChange={() => setShowPins(!showPins)} /><span className="sk-sw pin" /><span className="sk-layer-name">Moisture points<small>{plan.moisture.length} point{plan.moisture.length === 1 ? '' : 's'}</small></span></label>
+                  <label className="sk-layer"><input type="checkbox" checked={showEquip} onChange={() => setShowEquip(!showEquip)} /><span className="sk-sw tag" /><span className="sk-layer-name">Equipment<small>{eqCounts.total} on site{plan.equipment.length > eqCounts.total ? `, ${plan.equipment.length - eqCounts.total} not on this day` : ''}</small></span></label>
                   {!layerList.length && <div className="muted" style={{ fontSize: 13 }}>Affected areas drawn on the Sketch tab show up here as layers.</div>}
                   <div className="chips"><button type="button" onClick={() => setHidden(new Set())}>Show all</button><button type="button" onClick={() => setHidden(new Set(layerList.map((l) => l.id)))}>Hide areas</button></div>
                 </div>
@@ -1816,10 +2001,21 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
           onContextMenu={(e) => e.preventDefault()}
           aria-label="Sketch drawing area"
         />
-        {mode === 'moisture' && !sheetOpen && !moveId && (focusId
-          ? !plan.moisture.some((m) => pointInPoly(plan.rooms.find((r) => r.id === focusId)?.pts || [], m.x, m.y)) && <div className="sk-tip">Tap the room to log a reading</div>
-          : !plan.moisture.length && <div className="sk-tip">Tap a room to zoom in and log readings</div>)}
+        {mode === 'moisture' && !sheetOpen && !moveId && !moveEqId && (work === 'equipment'
+          ? (focusId
+            ? !equipmentOnPlan(plan, dayRef.current).some((r) => pointInPoly(plan.rooms.find((x) => x.id === focusId)?.pts || [], r.x, r.y)) && <div className="sk-tip">Tap the room to place equipment</div>
+            : !plan.equipment.length && <div className="sk-tip">Tap a room to zoom in and place equipment</div>)
+          : (focusId
+            ? !plan.moisture.some((m) => pointInPoly(plan.rooms.find((r) => r.id === focusId)?.pts || [], m.x, m.y)) && <div className="sk-tip">Tap the room to log a reading</div>
+            : !plan.moisture.length && <div className="sk-tip">Tap a room to zoom in and log readings</div>))}
+        {eqNote && <div className="sk-tip" role="status" style={{ bottom: 70 }}>{eqNote}</div>}
         {rcNote && <div className="sk-tip" role="status" style={{ bottom: 70 }}>{rcNote}</div>}
+        {moveEqId && (
+          <div className="sk-movebar" role="status">
+            <span>Tap where {(() => { const u = plan.equipment.find((x) => x.id === moveEqId); return u ? unitCode(u) : 'it'; })()} should go</span>
+            <button type="button" onClick={() => { const id = moveEqId; setMoveEqId(null); gotoUnit(id); }}>Cancel</button>
+          </div>
+        )}
         {moveId && (
           <div className="sk-movebar" role="status">
             <span>Tap where point {plan.moisture.find((m) => m.id === moveId)?.n} should go</span>
@@ -2059,7 +2255,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
           </div>
         )}
 
-        {sheetOpen && (() => {
+        {sheetOpen && mp && (() => {
           const goal = goalFor(plan, mp);
           const mpv = dayPlan.moisture.find((x) => x.id === mp.id) || mp;
           const st = moistureStatus(mpv, goal);
@@ -2237,6 +2433,78 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
             ? createPortal(<div className="sk-sheet-layer" style={vvBox ? { top: vvBox.top, height: vvBox.height } : undefined}>{sheet}</div>, document.body)
             : sheet;
         })()}
+
+        {sheetOpen && eq && (() => {
+          const dId = dayRef.current;
+          const st = unitAt(plan, eq, dId);
+          const ty = EQUIPMENT_TYPES[eq.t] || EQUIPMENT_TYPES.other;
+          const here = st.state !== 'none' ? st : unitAt(plan, eq, null);
+          const roomHere = hitRoom(plan, here.x, here.y);
+          const isOut = st.state === 'out';
+          const hist = unitHistory(plan, eq);
+          const nDays = daysOnSite(plan, eq, dId);
+          const placedBy = eq.log[0] ? eq.log[0].by : null;
+          const canDelUnit = isStaffOffice || (!!placedBy?.id && placedBy.id === me.id);
+          const lastOut = isOut ? hist.find((h) => h.id === st.entry.id) || null : null;
+          const daysText = `${nDays} day${nDays === 1 ? '' : 's'} on site`;
+          const sheet = (
+            <div className="sk-sheet sk-eq-sheet" ref={popRef} tabIndex={-1} role="dialog" aria-label={`Equipment ${unitCode(eq)}`}
+              onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closePopup(); } }}
+              style={phoneSheet ? { pointerEvents: armed ? 'auto' : 'none' } : { bottom: kbPad, maxHeight: `calc(100% - ${kbPad + 8}px)`, pointerEvents: armed ? 'auto' : 'none' }}>
+              <div className="sk-sheet-head">
+                <div className="sk-sheet-title">
+                  <strong><span className="sk-eq-tag" style={{ background: ty.color }}>{unitCode(eq)}</span> {ty.label}</strong>
+                  <span className="muted">{roomHere ? roomTitle(roomHere) : 'Outside the rooms'}</span>
+                </div>
+                <button type="button" className="sk-nav" aria-label="Close" onClick={closePopup}>{'\u00d7'}</button>
+              </div>
+              <div className="sk-eq-status">
+                <span className={`sk-eq-pill${isOut ? ' out' : ''}`}>{isOut ? 'Picked up' : 'On site'}</span>
+                <span>{isOut && lastOut ? `${lastOut.day}, ${lastOut.date} \u00b7 ${daysText}` : `${hist[0] ? `Placed ${hist[0].day}, ${hist[0].date} \u00b7 ` : ''}${daysText}`}</span>
+              </div>
+              {days.length > 1 && curDay && curDay.date !== todayKey() && <div className="sk-pastday" role="note">Logged on {dayName(days, curDay.id)} ({dateText(curDay.date)}), not today.</div>}
+              <div className="sk-eq-actions">
+                {isOut ? (
+                  <button type="button" className="primary" onClick={() => equipChangeState('putback')}>Put back</button>
+                ) : (
+                  <>
+                    <button type="button" className="secondary" onClick={() => { setMoveEqId(eq.id); setPopup(null); }}>Move</button>
+                    <button type="button" className="secondary" onClick={() => equipChangeState('pickup')}>Pick up</button>
+                  </>
+                )}
+              </div>
+              <div className="sk-eq-fields">
+                <label className="sk-opt full">Equipment
+                  <select value={eq.t} onChange={(e) => { const t = e.target.value; if (t === eq.t) return; const others = planRef.current.equipment.filter((x) => x.id !== eq.id); patchEquip(eq.id, { t, n: nextEquipNumber(others, t) }); }}>
+                    {EQUIPMENT_GROUPS.map((g) => (
+                      <optgroup key={g} label={g}>
+                        {EQUIPMENT_ORDER.filter((k) => EQUIPMENT_TYPES[k].group === g).map((k) => <option key={k} value={k}>{EQUIPMENT_TYPES[k].label}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
+                </label>
+                <label className="sk-field">Model or unit no.
+                  <input key={`l-${eq.id}`} defaultValue={eq.label} maxLength={40} placeholder="Optional" onBlur={(e) => { const t = e.target.value.trim(); if (t !== eq.label) patchEquip(eq.id, { label: t }); }} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
+                </label>
+                <label className="sk-field">Note
+                  <input key={`n-${eq.id}`} defaultValue={eq.note} maxLength={80} placeholder="Optional" onBlur={(e) => { const t = e.target.value.trim(); if (t !== eq.note) patchEquip(eq.id, { note: t }); }} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
+                </label>
+              </div>
+              <details>
+                <summary>History ({hist.length})</summary>
+                <div className="sk-details">
+                  <ol className="sk-eq-hist">
+                    {hist.map((h) => <li key={h.id}><strong>{h.text}</strong><span>{h.day}, {h.date} {'\u00b7'} {h.room}{h.by ? ` \u00b7 ${h.by}` : ''}</span></li>)}
+                  </ol>
+                  {canDelUnit && <button type="button" className="danger small" onClick={() => { if (window.confirm(`Delete ${unitCode(eq)}? It is removed from every day, as if it was never placed. To keep it in the log, pick it up instead.`)) removeSelected(); }}>Delete {unitCode(eq)}</button>}
+                </div>
+              </details>
+            </div>
+          );
+          return phoneSheet && typeof document !== 'undefined'
+            ? createPortal(<div className="sk-sheet-layer" style={vvBox ? { top: vvBox.top, height: vvBox.height } : undefined}>{sheet}</div>, document.body)
+            : sheet;
+        })()}
       </div>
 
       {stdOpen && (
@@ -2270,9 +2538,10 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
             <div className="sketch-pop-head"><strong>Export sketch</strong><button type="button" className="sk-x" aria-label="Close" onClick={() => setExportOpen(false)}>{'\u00d7'}</button></div>
             <button type="button" className="secondary" onClick={() => exportAs('png')}>Export as PNG</button>
             <button type="button" className="secondary" onClick={() => exportAs('pdf')}>Export as PDF</button>
-            {mode === 'moisture' && <button type="button" className="primary" disabled={!plan.moisture.length} onClick={() => exportAs('report')} title="Floor plan, readings by day, drying curves, dry dates and the full log">Customer report (PDF)</button>}
+            {mode === 'moisture' && <button type="button" className="primary" disabled={!plan.moisture.length && !plan.equipment.length} onClick={() => exportAs('report')} title="Floor plan, readings by day, drying curves, dry dates, equipment placed and the full log">Customer report (PDF)</button>}
             {mode === 'moisture' && <button type="button" className="secondary" disabled={!plan.moisture.length} onClick={() => exportAs('summary')} title="One row per point, one column per day">Daily summary (CSV)</button>}
             {mode === 'moisture' && <button type="button" className="secondary" disabled={!plan.moisture.length} onClick={() => exportAs('csv')} title="Every reading at every point, oldest first">Full moisture log (CSV)</button>}
+            {mode === 'moisture' && <button type="button" className="secondary" disabled={!plan.equipment.length} onClick={() => exportAs('equipment')} title="One row per piece of equipment: where, when placed and picked up, days on site">Equipment log (CSV)</button>}
           </div>
         </div>
       )}
@@ -2286,8 +2555,9 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
           const c = moistureCounts(dayPlan);
           return <>{c.points > 0 && <> · <strong>{c.points} moisture point{c.points === 1 ? '' : 's'}</strong></>}{c.standards > 0 && <> · <strong style={{ color: MOISTURE_COLORS.standard }}>{c.standards} dry standard{c.standards === 1 ? '' : 's'}</strong></>}{c.air > 0 && <> · <strong style={{ color: MOISTURE_COLORS.air }}>{c.air} air point{c.air === 1 ? '' : 's'}</strong></>}{c.wet > 0 && <> · <strong style={{ color: MOISTURE_COLORS.wet }}>{c.wet} wet</strong></>}{c.dry > 0 && <> · <strong style={{ color: MOISTURE_COLORS.dry }}>{c.dry} dry</strong></>}{c.none > 0 && <> · <strong>{c.none} to read</strong></>}</>;
         })()}
+        {mode === 'moisture' && plan.equipment.length > 0 && <> · <strong style={{ color: '#1c7ed6' }} title={countText(eqCounts)}>{eqCounts.total} equipment on site</strong></>}
         {plan.sources.length > 0 && <> · <strong style={{ color: kindDot('source') }}>{plan.sources.length} source{plan.sources.length === 1 ? '' : 's'} of loss</strong></>}
-        <span className="muted sk-hint"> · {tool === 'area' ? AREA_HINTS[areaKind] : HINTS[tool]}</span>
+        <span className="muted sk-hint"> · {tool === 'area' ? AREA_HINTS[areaKind] : mode === 'moisture' && work === 'equipment' ? HINTS.equipment : HINTS[tool]}</span>
       </div>
     </div>
   );
