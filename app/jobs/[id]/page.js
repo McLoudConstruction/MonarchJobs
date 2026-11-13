@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import AuthGate from '@/components/AuthGate';
+import Breadcrumb from '@/components/Breadcrumb';
 import VisitForm from '@/components/VisitForm';
 import VisitActions from '@/components/VisitActions';
 import OnTheWayModal from '@/components/OnTheWayModal';
@@ -245,6 +246,7 @@ function JobInner({ id, staff, token }) {
 
   return (
     <>
+      <Breadcrumb items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Jobs', href: '/jobs' }, { label: `Job #${job.job_number}` }]} />
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <h1>Job #{job.job_number} <span className={`badge s-${job.status}`}>{JOB_STATUS[job.status]}</span></h1>
         <div className="row" style={{ gap: 8 }}>

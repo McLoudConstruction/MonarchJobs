@@ -1999,3 +1999,12 @@ html{ touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adju
 .sk-eq-hist{ margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
 .sk-eq-hist li{ display: flex; flex-direction: column; gap: 1px; padding-left: 10px; border-left: 3px solid var(--line); }
 .sk-eq-hist li span{ color: var(--ink-soft); }
+
+/* breadcrumb trail above a page title */
+.crumbs{ margin: 0 0 8px; }
+.crumbs ol{ list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; font-size: 14px; color: var(--ink-soft); }
+.crumbs li{ display: inline-flex; align-items: center; }
+.crumbs a{ display: inline-flex; align-items: center; min-height: 40px; padding: 0 6px; margin-left: -6px; border-radius: 8px; color: var(--accent-text); text-decoration: none; font-weight: 600; }
+.crumbs a:hover{ background: var(--panel); text-decoration: underline; }
+.crumbs [aria-current]{ color: var(--ink); font-weight: 600; }
+.crumb-sep{ margin: 0 4px; color: var(--ink-soft); }

@@ -23,6 +23,10 @@
   .page, .page.wide { max-width: none; padding: 26px var(--tablet-gutter) calc(48px + env(safe-area-inset-bottom)); }
   .page h1 { font-size: 26px; margin-bottom: 6px; }
   .page .sub { font-size: 16px; margin-bottom: 22px; }
+  .crumbs ol { font-size: 16px; }
+  .crumbs a { min-height: 48px; padding: 0 10px; margin-left: -10px; }
+  .match-actions .secondary { min-height: 48px; padding: 0 16px; }
+  .match-view { padding: 12px 6px; }
   .card h2 { font-size: 17px; }
   .card .hint { font-size: 15px; }
   .card { padding: 20px 22px; border-radius: 12px; }

@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import PhoneInput from '@/components/PhoneInput';
 import { getSupabase } from '@/lib/supabaseClient';
-import { displayPhone, digitsOnly } from '@/lib/phone';
+import { displayPhone } from '@/lib/phone';
+import { customerSearchArgs } from '@/lib/customerSearch';
 import * as L from '@/lib/leadIntake';
 
 // The Stage 1 questions for Restoration and Carpet leads. Every section is a card (or two) of
@@ -99,27 +100,29 @@ export function AddressExtra({ kind, value, onChange }) {
   );
 }
 
-// A repeat caller should not be entered twice: offer the customers on file that match the phone or email.
-export function CustomerMatchHint({ phone, email, linkedId, onUse }) {
+// A repeat caller should not be entered twice: as the office types a name, phone or email, offer the
+// customers on file that match. "Use this customer" fills in their contact info and last address.
+export function CustomerMatchHint({ value, linkedId, onUse }) {
   const [matches, setMatches] = useState([]);
+  const args = customerSearchArgs(value);
+  const key = args ? `${args.p_name}|${args.p_phone}|${args.p_email}` : '';
   useEffect(() => {
-    if (linkedId) { setMatches([]); return undefined; }
-    const goodPhone = digitsOnly(phone).length >= 10;
-    const goodEmail = /.+@.+\..+/.test(email || '');
-    if (!goodPhone && !goodEmail) { setMatches([]); return undefined; }
+    if (linkedId || !key) { setMatches([]); return undefined; }
     let live = true;
     const t = setTimeout(() => {
-      getSupabase().rpc('find_customer_matches', { p_phone: goodPhone ? phone : '', p_email: goodEmail ? email : '' })
+      getSupabase().rpc('search_customers', args)
         .then(({ data }) => { if (live) setMatches(data || []); });
-    }, 400);
+    }, 300);
     return () => { live = false; clearTimeout(t); };
-  }, [phone, email, linkedId]);
+    // args is rebuilt every render; key is what changes when the typed text does
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, linkedId]);
   if (!matches.length) return null;
   return (
     <div className="match-card">
       <div className="match-title">Existing customer?</div>
-      <div className="match-sub">This phone number or email is already on file.</div>
-      {matches.slice(0, 3).map((m) => (
+      <div className="match-sub">Customers on file that match what you have typed. Tap one to fill in their info.</div>
+      {matches.map((m) => (
         <div key={m.id} className="match-row">
           <div className="match-who">
             <strong>{m.display_name}</strong>

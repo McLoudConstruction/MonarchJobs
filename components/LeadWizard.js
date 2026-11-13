@@ -79,9 +79,9 @@ export default function LeadWizard({
       <div className="wizard-body">
         {step === 0 && (
           <>
-            <CustomerMatchHint phone={value.phone} email={value.email} linkedId={linkedCustomerId} onUse={onUseCustomer} />
             <div className="wizard-two lead-form">
-              <ContactSection {...common} autoFocusName extra={<ContactExtra kind={kind} {...common} />} />
+              <ContactSection {...common} autoFocusName extra={<ContactExtra kind={kind} {...common} />}
+                hint={<CustomerMatchHint value={value} linkedId={linkedCustomerId} onUse={onUseCustomer} />} />
               <AddressSection {...common} after={<AddressExtra kind={kind} {...common} />} />
             </div>
           </>

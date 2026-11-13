@@ -26,7 +26,7 @@ export function pickLeadFields(obj) {
 
 // The three groups of fields, exported so the new-lead wizard can show them one step at a time.
 // The lead page still shows them all together through LeadForm below.
-export function ContactSection({ value, onChange, autoFocusName = false, extra = null }) {
+export function ContactSection({ value, onChange, autoFocusName = false, extra = null, hint = null }) {
   const set = (k) => (e) => onChange({ [k]: e.target.value });
   return (
     <div className="card">
@@ -50,6 +50,7 @@ export function ContactSection({ value, onChange, autoFocusName = false, extra =
         </div>
         {extra}
       </div>
+      {hint}
     </div>
   );
 }
