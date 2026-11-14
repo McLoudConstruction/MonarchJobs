@@ -1,7 +1,7 @@
 /* Week timeline used to pick an appointment time and to browse the schedule. */
 .wg { border: 1px solid var(--border); border-radius: 8px; background: var(--card-bg); overflow: hidden; }
 .wg-bar { display: flex; gap: 6px 8px; flex-wrap: wrap; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--panel); }
-.wg-bar select { padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--paper); color: var(--ink); }
+.wg-bar select { padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background-color: var(--paper); color: var(--ink); }
 .wg-bar .range { font-weight: 600; font-size: 13px; margin: 0 4px; white-space: nowrap; }
 .wg-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-left: 6px; }
 .wg-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: baseline; }
@@ -30,3 +30,20 @@
 
 .wg-now { position: absolute; left: 0; right: 0; height: 0; border-top: 2px solid #d64545; z-index: 2; pointer-events: none; }
 .wg-now::before { content: ''; position: absolute; left: -4px; top: -5px; width: 8px; height: 8px; border-radius: 50%; background: #d64545; }
+
+/* Rolling mode: today is the first column, columns have a steady width, and the grid scrolls sideways.
+   The hour labels stay put on the left while the days slide past. */
+.wg-rolling .wg-scroll { overflow: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scroll-padding-left: 56px; max-height: 72vh; }
+.wg-rolling .wg-inner { --wg-gutter: 56px; --wg-min: 120px; min-width: 0;
+  width: max(calc(var(--wg-gutter) + (100% - var(--wg-gutter)) * var(--wg-n) / 7), calc(var(--wg-gutter) + var(--wg-n) * var(--wg-min))); }
+.wg-rolling .wg-head { z-index: 8; }
+.wg-rolling .wg-head, .wg-rolling .wg-body { grid-template-columns: var(--wg-gutter) repeat(var(--wg-n), minmax(0, 1fr)); }
+.wg-rolling .wg-head > div:first-child { position: sticky; left: 0; z-index: 7; background: var(--panel); border-right: 1px solid var(--border); }
+.wg-rolling .wg-gutter { position: sticky; left: 0; z-index: 6; background: var(--card-bg); border-right: 1px solid var(--border); }
+.wg-rolling .wg-col { scroll-snap-align: start; }
+.wg-rolling .wg-head > div:not(:first-child) { scroll-snap-align: start; }
+.wg-rolling .wg-head .tag { font-weight: 700; color: var(--accent-text, var(--accent)); text-transform: uppercase; letter-spacing: 0.06em; }
+.wg-rolling .wg-head > .wk, .wg-rolling .wg-col.wk { border-left: 2px solid var(--muted); }
+.wg-rolling .wg-bar .range { flex: 0 1 auto; }
+@media (pointer: coarse) { .wg-rolling .wg-inner { --wg-min: 132px; } }
+.wg-bar select { width: auto; min-width: 170px; flex: 0 0 auto; }

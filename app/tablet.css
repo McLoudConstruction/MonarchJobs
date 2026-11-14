@@ -130,7 +130,6 @@
   .wizard-recap { font-size: 15.5px; padding: 12px 16px; }
   .wizard-actions { gap: 14px; padding: 14px 0 4px; }
   .wizard-actions button { min-width: 140px; }
-  .appt-split { grid-template-columns: 300px minmax(0, 1fr); }
 
   /* ===== Schedule ===== */
   .sched th { font-size: 12.5px; padding: 12px 8px; }
@@ -139,7 +138,8 @@
   .visit.compact { padding: 8px 12px; margin-bottom: 6px; }
   .visit.compact > div { line-height: 1.4; }
   .wg-bar { gap: 10px; padding: 10px 14px; }
-  .wg-bar select, .wg-bar button { min-height: 44px; padding: 8px 14px; font-size: 15px; }
+  .wg-bar select, .wg-bar button { min-height: 52px; padding: 8px 16px; font-size: 16px; }
+  .wg-bar select { padding-right: 44px; }
   .wg-bar .range { font-size: 15px; }
   .wg-head > div { padding: 10px 6px; font-size: 15px; }
   .wg-visit { font-size: 13.5px; padding: 4px 8px; }

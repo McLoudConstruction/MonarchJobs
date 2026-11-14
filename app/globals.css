@@ -1120,18 +1120,41 @@ a.stat-tile:hover{ border-color: var(--accent); }
 .wizard-actions{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 0 2px; flex-shrink: 0; }
 .wizard-spacer{ flex: 1; }
 .wizard-msg{ margin: 0; padding: 6px 10px; }
-/* schedule step: controls on the left, week on the right, the week scrolls inside its own box */
+/* schedule step: start / length / tech in one row, the calendar full width below it, scrolling sideways */
 .wizard-schedule{ display: flex; flex-direction: column; height: 100%; box-sizing: border-box; padding: 12px 16px; margin: 0; }
 .wizard-schedule-head{ display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; flex-shrink: 0; }
 .wizard-schedule-head h2{ margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
 .wizard-schedule-head .hint{ margin: 0; font-size: 13px; }
-.appt-split{ display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 18px; flex: 1; min-height: 0; }
-.appt-split .appt-controls{ overflow-y: auto; }
-.appt-split .appt-controls .grid2{ grid-template-columns: 1fr; }
-.appt-split .appt-grid{ min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.appt-fields{ display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+.appt-fields > *{ min-width: 0; }
+.appt-fields .field:nth-child(3){ grid-column: 1 / -1; }
+.appt-split{ display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; }
+.appt-split .appt-controls{ flex-shrink: 0; }
+.appt-split .appt-fields{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.appt-split .appt-fields .field:nth-child(3){ grid-column: auto; }
+.appt-split .appt-fields .field{ margin-bottom: 0; }
+.appt-split .appt-grid{ flex: 1; min-height: 280px; display: flex; flex-direction: column; }
 .appt-split .appt-grid .wg{ flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .appt-split .appt-grid .wg-scroll{ flex: 1; min-height: 0; overflow: auto; }
-@media (max-width: 900px){ .appt-split{ grid-template-columns: 1fr; } .wizard-schedule{ height: auto; } .appt-split .appt-grid .wg{ flex: none; } .appt-split .appt-grid .wg-scroll{ max-height: 65vh; } }
+@media (max-width: 700px){ .appt-split .appt-fields{ grid-template-columns: 1fr; } .wizard-schedule{ height: auto; } .appt-split .appt-grid{ min-height: 0; } .appt-split .appt-grid .wg{ flex: none; } .appt-split .appt-grid .wg-scroll{ max-height: 65vh; } }
+
+/* bigger, easier-to-tap dropdowns and date field on touch screens (the chevron is drawn here because the native one is tiny) */
+@media (pointer: coarse){
+  .appt-controls select, .wg-bar select{
+    -webkit-appearance: none; appearance: none; min-height: 56px; font-size: 17px; padding: 12px 44px 12px 16px; border-radius: 10px;
+    touch-action: manipulation; text-overflow: ellipsis;
+    background-image: linear-gradient(45deg, transparent 50%, var(--ink) 50%), linear-gradient(135deg, var(--ink) 50%, transparent 50%);
+    background-position: calc(100% - 26px) 50%, calc(100% - 18px) 50%; background-size: 8px 8px, 8px 8px; background-repeat: no-repeat;
+  }
+  .appt-controls .field label{ font-size: 14px; margin-bottom: 6px; }
+  .appt-controls .dtf-input{ min-height: 56px; font-size: 17px; padding: 12px 16px; border-radius: 10px; touch-action: manipulation; }
+  .dtf-month button{ width: 48px; height: 48px; font-size: 24px; }
+  .dtf-day{ height: 48px; font-size: 16px; }
+  .dtf-hours button, .dtf-mins button{ height: 48px; font-size: 16px; }
+  .dtf-today{ padding: 12px 8px; font-size: 15px; }
+  .dtf-actions button{ min-height: 52px; font-size: 16px; }
+  .dtf-pop{ width: 360px; }
+}
 
 /* Centered popup dialog (On the way) */
 .popup-overlay{ position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1200; display: flex; align-items: center; justify-content: center; padding: 16px; }

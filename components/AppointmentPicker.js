@@ -5,7 +5,6 @@ import { getSupabase } from '@/lib/supabaseClient';
 import WeekGrid from '@/components/WeekGrid';
 import DateTimeField from '@/components/DateTimeField';
 import { DURATION_CHOICES, fmtDuration, fmtDateTime, fromLocalInput, toLocalInput } from '@/lib/format';
-import { weekStartMonday } from '@/lib/weekGrid';
 import { staffName } from '@/lib/userDisplay';
 
 // Every appointment starts out 4 hours long. Emergency-type work (mitigation and extraction) starts at the
@@ -23,20 +22,11 @@ export function defaultAppointment({ nearestHour = false } = {}) {
 // clicked. There is no end time: an appointment is a start and a duration.
 // value: { start: 'YYYY-MM-DDTHH:mm' (local), duration: minutes, techId, override }
 export default function AppointmentPicker({ value, onChange, staffList, excludeVisitId = null, onConflicts, split = false }) {
-  const [weekStart, setWeekStart] = useState(() => weekStartMonday(value.start ? new Date(value.start) : new Date()));
   const [conflicts, setConflicts] = useState([]);
 
   const startDate = value.start ? new Date(value.start) : null;
   const validStart = startDate && !Number.isNaN(startDate.getTime());
   const set = (patch) => onChange({ ...value, override: false, ...patch });
-
-  // when the start moves to another week (typed in, or picked), show that week
-  useEffect(() => {
-    if (!validStart) return;
-    const ws = weekStartMonday(startDate);
-    setWeekStart((cur) => (cur.getTime() === ws.getTime() ? cur : ws));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value.start]);
 
   // double-booking check for the chosen tech and time
   useEffect(() => {
@@ -66,7 +56,7 @@ export default function AppointmentPicker({ value, onChange, staffList, excludeV
   return (
     <div className={split ? 'appt-split' : undefined}>
       <div className="appt-controls">
-      <div className="grid2">
+      <div className="appt-fields">
         <div className="field">
           <label>Start</label>
           <DateTimeField value={value.start} onChange={(v) => set({ start: v })} />
@@ -77,15 +67,15 @@ export default function AppointmentPicker({ value, onChange, staffList, excludeV
             {durations.map((m) => <option key={m} value={m}>{fmtDuration(m)}</option>)}
           </select>
         </div>
+        <div className="field">
+          <label>Tech</label>
+          <select value={value.techId} onChange={(e) => set({ techId: e.target.value })}>
+            <option value="">Unassigned</option>
+            {staffList.map((s) => <option key={s.id} value={s.id}>{staffName(s)} ({s.role})</option>)}
+          </select>
+        </div>
       </div>
-      <div className="field">
-        <label>Tech</label>
-        <select value={value.techId} onChange={(e) => set({ techId: e.target.value })}>
-          <option value="">Unassigned</option>
-          {staffList.map((s) => <option key={s.id} value={s.id}>{staffName(s)} ({s.role})</option>)}
-        </select>
-      </div>
-      {validStart && <p className="hint" style={{ marginTop: -6 }}>Appointment: <strong>{fmtDateTime(startDate)} for {fmtDuration(value.duration)}</strong></p>}
+      {validStart && !split && <p className="hint" style={{ marginTop: -6 }}>Appointment: <strong>{fmtDateTime(startDate)} for {fmtDuration(value.duration)}</strong></p>}
 
       {conflicts.length > 0 && (
         <div className="banner flag">
@@ -100,14 +90,13 @@ export default function AppointmentPicker({ value, onChange, staffList, excludeV
       </div>
       <div className="appt-grid">
       <WeekGrid
-        weekStart={weekStart}
-        onWeekChange={setWeekStart}
+        rolling
         techs={staffList}
         focusTechId={value.techId}
         proposed={validStart ? { start: startDate, duration: value.duration } : null}
         excludeVisitId={excludeVisitId}
         onPick={(date) => set({ start: toLocalInput(date) })}
-        hint="Click an open spot in the week to set the start time, or drag the dashed box (the appointment you are setting) to a new time or day."
+        hint="Today is the first column. Swipe or scroll sideways for other days and weeks. Tap an open spot to set the start time, or drag the dashed box (the appointment you are setting) to a new time or day."
       />
       </div>
     </div>

@@ -12,14 +12,18 @@ import './weekgrid.css';
 const HOUR_PX = 44;
 const HOURS = Array.from({ length: DAY_END_HOUR - DAY_START_HOUR }, (_, i) => DAY_START_HOUR + i);
 const hourLabel = (h) => `${h % 12 === 0 ? 12 : h % 12} ${h < 12 ? 'AM' : 'PM'}`;
+const GUTTER_PX = 56;       // width of the hour labels column (keep in step with weekgrid.css)
+const ROLLING_DAYS = 28;    // days loaded to start with in rolling mode
+const ROLLING_MAX_DAYS = 140;
 
 // A week of visits laid out by time of day. Pass onPick to let the person click a time slot, or drag the
 // dashed appointment box to a new time or day (used when scheduling); pass proposed to draw the
 // appointment being planned; pass linkVisits to open a job when its block is clicked (used on the
-// Schedule page).
+// Schedule page). With rolling, the first column is always today and the grid scrolls sideways through
+// the following days and weeks (more days load as you near the end) instead of paging a Monday-to-Sunday week.
 export default function WeekGrid({
   weekStart, onWeekChange, techs, focusTechId = '', proposed = null, onPick = null,
-  excludeVisitId = null, linkVisits = false, hint = null,
+  excludeVisitId = null, linkVisits = false, hint = null, rolling = false,
 }) {
   const [visits, setVisits] = useState([]);
   const [view, setView] = useState(focusTechId || 'all');
@@ -28,8 +32,17 @@ export default function WeekGrid({
   const scrollRef = useRef(null);
   const dragRef = useRef(null);
   const justDragged = useRef(false);
-  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
-  const weekEnd = useMemo(() => addDays(weekStart, 7), [weekStart]);
+  const [span, setSpan] = useState(ROLLING_DAYS);   // rolling: how many days are drawn
+  const [firstIdx, setFirstIdx] = useState(0);        // rolling: index of the left-most visible day
+  const rangeStart = useMemo(() => {
+    if (!rolling) return weekStart;
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, [rolling, weekStart]);
+  const count = rolling ? span : 7;
+  const days = useMemo(() => Array.from({ length: count }, (_, i) => addDays(rangeStart, i)), [rangeStart, count]);
+  const rangeEnd = useMemo(() => addDays(rangeStart, count), [rangeStart, count]);
 
   // follow the tech chosen in the form above, unless the person has picked another view
   useEffect(() => { setView(focusTechId || 'all'); }, [focusTechId]);
@@ -38,11 +51,11 @@ export default function WeekGrid({
     let cancelled = false;
     getSupabase().from('job_visits')
       .select('id,tech_id,starts_at,ends_at,duration_minutes,status,job:jobs(id,job_number,customer:customers(display_name),address:addresses(street,city))')
-      .lt('starts_at', weekEnd.toISOString()).gt('ends_at', weekStart.toISOString())
+      .lt('starts_at', rangeEnd.toISOString()).gt('ends_at', rangeStart.toISOString())
       .neq('status', 'cancelled').order('starts_at')
       .then(({ data }) => { if (!cancelled) setVisits(data || []); });
     return () => { cancelled = true; };
-  }, [weekStart, weekEnd]);
+  }, [rangeStart, rangeEnd]);
 
   const techIds = useMemo(() => techs.map((t) => t.id), [techs]);
   const techName = (id) => { const t = techs.find((x) => x.id === id); return t ? staffName(t) : 'Unassigned'; };
@@ -64,13 +77,48 @@ export default function WeekGrid({
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || el.scrollHeight <= el.clientHeight + 1) return;
-    const inWeek = (d) => d >= weekStart && d < weekEnd;
+    const inWeek = (d) => d >= rangeStart && d < rangeEnd;
     const planned = proposed?.start ? new Date(proposed.start) : null;
     const target = planned && inWeek(planned) ? planned : inWeek(new Date()) ? new Date() : null;
     const f = target ? fractionFromTime(target, target) : 0;
     el.scrollTop = Math.max(0, f * HOURS.length * HOUR_PX - HOUR_PX * 1.5);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekStart.getTime()]);
+  }, [rangeStart.getTime()]);
+
+  // Rolling: draw far enough ahead to include the appointment being planned.
+  useEffect(() => {
+    if (!rolling || !proposed?.start) return;
+    const day = new Date(proposed.start);
+    day.setHours(0, 0, 0, 0);
+    const need = Math.round((day.getTime() - rangeStart.getTime()) / 86400000) + 1;
+    if (need > span) setSpan(Math.min(ROLLING_MAX_DAYS, Math.ceil((need + 7) / 7) * 7));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rolling, proposed?.start]);
+
+  // Rolling: when the appointment moves to a day that is off screen (typed in the date picker), scroll to it.
+  const propDayKey = proposed?.start ? new Date(proposed.start).toDateString() : '';
+  useEffect(() => {
+    if (!rolling || !propDayKey) return;
+    const el = scrollRef.current;
+    const idx = days.findIndex((d) => d.toDateString() === propDayKey);
+    if (!el || idx < 0) return;
+    const w = colWidth();
+    const centre = idx * w + w / 2;
+    if (centre < el.scrollLeft || centre > el.scrollLeft + el.clientWidth - GUTTER_PX) el.scrollTo({ left: idx * w, behavior: 'smooth' });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rolling, propDayKey, days.length]);
+
+  const colWidth = () => colRefs.current[0]?.offsetWidth || 120;
+  function onScroll() {
+    if (!rolling) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    const w = colWidth();
+    setFirstIdx(Math.min(Math.max(Math.round(el.scrollLeft / w), 0), days.length - 1));
+    if (el.scrollLeft + el.clientWidth > el.scrollWidth - w * 3) setSpan((s) => Math.min(ROLLING_MAX_DAYS, s + ROLLING_DAYS));
+  }
+  const scrollWeeks = (dir) => scrollRef.current?.scrollBy({ left: dir * colWidth() * 7, behavior: 'smooth' });
+  const scrollToToday = () => scrollRef.current?.scrollTo({ left: 0, behavior: 'smooth' });
 
   const propStart = dragStart || (proposed?.start ? new Date(proposed.start) : null);
 
@@ -114,12 +162,12 @@ export default function WeekGrid({
   }
 
   return (
-    <div className="wg" style={{ '--wg-hour': `${HOUR_PX}px` }}>
+    <div className={`wg${rolling ? ' wg-rolling' : ''}`} style={{ '--wg-hour': `${HOUR_PX}px` }}>
       <div className="wg-bar">
-        <button type="button" className="secondary small" onClick={() => onWeekChange(addDays(weekStart, -7))}>Prev</button>
-        <button type="button" className="secondary small" onClick={() => onWeekChange(weekStartMonday(new Date()))}>This week</button>
-        <button type="button" className="secondary small" onClick={() => onWeekChange(addDays(weekStart, 7))}>Next</button>
-        <span className="range">{fmtDay(days[0])} to {fmtDay(days[6])}</span>
+        <button type="button" className="secondary small" onClick={() => (rolling ? scrollWeeks(-1) : onWeekChange(addDays(weekStart, -7)))}>Prev</button>
+        <button type="button" className="secondary small" onClick={() => (rolling ? scrollToToday() : onWeekChange(weekStartMonday(new Date())))}>{rolling ? 'Today' : 'This week'}</button>
+        <button type="button" className="secondary small" onClick={() => (rolling ? scrollWeeks(1) : onWeekChange(addDays(weekStart, 7)))}>Next</button>
+        <span className="range">{fmtDay(days[rolling ? firstIdx : 0])} to {fmtDay(days[Math.min((rolling ? firstIdx : 0) + 6, days.length - 1)])}</span>
         <span className="wg-legend">
           {techs.filter((t) => view === 'all' || t.id === view).map((t) => (
             <span key={t.id}><i style={{ background: techColor(techIds, t.id) }} />{staffName(t)}</span>
@@ -132,15 +180,17 @@ export default function WeekGrid({
           {techs.map((t) => <option key={t.id} value={t.id}>{staffName(t)}</option>)}
         </select>
       </div>
-      <div className="wg-scroll" ref={scrollRef}>
-        <div className="wg-inner">
+      <div className="wg-scroll" ref={scrollRef} onScroll={onScroll}>
+        <div className="wg-inner" style={rolling ? { '--wg-n': days.length } : undefined}>
           <div className="wg-head">
             <div />
-            {days.map((d) => {
+            {days.map((d, i) => {
               const { outside } = layoutDay(shown, d);
+              const isToday = d.toDateString() === todayKey;
               return (
-                <div key={d.getTime()} className={d.toDateString() === todayKey ? 'today' : ''}>
+                <div key={d.getTime()} className={`${isToday ? 'today' : ''}${rolling && i > 0 && d.getDay() === 1 ? ' wk' : ''}`}>
                   {fmtDay(d)}
+                  {rolling && isToday && <span className="out tag">Today</span>}
                   {outside.length > 0 && <span className="out">+{outside.length} outside {hourLabel(DAY_START_HOUR)} to {hourLabel(DAY_END_HOUR)}</span>}
                 </div>
               );
@@ -150,14 +200,14 @@ export default function WeekGrid({
             <div className="wg-gutter" style={{ height: HOURS.length * HOUR_PX }}>
               {HOURS.map((h, i) => <span key={h} style={{ top: i * HOUR_PX }}>{i === 0 ? '' : hourLabel(h)}</span>)}
             </div>
-            {days.map((d) => {
+            {days.map((d, di) => {
               const { items } = layoutDay(shown, d);
               const showProposed = propStart && propStart.toDateString() === d.toDateString();
               const pTop = showProposed ? fractionFromTime(propStart, d) : 0;
               const pHeight = showProposed ? ((proposed.duration || 60) / ((DAY_END_HOUR - DAY_START_HOUR) * 60)) : 0;
               return (
                 <div key={d.getTime()} ref={(el) => { colRefs.current[days.indexOf(d)] = el; }}
-                  className={`wg-col${onPick ? ' clickable' : ''}${d.toDateString() === todayKey ? ' today' : ''}`}
+                  className={`wg-col${onPick ? ' clickable' : ''}${d.toDateString() === todayKey ? ' today' : ''}${rolling && di > 0 && d.getDay() === 1 ? ' wk' : ''}`}
                   style={{ height: HOURS.length * HOUR_PX }} onClick={(e) => pick(e, d)}>
                   {items.map(({ visit: v, top, height, lane, lanes }) => {
                     const style = {
