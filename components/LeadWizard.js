@@ -53,9 +53,11 @@ export default function LeadWizard({
   return (
     <form className="wizard" onSubmit={submit}>
       <div className="wizard-head">
-        <h1>New lead</h1>
-        <span className="kind-pill">{kindLabel} <button type="button" className="linklike" onClick={onRestart}>Change</button></span>
-        {subtitle && <span className="wizard-sub">{subtitle}</span>}
+        <div className="wizard-title">
+          <h1>New lead</h1>
+          <span className="kind-pill">{kindLabel} <button type="button" className="linklike" onClick={onRestart}>Change</button></span>
+          {subtitle && <span className="wizard-sub">{subtitle}</span>}
+        </div>
         <ol className="wizard-steps">
           {steps.map((label, i) => (
             <li key={label} className={`${i === step ? 'current' : ''} ${i < step ? 'done' : ''}`}>
@@ -116,9 +118,9 @@ export default function LeadWizard({
         {msg && <div className="msg err wizard-msg">{msg}</div>}
         <span className="wizard-spacer" />
         {step > 0 && <button type="button" className="secondary" onClick={() => go(step - 1)}>Back</button>}
-        <button type="button" className="secondary" disabled={busy} onClick={onSave}>{busy ? 'Saving...' : step === last ? 'Save lead, schedule later' : 'Save lead now'}</button>
-        {step < last && <button type="submit" className="primary">Next: {steps[step + 1]}</button>}
-        {step === last && <button type="button" className="primary" disabled={busy} onClick={onSaveAndBook}>{busy ? 'Booking...' : 'Save and create work order'}</button>}
+        <button type="button" className="secondary" disabled={busy} onClick={onSave}>{busy ? 'Saving...' : step === last ? 'Save, schedule later' : 'Save lead'}</button>
+        {step < last && <button type="submit" className="primary">Next: {steps[step + 1]} →</button>}
+        {step === last && <button type="button" className="primary" disabled={busy} onClick={onSaveAndBook}>{busy ? 'Booking...' : 'Create work order'}</button>}
       </div>
     </form>
   );

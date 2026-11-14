@@ -305,7 +305,7 @@ function JobInner({ id, staff, token }) {
   return (
     <>
       <Breadcrumb items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Jobs', href: '/jobs' }, { label: `Job #${job.job_number}` }]} />
-      <div className="row" style={{ justifyContent: 'space-between' }}>
+      <div className="page-head">
         <h1>Job #{job.job_number} <span className={`badge s-${job.status}`}>{JOB_STATUS[job.status]}</span></h1>
         <div className="row" style={{ gap: 8 }}>
           {unassignedVisit && <button type="button" className="assign-btn" onClick={() => setAssignOpen(true)}>Assign Job</button>}
@@ -350,9 +350,9 @@ function JobInner({ id, staff, token }) {
             <h2>Customer</h2>
             <div className="title">{isOffice ? <Link href={`/customers/${job.customer.id}`}>{job.customer.display_name}</Link> : job.customer.display_name}</div>
             {contactName && contactName !== job.customer.display_name && <div>{contactName}</div>}
-            <div className="meta-line">
-              {job.customer.phone && <a href={telHref(job.customer.phone)}>{displayPhone(job.customer.phone)}</a>}
-              {job.customer.email && <>{job.customer.phone ? ' · ' : ''}<a href={`mailto:${job.customer.email}`}>{job.customer.email}</a></>}
+            <div className="contact-chips">
+              {job.customer.phone && <a className="chip-link" href={telHref(job.customer.phone)}>Call {displayPhone(job.customer.phone)}</a>}
+              {job.customer.email && <a className="chip-link" href={`mailto:${job.customer.email}`}>{job.customer.email}</a>}
               {!job.customer.phone && !job.customer.email && <span className="muted">No phone or email on file.</span>}
             </div>
           </div>
@@ -391,8 +391,8 @@ function JobInner({ id, staff, token }) {
                   {(isOffice || v.tech_id === staff.id) && <VisitActions visit={v} token={token} onDone={load} />}
                   {isOffice && v.status === 'scheduled' && (
                     <>
-                      <button className="secondary small" onClick={() => setVisitEdit(v)}>Reschedule / reassign</button>
-                      <button className="danger small" onClick={() => cancelVisit(v)}>Cancel visit</button>
+                      <button className="secondary small" onClick={() => setVisitEdit(v)}>Reschedule</button>
+                      <button className="linklike danger-link" onClick={() => cancelVisit(v)}>Cancel</button>
                     </>
                   )}
                 </div>

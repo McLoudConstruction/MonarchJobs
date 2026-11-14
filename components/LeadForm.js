@@ -32,16 +32,16 @@ export function ContactSection({ value, onChange, autoFocusName = false, extra =
     <div className="card">
       <h2>Contact</h2>
       <div className="grid2">
-        <div className="field"><label>Type</label>
-          <select value={value.customer_type} onChange={set('customer_type')}>
-            {Object.entries(CUSTOMER_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
-        </div>
-        <div className="field"><label>Company (if any)</label><input value={value.company_name} onChange={set('company_name')} /></div>
         <div className="field"><label>First name</label><input value={value.first_name} onChange={set('first_name')} autoComplete="off" autoFocus={autoFocusName} /></div>
         <div className="field"><label>Last name</label><input value={value.last_name} onChange={set('last_name')} autoComplete="off" /></div>
         <div className="field"><label>Phone</label><PhoneInput value={value.phone} onChange={set('phone')} /></div>
         <div className="field"><label>Email</label><input type="email" value={value.email} onChange={set('email')} /></div>
+        <div className="field"><label>Customer type</label>
+          <select value={value.customer_type} onChange={set('customer_type')}>
+            {Object.entries(CUSTOMER_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </div>
+        <div className="field"><label>Company (optional)</label><input value={value.company_name} onChange={set('company_name')} /></div>
         <div className="field"><label>How did they reach us?</label>
           <select value={value.source} onChange={set('source')}>
             <option value="phone">Phone call</option><option value="web">Website</option>

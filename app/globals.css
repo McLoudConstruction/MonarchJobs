@@ -2120,3 +2120,28 @@ html{ touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adju
 .badge.as-on_job{ background: #e7f1ff; color: #1c64c8; }
 .badge.as-repair{ background: var(--warn-bg); color: var(--warn-ink); }
 .badge.as-retired{ background: #eceff1; color: #6b7785; }
+
+/* ---------- UI cleanup: lead wizard and job page ---------- */
+.page-head{ display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.page-head h1{ margin: 0 0 4px; }
+.contact-chips{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.chip-link{ display: inline-block; padding: 7px 12px; border: 1px solid var(--line); border-radius: 20px; font-size: 13px; font-weight: 600; color: var(--accent-text); text-decoration: none; background: var(--panel); }
+.chip-link:hover{ border-color: var(--accent); }
+button.danger-link{ background: none; border: 0; padding: 6px 4px; color: var(--danger); font: inherit; font-size: 12.5px; cursor: pointer; text-decoration: underline; }
+.job-overview .card{ border-radius: 10px; }
+.job-overview .card .title{ font-size: 15px; font-weight: 600; }
+.visit-row{ padding: 12px 0; }
+
+/* lead wizard: calmer header, flat step strip, sticky action bar */
+.wizard-head{ flex-direction: column; align-items: stretch; gap: 10px; margin-bottom: 12px; }
+.wizard-title{ display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.wizard-steps{ margin: 0; gap: 0; border-bottom: 1px solid var(--line); }
+.wizard-steps li{ flex: 1; }
+.wizard-steps button{ width: 100%; justify-content: center; background: transparent; border: 0; border-bottom: 3px solid transparent; border-radius: 0; padding: 8px 6px; }
+.wizard-steps li.current button{ border-bottom-color: var(--accent); }
+.wizard-steps li.done button{ border-bottom-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.wizard-recap{ background: transparent; border: 0; padding: 0 2px; color: var(--ink-soft); }
+.wizard .lead-form .card{ border-radius: 10px; padding: 14px 18px 8px; }
+.wizard .lead-form .card h2{ font-size: 13px; letter-spacing: 0.06em; margin-bottom: 10px; }
+.wizard-actions{ border-top: 1px solid var(--line); padding-top: 12px; margin-top: 8px; }
+@media (max-width: 700px){ .wizard-steps li span:not(.wizard-num){ display: none; } .wizard-steps li.current span:not(.wizard-num){ display: inline; } }
