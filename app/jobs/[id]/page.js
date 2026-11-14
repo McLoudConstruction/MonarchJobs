@@ -202,6 +202,7 @@ function JobInner({ id, staff, token }) {
     const off2 = onOpsFinished(() => { refresh(); load(); });
     return () => { alive = false; off1(); off2(); };
   }, [id, load]);
+  const visitsShown = useMemo(() => overlayVisits(visits, waitingOps), [visits, waitingOps]);
   const photosById = useMemo(() => new Map(photos.map((p) => [p.id, p])), [photos]);
 
   if (loadFailed && !job) {
@@ -273,7 +274,6 @@ function JobInner({ id, staff, token }) {
   // the address warning (pets) shows in the Site card; only the job-level warning stays a banner
   const warnings = [job.warning].filter(Boolean);
   // the visit "On the way" applies to: the next one still waiting, if this person may act on it
-  const visitsShown = useMemo(() => overlayVisits(visits, waitingOps), [visits, waitingOps]);
   const otwVisit = visitsShown.find((v) => ['scheduled', 'on_the_way'].includes(v.status) && (isOffice || v.tech_id === staff.id));
   // a visit still waiting with nobody on it: the office sees a red Assign Job button
   const unassignedVisit = isOffice ? visits.find((v) => v.status === 'scheduled' && !v.tech_id) : null;
