@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { apiFetch } from '@/lib/useAuth';
+import { sendVisitAction } from '@/lib/offlineActions';
 
 // Compact Start / Finish buttons on a visit row, for desktop. Phones use the action bar at the bottom of
 // the screen instead (VisitDock). "On the way" is the popup on the job header. The server checks the tech owns the visit.
@@ -13,7 +13,7 @@ export default function VisitActions({ visit, token, onDone }) {
     setBusy(true);
     setMsg(null);
     try {
-      await apiFetch(`/api/visits/${visit.id}/status`, token, { method: 'POST', body: JSON.stringify({ action, minutes }) });
+      await sendVisitAction({ visit, action, minutes });
       onDone();
     } catch (e) {
       setMsg(e.message);

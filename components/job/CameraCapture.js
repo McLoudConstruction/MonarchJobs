@@ -495,12 +495,12 @@ export default function CameraCapture({ open, onClose, uploader, fixedKind = nul
           <div className="camera-notice" role="status">
             {notice ? notice : failed > 0 ? (
               <>
-                {failed} {failed === 1 ? 'photo' : 'photos'} not uploaded.{' '}
+                {failed} {failed === 1 ? 'photo' : 'photos'} NOT saved.{' '}
                 {true && (
                   <button type="button" className="camera-link" onClick={retryAll}>Retry</button>
                 )}
               </>
-            ) : `Uploading ${pending} ${pending === 1 ? 'photo' : 'photos'}`}
+            ) : `Saving ${pending} ${pending === 1 ? 'photo' : 'photos'}`}
           </div>
         )}
       </div>

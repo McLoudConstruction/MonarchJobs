@@ -9,6 +9,8 @@ import { INTERNAL_CATEGORIES } from '@/lib/jobDocs';
 import { fmtDateTime } from '@/lib/format';
 import { displayPhone } from '@/lib/phone';
 import { apiFetch } from '@/lib/useAuth';
+import { saveNewUpdate } from '@/lib/offlineActions';
+import { getOps } from '@/lib/offlineClient';
 
 const blank = (kind) => ({ id: null, kind, category: kind === 'internal' ? INTERNAL_CATEGORIES[0] : '', title: '', body: '', next_steps: '', photo_ids: [] });
 
@@ -88,17 +90,24 @@ export default function UpdatesTab({ jobId, updates, photos, isOffice, staff, to
   const [err, setErr] = useState('');
   const [sending, setSending] = useState(null);
   const [copied, setCopied] = useState('');
+  const [notice, setNotice] = useState('');
+  const [queuedNotes, setQueuedNotes] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    (async () => { const o = await getOps(); if (!o) return; const l = await o.list(jobId); if (alive) setQueuedNotes(l.filter((x) => x.type === 'note').map((x) => ({ ...x.payload.row, _pending: true, created_by: x.userId }))); })();
+    return () => { alive = false; };
+  }, [jobId, updates, notice]);
 
   const counts = useMemo(() => ({
     internal: updates.filter((u) => u.kind === 'internal').length,
     progress: updates.filter((u) => u.kind === 'progress').length,
   }), [updates]);
   const list = useMemo(
-    () => updates.filter((u) => u.kind === mode).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
-    [updates, mode],
+    () => [...queuedNotes.filter((q) => !updates.some((u) => u.id === q.id)), ...updates].filter((u) => u.kind === mode).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
+    [updates, mode, queuedNotes],
   );
   const photoById = useMemo(() => new Map(photos.map((p) => [p.id, p])), [photos]);
-  const canEdit = (u) => u.status !== 'sent' && (isOffice || u.created_by === staff.id);
+  const canEdit = (u) => !u._pending && u.status !== 'sent' && (isOffice || u.created_by === staff.id);
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
@@ -136,10 +145,12 @@ export default function UpdatesTab({ jobId, updates, photos, isOffice, staff, to
     if (form.id) {
       ({ error } = await sb.from('job_updates').update(fields).eq('id', form.id));
     } else {
-      ({ error } = await sb.from('job_updates').insert({
-        job_id: jobId, kind: form.kind, status: form.kind === 'internal' ? 'posted' : 'draft', ...fields,
-      }));
-      if (!error) await logEvent(form.kind === 'internal' ? 'update_posted' : 'progress_update_saved', { category: fields.category });
+      const eventKind = form.kind === 'internal' ? 'update_posted' : 'progress_update_saved';
+      try {
+        const r = await saveNewUpdate({ jobId, eventKind, row: { kind: form.kind, status: form.kind === 'internal' ? 'posted' : 'draft', ...fields } });
+        if (r.queued) setNotice('Saved on this phone. It will post when you have signal.');
+        else await logEvent(eventKind, { category: fields.category });
+      } catch (e2) { error = e2; }
     }
     setSaving(false);
     if (error) { setErr(error.message); return; }
@@ -167,6 +178,7 @@ export default function UpdatesTab({ jobId, updates, photos, isOffice, staff, to
         <button type="button" role="tab" aria-selected={mode === 'progress'} className={mode === 'progress' ? 'on' : ''} onClick={() => setMode('progress')}>Progress updates ({counts.progress})</button>
       </div>
 
+      {notice && <div className="msg ok" role="status">{notice}</div>}
       {!form && (
         <div className="card">
           {mode === 'internal' ? (
@@ -224,7 +236,7 @@ export default function UpdatesTab({ jobId, updates, photos, isOffice, staff, to
             <div key={u.id} className="list-item update-item">
               <div className="title">
                 {u.kind === 'internal'
-                  ? <span className="badge off">{u.category || 'Note'}</span>
+                  ? <><span className="badge off">{u.category || 'Note'}</span>{u._pending && <span className="badge off" style={{ marginLeft: 6 }}>Waiting to send</span>}</>
                   : <><span className={`badge ${u.status === 'sent' ? 'live' : 'off'}`}>{u.status === 'sent' ? 'Sent' : 'Draft'}</span> {u.title || 'Progress update'}</>}
               </div>
               <div className="meta">{fmtDateTime(u.created_at)} · {authorName(u.created_by) || 'staff'}</div>

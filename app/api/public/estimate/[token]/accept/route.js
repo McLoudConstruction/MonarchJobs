@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAdmin } from '@/lib/supabaseAdmin';
 import { estimateTotals, estimateSnapshot } from '@/lib/estimate';
+import { effectiveLines, validateChoice } from '@/lib/estimateOptions';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,19 +46,24 @@ export async function POST(request, { params }) {
 
   const { data: lines } = await admin
     .from('estimate_lines')
-    .select('description,unit,quantity,unit_price,sort_order,created_at')
+    .select('id,description,unit,quantity,unit_price,tier,optional,sort_order,created_at')
     .eq('estimate_id', est.id)
     .order('sort_order')
     .order('created_at');
   if (!lines?.length) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
-  const totals = estimateTotals(lines, est.minimum_charge);
-  const snapshot = estimateSnapshot(lines, est.minimum_charge);
+  // What the customer chose: one tier (when the quote has them) and the add-ons they ticked.
+  const checked = validateChoice(lines, body);
+  if (checked.error) return NextResponse.json({ error: checked.error }, { status: 400 });
+  const choice = checked.choice;
+  const chosen = effectiveLines(lines, choice);
+  const totals = estimateTotals(chosen, est.minimum_charge);
+  const snapshot = estimateSnapshot(chosen, est.minimum_charge);
 
   // Approve first, only if it is still "sent", so two quick taps cannot sign twice.
   const now = new Date().toISOString();
   const { data: approved, error: aerr } = await admin
     .from('estimates')
-    .update({ status: 'approved', approved_at: now })
+    .update({ status: 'approved', approved_at: now, chosen_tier: choice.tier })
     .eq('id', est.id)
     .eq('status', 'sent')
     .select('id')
@@ -77,12 +83,15 @@ export async function POST(request, { params }) {
     minimum_charge: snapshot.minimum_charge,
     lines_snapshot: snapshot.lines,
     preferred_times: preferred,
+    chosen_tier: choice.tier,
   });
   if (serr) {
     // Do not leave an approval with no signature behind it.
-    await admin.from('estimates').update({ status: 'sent', approved_at: null }).eq('id', est.id);
+    await admin.from('estimates').update({ status: 'sent', approved_at: null, chosen_tier: null }).eq('id', est.id);
     return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
   }
+
+  if (choice.picks.length) await admin.from('estimate_lines').update({ accepted: true }).eq('estimate_id', est.id).in('id', choice.picks);
 
   if (est.lead_id && preferred) {
     await admin.from('leads').update({ preferred_times: preferred }).eq('id', est.lead_id).in('status', ['new', 'quoted', 'accepted']);
@@ -91,7 +100,7 @@ export async function POST(request, { params }) {
     job_id: est.job_id,
     lead_id: est.lead_id,
     kind: 'estimate_signed',
-    details: { signer_name: name, total_cents: totals.totalCents, ip },
+    details: { signer_name: name, total_cents: totals.totalCents, tier: choice.tier, addons: choice.picks.length, ip },
   });
 
   return NextResponse.json({ ok: true });

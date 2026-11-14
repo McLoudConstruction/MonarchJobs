@@ -7,11 +7,13 @@ import BrandingSection from '@/components/settings/BrandingSection';
 import UsersSection from '@/components/settings/UsersSection';
 import PriceListSection from '@/components/settings/PriceListSection';
 import IntegrationsSection from '@/components/settings/IntegrationsSection';
+import RemindersSection from '@/components/settings/RemindersSection';
 
 const TABS = [
   { id: 'business', label: 'Business' },
   { id: 'users', label: 'Users' },
   { id: 'prices', label: 'Price list' },
+  { id: 'reminders', label: 'Reminders' },
   { id: 'integrations', label: 'Integrations' },
 ];
 
@@ -67,6 +69,7 @@ export default function SettingsPage() {
             )}
             {tab === 'users' && <UsersSection currentUserId={staff.id} token={token} />}
             {tab === 'prices' && <PriceListSection />}
+            {tab === 'reminders' && <RemindersSection token={token} />}
             {tab === 'integrations' && <IntegrationsSection token={token} />}
           </div>
         </>

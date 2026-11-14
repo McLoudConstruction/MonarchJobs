@@ -20,7 +20,7 @@ export default function LibraryUploadDialog({ open, onClose, uploader }) {
   useEffect(() => () => itemsRef.current.forEach((i) => URL.revokeObjectURL(i.preview)), []);
 
   const busy = items.some((i) => i.status === 'waiting' || i.status === 'uploading');
-  const done = items.filter((i) => i.status === 'done').length;
+  const done = items.filter((i) => i.status === 'done' || i.status === 'queued').length;
   const failed = items.filter((i) => i.status === 'error');
 
   const patch = (file, fields) => setItems((list) => list.map((i) => (i.file === file ? { ...i, ...fields } : i)));
@@ -75,7 +75,7 @@ export default function LibraryUploadDialog({ open, onClose, uploader }) {
         {items.length > 0 && (
           <>
             <p className="hint" role="status" style={{ margin: '12px 0 8px' }}>
-              {busy ? `Uploading... ${done} of ${items.length} done. Keep this window open.` : `${done} of ${items.length} uploaded${failed.length ? `, ${failed.length} failed` : ''}.`}
+              {busy ? `Saving... ${done} of ${items.length} done.` : `${done} of ${items.length} saved on this phone and uploading${failed.length ? `, ${failed.length} NOT saved` : ''}.`}
             </p>
             <div className="ph-grid lib-grid">
               {items.map((i) => (
@@ -86,6 +86,7 @@ export default function LibraryUploadDialog({ open, onClose, uploader }) {
                     {i.status === 'waiting' && 'Waiting'}
                     {i.status === 'uploading' && 'Uploading...'}
                     {i.status === 'done' && '✓ Added'}
+                    {i.status === 'queued' && '✓ Saved on phone'}
                     {i.status === 'error' && 'Failed'}
                   </span>
                 </div>

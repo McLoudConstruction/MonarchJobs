@@ -14,7 +14,7 @@ export async function GET(request, { params }) {
   const admin = getAdmin();
   const { data: est } = await admin
     .from('estimates')
-    .select('id,job_id,lead_id,status,minimum_charge,sent_at,first_viewed_at,view_count')
+    .select('id,job_id,lead_id,status,minimum_charge,chosen_tier,sent_at,first_viewed_at,view_count')
     .eq('share_token', token)
     .maybeSingle();
   if (!est || est.status === 'draft') return NextResponse.json({ error: 'Not found.' }, { status: 404 });
@@ -33,7 +33,7 @@ export async function GET(request, { params }) {
     ? admin.from('jobs').select('job_number,job_type,customer_notes,customer:customers(display_name),address:addresses(street,unit,city,state,zip)').eq('id', est.job_id).maybeSingle()
     : admin.from('leads').select('name,job_type,street,unit,city,state,zip').eq('id', est.lead_id).maybeSingle();
   const [{ data: lines }, { data: found }, { data: settings }] = await Promise.all([
-    admin.from('estimate_lines').select('description,unit,quantity,unit_price,sort_order,created_at').eq('estimate_id', est.id).order('sort_order').order('created_at'),
+    admin.from('estimate_lines').select('id,description,unit,quantity,unit_price,tier,optional,accepted,sort_order,created_at').eq('estimate_id', est.id).order('sort_order').order('created_at'),
     subject,
     admin.from('settings').select('business_name,phone,email,logo_path').eq('id', 1).maybeSingle(),
   ]);
@@ -55,6 +55,7 @@ export async function GET(request, { params }) {
     can_accept: est.status === 'sent',
     signed,
     minimum_charge: est.minimum_charge,
+    chosen_tier: est.chosen_tier,
     lines: lines || [],
     job: job ? { job_number: job.job_number, job_type: job.job_type, customer_notes: job.customer_notes, customer: job.customer?.display_name, address: job.address } : null,
     business: settings || {},

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import PopupModal from '@/components/PopupModal';
-import { apiFetch } from '@/lib/useAuth';
+import { sendVisitAction } from '@/lib/offlineActions';
 import { MINUTE_CHOICES } from '@/lib/visitFlow';
 
 // "On the way" popup: pick how many minutes out. Sends the customer notification through the same
@@ -15,7 +15,7 @@ export default function OnTheWayModal({ open, visit, token, onClose, onDone }) {
     setBusy(true);
     setMsg(null);
     try {
-      await apiFetch(`/api/visits/${visit.id}/status`, token, { method: 'POST', body: JSON.stringify({ action: 'on_the_way', minutes }) });
+      await sendVisitAction({ visit, action: 'on_the_way', minutes });
       setBusy(false);
       onClose();
       onDone();

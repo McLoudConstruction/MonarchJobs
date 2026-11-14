@@ -123,6 +123,16 @@ export function UserIcon(props) {
   );
 }
 
+export function EquipmentIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <rect x="3" y="4" width="14" height="12" rx="2" />
+      <circle cx="10" cy="10" r="3" />
+      <path d="M10 7v3l2 1" />
+    </svg>
+  );
+}
+
 export function SignOutIcon(props) {
   return (
     <svg {...common} {...props}>

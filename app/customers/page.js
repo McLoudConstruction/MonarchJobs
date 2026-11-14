@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import AuthGate from '@/components/AuthGate';
 import { getSupabase } from '@/lib/supabaseClient';
 import PhoneInput from '@/components/PhoneInput';
+import { PlansDue, MailingList } from '@/components/customer/OutreachPanels';
 import { displayPhone, formatPhone, digitsOnly } from '@/lib/phone';
 
 const EMPTY = {
@@ -74,6 +75,8 @@ function CustomersInner() {
         <input type="search" placeholder="Search customers" value={q} onChange={(e) => setQ(e.target.value)} />
         <button className="primary" onClick={() => setAdding(!adding)}>{adding ? 'Cancel' : 'New customer'}</button>
       </div>
+
+      <div className="row" style={{ gap: 8 }}><PlansDue /><MailingList /></div>
 
       {adding && (
         <form className="card" onSubmit={create}>

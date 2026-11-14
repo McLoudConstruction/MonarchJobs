@@ -3,11 +3,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
 import { apiFetch } from '@/lib/useAuth';
-import { estimateTotals, lineCents, estimateSnapshot, sameSnapshot, ESTIMATE_STATUS } from '@/lib/estimate';
+import { lineCents, estimateSnapshot, sameSnapshot, ESTIMATE_STATUS } from '@/lib/estimate';
 import { money, fmtDateTime, UNIT_LABELS } from '@/lib/format';
 import { displayPhone, toE164 } from '@/lib/phone';
+import { LINE_KINDS, lineKind, kindFields, lineKindLabel, hasTiers, tiersPresent, tierTotals, currentTotals, effectiveLines, choiceFromEstimate, TIER_LABELS } from '@/lib/estimateOptions';
 
-const BLANK_CUSTOM = { description: '', quantity: '1', unit: 'flat', unit_price: '' };
+const BLANK_CUSTOM = { description: '', quantity: '1', unit: 'flat', unit_price: '', kind: 'included' };
 
 // Estimate on a lead or on a job (scope = { leadId } or { jobId }). Office/owner, and the assigned tech
 // on a job, can add, change and remove lines while it is open; every change is logged by the database
@@ -23,6 +24,8 @@ export default function EstimateCard({ scope, open, staff, token, contact, onCha
   const [items, setItems] = useState([]);
   const [pickId, setPickId] = useState('');
   const [pickQty, setPickQty] = useState('1');
+  const [pickKind, setPickKind] = useState('included');
+  const [manualTier, setManualTier] = useState('');
   const [custom, setCustom] = useState(null);
   const [editId, setEditId] = useState(null);
   const [edit, setEdit] = useState(null);
@@ -68,21 +71,29 @@ export default function EstimateCard({ scope, open, staff, token, contact, onCha
     changed();
   }
 
+  async function insertItem(item, qty, kind) {
+    setMsg(null);
+    const { error } = await getSupabase().from('estimate_lines').insert({
+      estimate_id: est.id, price_item_id: item.id, description: item.name, unit: item.unit,
+      quantity: qty, unit_price: item.price, is_custom: false, sort_order: lines.length, created_by: staff.id,
+      ...kindFields(kind),
+    });
+    if (error) return fail(error);
+    changed();
+  }
+
   async function addFromList(e) {
     e.preventDefault();
     const item = items.find((i) => i.id === pickId);
     if (!item) { setMsg({ err: true, text: 'Choose a service from the price list.' }); return; }
     const qty = Number(pickQty);
     if (!(qty >= 0)) { setMsg({ err: true, text: 'Enter a quantity.' }); return; }
-    setMsg(null);
-    const { error } = await getSupabase().from('estimate_lines').insert({
-      estimate_id: est.id, price_item_id: item.id, description: item.name, unit: item.unit,
-      quantity: qty, unit_price: item.price, is_custom: false, sort_order: lines.length, created_by: staff.id,
-    });
-    if (error) return fail(error);
+    await insertItem(item, qty, pickKind);
     setPickId(''); setPickQty('1');
-    changed();
   }
+
+  // One tap: the add-on goes on the estimate as an optional line the customer can tick.
+  const addAddon = (item) => insertItem(item, 1, 'optional');
 
   async function addCustom(e) {
     e.preventDefault();
@@ -92,7 +103,7 @@ export default function EstimateCard({ scope, open, staff, token, contact, onCha
     setMsg(null);
     const { error } = await getSupabase().from('estimate_lines').insert({
       estimate_id: est.id, description: custom.description.trim(), unit: custom.unit, quantity: qty,
-      unit_price: price, is_custom: true, sort_order: lines.length, created_by: staff.id,
+      unit_price: price, is_custom: true, sort_order: lines.length, created_by: staff.id, ...kindFields(custom.kind),
     });
     if (error) return fail(error);
     setCustom(null);
@@ -104,7 +115,7 @@ export default function EstimateCard({ scope, open, staff, token, contact, onCha
     const qty = Number(edit.quantity);
     const price = Number(edit.unit_price);
     if (!edit.description.trim() || Number.isNaN(price) || !(qty >= 0)) { setMsg({ err: true, text: 'Enter a description, quantity and price.' }); return; }
-    const { error } = await getSupabase().from('estimate_lines').update({ description: edit.description.trim(), quantity: qty, unit_price: price }).eq('id', editId);
+    const { error } = await getSupabase().from('estimate_lines').update({ description: edit.description.trim(), quantity: qty, unit_price: price, ...kindFields(edit.kind) }).eq('id', editId);
     if (error) return fail(error);
     setEditId(null);
     changed();
@@ -150,7 +161,10 @@ export default function EstimateCard({ scope, open, staff, token, contact, onCha
     );
   }
 
-  const totals = estimateTotals(lines, est.minimum_charge);
+  const tiered = hasTiers(lines);
+  const totals = currentTotals(est, lines);
+  const perTier = tierTotals(lines, est.minimum_charge);
+  const addonItems = items.filter((i) => i.is_addon);
   const link = typeof window !== 'undefined' ? `${window.location.origin}/e/${est.share_token}` : '';
 
   return (
@@ -174,19 +188,24 @@ export default function EstimateCard({ scope, open, staff, token, contact, onCha
                       <div className="field" style={{ flex: 1 }}><label>Qty</label><input type="number" step="0.001" min="0" value={edit.quantity} onChange={(e) => setEdit({ ...edit, quantity: e.target.value })} /></div>
                       <div className="field" style={{ flex: 1 }}><label>Price</label><input type="number" step="0.01" value={edit.unit_price} onChange={(e) => setEdit({ ...edit, unit_price: e.target.value })} /></div>
                     </div>
+                    <div className="field"><label>Line type</label>
+                      <select value={edit.kind} onChange={(e) => setEdit({ ...edit, kind: e.target.value })}>
+                        {LINE_KINDS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                      </select>
+                    </div>
                     <div className="row"><button className="primary small">Save</button><button type="button" className="secondary small" onClick={() => setEditId(null)}>Cancel</button></div>
                   </form>
                 </td>
               </tr>
             ) : (
               <tr key={l.id}>
-                <td>{l.description}{l.is_custom && <span className="badge off" style={{ marginLeft: 6 }}>custom</span>}</td>
+                <td>{l.description}{l.is_custom && <span className="badge off" style={{ marginLeft: 6 }}>custom</span>}{lineKindLabel(l) && <span className="badge s-quoted" style={{ marginLeft: 6 }}>{lineKindLabel(l)}</span>}{l.optional && l.accepted && <span className="badge s-completed" style={{ marginLeft: 6 }}>customer added</span>}</td>
                 <td>{Number(l.quantity)}</td>
                 <td>{money(l.unit_price)} <span className="muted">{UNIT_LABELS[l.unit]}</span></td>
                 <td style={{ textAlign: 'right' }}>{money(lineCents(l) / 100)}</td>
                 <td style={{ whiteSpace: 'nowrap' }}>
                   {open && <>
-                    <button className="secondary small" onClick={() => { setEditId(l.id); setEdit({ description: l.description, quantity: String(Number(l.quantity)), unit_price: String(l.unit_price) }); }}>Edit</button>{' '}
+                    <button className="secondary small" onClick={() => { setEditId(l.id); setEdit({ description: l.description, quantity: String(Number(l.quantity)), unit_price: String(l.unit_price), kind: lineKind(l) }); }}>Edit</button>{' '}
                     <button className="danger small" onClick={() => removeLine(l)}>Remove</button>
                   </>}
                 </td>
@@ -198,7 +217,10 @@ export default function EstimateCard({ scope, open, staff, token, contact, onCha
           {totals.minimumAdjustmentCents > 0 && (
             <tr><td colSpan="3">Minimum charge adjustment ({money(est.minimum_charge)} minimum)</td><td style={{ textAlign: 'right' }}>{money(totals.minimumAdjustmentCents / 100)}</td><td></td></tr>
           )}
-          <tr><th colSpan="3">Total</th><th style={{ textAlign: 'right' }}>{money(totals.totalCents / 100)}</th><td></td></tr>
+          <tr><th colSpan="3">{est.status === 'approved' ? 'Total (customer choice)' : tiered ? 'Total (included lines only)' : 'Total'}</th><th style={{ textAlign: 'right' }}>{money(totals.totalCents / 100)}</th><td></td></tr>
+          {tiered && est.status !== 'approved' && tiersPresent(lines).map((k) => (
+            <tr key={k}><td colSpan="3" className="muted">If the customer chooses {TIER_LABELS[k]}</td><td style={{ textAlign: 'right' }}>{money(perTier[k].totalCents / 100)}</td><td></td></tr>
+          ))}
         </tbody>
       </table>
 
@@ -213,9 +235,21 @@ export default function EstimateCard({ scope, open, staff, token, contact, onCha
               </select>
             </div>
             <div className="field" style={{ width: 110, marginBottom: 0 }}><label>Qty</label><input type="number" step="0.001" min="0" value={pickQty} onChange={(e) => setPickQty(e.target.value)} /></div>
+            <div className="field" style={{ width: 150, marginBottom: 0 }}><label>Line type</label>
+              <select value={pickKind} onChange={(e) => setPickKind(e.target.value)}>
+                {LINE_KINDS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
             <button className="primary">Add</button>
             <button type="button" className="secondary" onClick={() => setCustom(custom ? null : { ...BLANK_CUSTOM })}>Custom line</button>
           </form>
+          {addonItems.length > 0 && (
+            <div className="row" style={{ marginTop: 10, gap: 6, flexWrap: 'wrap' }}>
+              <span className="muted">Add-ons:</span>
+              {addonItems.map((i) => <button key={i.id} type="button" className="secondary small" onClick={() => addAddon(i)}>+ {i.name} ({money(i.price)})</button>)}
+            </div>
+          )}
+          <p className="hint" style={{ marginTop: 8 }}>Good, Better and Best options let the customer pick one when they approve. Optional add-ons are ticked by the customer.</p>
           {items.length === 0 && <p className="hint" style={{ marginTop: 8 }}>The price list is empty. The owner adds services in Settings.</p>}
           {custom && (
             <form onSubmit={addCustom} style={{ marginTop: 12 }}>
@@ -230,6 +264,11 @@ export default function EstimateCard({ scope, open, staff, token, contact, onCha
                     </select>
                   </div>
                 </div>
+              </div>
+              <div className="field"><label>Line type</label>
+                <select value={custom.kind} onChange={(e) => setCustom({ ...custom, kind: e.target.value })}>
+                  {LINE_KINDS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
               </div>
               <button className="primary small">Add custom line</button>
             </form>
@@ -251,11 +290,17 @@ export default function EstimateCard({ scope, open, staff, token, contact, onCha
               </button>
             )}
             {est.status === 'sent' && <>
-              <button className="secondary" onClick={() => updateEstimate({ status: 'approved', approved_at: new Date().toISOString() })}>Mark approved</button>
+              {tiered && (
+                <select value={manualTier} onChange={(e) => setManualTier(e.target.value)} aria-label="Option the customer chose">
+                  <option value="">Option chosen...</option>
+                  {tiersPresent(lines).map((k) => <option key={k} value={k}>{TIER_LABELS[k]}</option>)}
+                </select>
+              )}
+              <button className="secondary" disabled={tiered && !manualTier} onClick={() => updateEstimate({ status: 'approved', approved_at: new Date().toISOString(), chosen_tier: tiered ? manualTier : null })}>Mark approved</button>
               <button className="danger" onClick={() => updateEstimate({ status: 'declined', declined_at: new Date().toISOString() })}>Mark declined</button>
             </>}
             {est.status === 'draft' && <button className="secondary" onClick={() => updateEstimate({ status: 'sent', sent_at: new Date().toISOString() })}>Mark as sent (without messaging)</button>}
-            {est.status !== 'draft' && <button className="secondary" onClick={() => updateEstimate({ status: 'draft' })}>Back to draft</button>}
+            {est.status !== 'draft' && <button className="secondary" onClick={async () => { await getSupabase().from('estimate_lines').update({ accepted: false }).eq('estimate_id', est.id); updateEstimate({ status: 'draft', chosen_tier: null }); }}>Back to draft</button>}
             <a href={`/e/${est.share_token}?preview=1`} target="_blank" rel="noreferrer"><button type="button" className="secondary">Preview customer view</button></a>
           </div>
           {est.status !== 'approved' && (
@@ -287,7 +332,7 @@ export default function EstimateCard({ scope, open, staff, token, contact, onCha
               <strong>Approved by {signature.signer_name}</strong> on {fmtDateTime(signature.signed_at)} for {money(signature.total_cents / 100)}.
               <div><img src={signature.signature_png} alt={`Signature of ${signature.signer_name}`} style={{ maxWidth: 260, maxHeight: 90, border: '1px solid var(--border)', borderRadius: 6, background: '#fff', marginTop: 6 }} /></div>
               {signature.preferred_times && <div className="meta">Preferred times: {signature.preferred_times}</div>}
-              {!sameSnapshot(signature.lines_snapshot ? { minimum_charge: signature.minimum_charge, lines: signature.lines_snapshot } : null, estimateSnapshot(lines, est.minimum_charge)) && (
+              {!sameSnapshot(signature.lines_snapshot ? { minimum_charge: signature.minimum_charge, lines: signature.lines_snapshot } : null, estimateSnapshot(effectiveLines(lines, choiceFromEstimate(est, lines)), est.minimum_charge)) && (
                 <div className="banner flag" style={{ marginTop: 8, marginBottom: 0 }}>
                   This estimate was changed after the customer signed it. Send it again if they need to approve the new version.
                 </div>

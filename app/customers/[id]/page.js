@@ -9,6 +9,7 @@ import { fmtDateTime, JOB_STATUS, addressLine } from '@/lib/format';
 import PhoneInput from '@/components/PhoneInput';
 import AddressFields from '@/components/AddressFields';
 import { displayPhone } from '@/lib/phone';
+import PlansCard from '@/components/customer/PlansCard';
 
 const BLANK_ADDR = { label: '', street: '', unit: '', city: '', state: 'MO', zip: '', gate_code: '', warnings: '', access_notes: '' };
 const BLANK_CONTACT = { name: '', phone: '', email: '', role: '', receives_notifications: true };
@@ -187,6 +188,8 @@ function Detail({ id }) {
           </form>
         )}
       </div>
+
+      <PlansCard customer={c} addresses={addrs} onChanged={load} />
 
       <div className="card">
         <h2>Job history</h2>

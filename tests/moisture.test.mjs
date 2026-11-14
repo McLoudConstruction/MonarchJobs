@@ -5,7 +5,7 @@ import {
   gpp, parseReading, fmtReading, makeMoisture, makeReading, cleanMoisture, cleanStandards, nextNumber, moistureStatus, goalFor,
   moistureCounts, hitMoisture, valueText, airText, sortedReadings, MAX_READINGS, padEdit,
 } from '../lib/moisture.js';
-import { moistureLogCsv, moistureLogRows, csvCell } from '../lib/moistureLog.js';
+import { moistureLogCsv, moistureLogRows, csvCell, LOG_COLUMNS } from '../lib/moistureLog.js';
 import { drawPlan } from '../lib/sketchDraw.js';
 
 const by = { id: 'u1', name: 'Sam Tech' };
@@ -379,4 +379,10 @@ test('point kinds: a dry standard point sets the goal for its material, an air p
   // an air point needs a humidity or a temperature to keep a reading; a moisture point needs a value
   assert.equal(cleanMoisture([{ n: 1, x: 1, y: 1, kind: 'air', readings: [{ val: null, at: at(10) }] }], (x) => x || 'i').at(0).readings.length, 0);
   assert.equal(cleanMoisture([{ n: 1, x: 1, y: 1, readings: [{ val: null, rh: 50, at: at(10) }] }], (x) => x || 'i').at(0).readings.length, 0);
+});
+
+test('exports never name the person who took a reading or moved equipment', () => {
+  const plan = { ...base(), moisture: [point(1, 3, 3, {}, [{ ...reading(20, 2), by: { id: 'u1', name: 'Jordan Techman' } }])] };
+  assert.ok(!moistureLogCsv(plan).includes('Jordan'));
+  assert.ok(!LOG_COLUMNS.some((c) => /by/i.test(c)));
 });

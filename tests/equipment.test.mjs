@@ -326,3 +326,11 @@ test('the customer report includes the equipment sections and still renders with
   assert.ok(!text(without).includes('Equipment placed'));
   assert.ok(text(withEq).includes('Dri-Eaz F203'));
 });
+
+test('the equipment log (CSV) does not name who placed or picked up a unit', () => {
+  let p = plan0();
+  p = place(p, 'dehu', 16, 3, 'd1');
+  p = { ...p, equipment: [pickUpUnit(p, p.equipment[0], { day: 'd3', by })] };
+  assert.ok(!/\bby\b/i.test(equipmentLogCsv(p).split('\r\n')[0].replace('by wall', '')));
+  assert.ok(!equipmentLogCsv(p).includes(by.name));
+});

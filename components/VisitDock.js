@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { apiFetch } from '@/lib/useAuth';
+import { sendVisitAction } from '@/lib/offlineActions';
 import { fmtTime } from '@/lib/format';
 
 // The phone's action bar: one big button for the next step of the visit, pinned above the bottom
@@ -15,7 +15,7 @@ export default function VisitDock({ visit, token, onOtw, onDone, inline = false 
     setBusy(true);
     setMsg(null);
     try {
-      await apiFetch(`/api/visits/${visit.id}/status`, token, { method: 'POST', body: JSON.stringify({ action }) });
+      await sendVisitAction({ visit, action });
       onDone();
     } catch (e) {
       setMsg(e.message);

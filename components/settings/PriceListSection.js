@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
 import { money, UNIT_LABELS } from '@/lib/format';
 
-const BLANK = { name: '', description: '', unit: 'sqft', price: '' };
+const BLANK = { name: '', description: '', unit: 'sqft', price: '', is_addon: false, aftercare: '', dry_hours: '' };
 
 export default function PriceListSection() {
   const [items, setItems] = useState([]);
@@ -35,7 +35,9 @@ export default function PriceListSection() {
 
   async function saveItem(e) {
     e.preventDefault();
-    const row = { name: form.name.trim(), description: form.description, unit: form.unit, price: Number(form.price) };
+    const dry = form.dry_hours === '' ? null : Math.round(Number(form.dry_hours));
+    if (dry !== null && !(dry >= 1 && dry <= 72)) { setMsg({ err: true, text: 'Drying time is 1 to 72 hours, or leave it blank.' }); return; }
+    const row = { name: form.name.trim(), description: form.description, unit: form.unit, price: Number(form.price), is_addon: !!form.is_addon, aftercare: form.aftercare.trim(), dry_hours: dry };
     if (!row.name || Number.isNaN(row.price) || row.price < 0) { setMsg({ err: true, text: 'Enter a name and a price of zero or more.' }); return; }
     const sb = getSupabase();
     const { error } = editId ? await sb.from('price_items').update(row).eq('id', editId) : await sb.from('price_items').insert(row);
@@ -53,7 +55,7 @@ export default function PriceListSection() {
 
   function edit(it) {
     setEditId(it.id);
-    setForm({ name: it.name, description: it.description, unit: it.unit, price: String(it.price) });
+    setForm({ name: it.name, description: it.description, unit: it.unit, price: String(it.price), is_addon: !!it.is_addon, aftercare: it.aftercare || '', dry_hours: it.dry_hours ? String(it.dry_hours) : '' });
   }
 
   return (
@@ -75,7 +77,7 @@ export default function PriceListSection() {
         <tbody>
           {items.map((it) => (
             <tr key={it.id} style={{ opacity: it.active ? 1 : 0.5 }}>
-              <td>{it.name}{it.description && <div className="muted">{it.description}</div>}</td>
+              <td>{it.name}{it.is_addon && <span className="badge s-quoted" style={{ marginLeft: 6 }}>add-on</span>}{it.description && <div className="muted">{it.description}</div>}{(it.aftercare || it.dry_hours) && <div className="muted">Aftercare{it.dry_hours ? `, dries in about ${it.dry_hours} h` : ''}</div>}</td>
               <td>{money(it.price)} <span className="muted">{UNIT_LABELS[it.unit]}</span></td>
               <td>
                 <button className="secondary small" onClick={() => edit(it)}>Edit</button>{' '}
@@ -99,6 +101,14 @@ export default function PriceListSection() {
           </div>
           <div className="field"><label>Price</label><input type="number" min="0" step="0.01" value={form.price} onChange={set('price')} required /></div>
         </div>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+          <input type="checkbox" checked={form.is_addon} onChange={(e) => setForm({ ...form, is_addon: e.target.checked })} />
+          Offer as a one-tap add-on on estimates (for example, protectant or deodorizer)
+        </label>
+        <div className="field"><label>Aftercare for the customer (optional)</label>
+          <textarea className="sig-notes" rows={3} maxLength={1500} value={form.aftercare} onChange={set('aftercare')} placeholder="Stay off the carpet for 2 hours. Wait 24 hours before moving furniture back..." />
+        </div>
+        <div className="field" style={{ maxWidth: 220 }}><label>Dries in about (hours, optional)</label><input type="number" min="1" max="72" value={form.dry_hours} onChange={set('dry_hours')} /></div>
         <div className="row">
           <button className="primary">{editId ? 'Save item' : 'Add item'}</button>
           {editId && <button type="button" className="secondary" onClick={() => { setEditId(null); setForm(BLANK); }}>Cancel</button>}

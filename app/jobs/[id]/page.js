@@ -14,6 +14,8 @@ import EstimateCard from '@/components/EstimateCard';
 import PhotosTab from '@/components/job/PhotosTab';
 import SketchTab from '@/components/job/SketchTab';
 import MoistureTab from '@/components/job/MoistureTab';
+import InspectionTab from '@/components/job/InspectionTab';
+import CustomerPageCard from '@/components/job/CustomerPageCard';
 import UpdatesTab from '@/components/job/UpdatesTab';
 import JobFab from '@/components/job/JobFab';
 import PhotoViewer from '@/components/job/PhotoViewer';
@@ -27,6 +29,12 @@ import { fmtDateTime, fmtDuration, JOB_STATUS, JOB_TYPES, addressLine } from '@/
 import { displayPhone, telHref } from '@/lib/phone';
 import { staffName, displayNameFor } from '@/lib/userDisplay';
 import { apiFetch } from '@/lib/useAuth';
+import { fetchJobPack, packKey } from '@/lib/jobPack';
+import { sendVisitAction } from '@/lib/offlineActions';
+import { getOps, onOpsFinished, onQueueChange } from '@/lib/offlineClient';
+import { overlayVisits } from '@/lib/offlineOps';
+import { cacheRead } from '@/lib/offlineClient';
+import { savePackLocally } from '@/lib/warmJobs';
 
 const JOB_TABS = [
   ['overview', 'Overview'],
@@ -34,6 +42,7 @@ const JOB_TABS = [
   ['photos', 'Photos'],
   ['sketch', 'Sketch'],
   ['moisture', 'Moisture'],
+  ['inspection', 'Inspection'],
   ['updates', 'Updates'],
   ['estimate', 'Estimate'],
   ['history', 'History'],
@@ -54,7 +63,9 @@ const VISIT_STATUS = { scheduled: 'Scheduled', on_the_way: 'On the way', started
 function JobInner({ id, staff, token }) {
   const isOffice = staff.role !== 'tech';
   const [job, setJob] = useState(null);
-  const [visits, setVisits] = useState([]);
+  const [visits, setVisitsRaw] = useState([]);
+  const [waitingOps, setWaitingOps] = useState([]);
+  const setVisits = setVisitsRaw;
   const [flagged, setFlagged] = useState(new Set());
   const [contacts, setContacts] = useState([]);
   const [jobContactIds, setJobContactIds] = useState([]);
@@ -69,6 +80,8 @@ function JobInner({ id, staff, token }) {
   const [sketches, setSketches] = useState([]);
   const [updates, setUpdates] = useState([]);
   const [docsMissing, setDocsMissing] = useState(false);
+  const [fromPhone, setFromPhone] = useState(false); // showing the copy kept on this phone (no signal)
+  const [loadFailed, setLoadFailed] = useState(false);
   const [viewer, setViewer] = useState(null); // { ids, startId }
   const roomInput = useRef(null);
   const roomTarget = useRef(null);
@@ -86,53 +99,74 @@ function JobInner({ id, staff, token }) {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
   const openTab = (k) => { setTab(k); window.history.replaceState(null, '', `#${k}`); };
+  // a scanned equipment label opens the job with ?unit=<id>: go to the Moisture tab and open that unit, once
+  const scanUnit = useRef(typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('unit'));
+  useEffect(() => {
+    if (!scanUnit.current) return;
+    const unitId = scanUnit.current;
+    scanUnit.current = null;
+    setTab('moisture');
+    window.history.replaceState(null, '', `${window.location.pathname}#moisture`);
+    setMoistCmd({ type: 'unit', unitId, n: Date.now() });
+  }, []);
   // a request left over for a tab that is no longer open is dropped
   useEffect(() => {
     if (tab !== 'moisture') setMoistCmd(null);
     if (tab !== 'updates') setUpdCmd(null);
   }, [tab]);
 
-  const load = useCallback(async () => {
-    const sb = getSupabase();
-    const { data: j } = await sb.from('jobs')
-      .select('*,customer:customers(id,display_name,first_name,last_name,company_name,phone,email,customer_type),address:addresses(*)')
-      .eq('id', id).maybeSingle();
+  // Shows a job pack (fresh from the server, or the copy kept on this phone).
+  const applyPack = useCallback((pack, fromPhone) => {
+    const j = pack.job;
     setJob(j);
     if (!j) return;
     setForm({
       status: j.status, job_type: j.job_type, po_number: j.po_number, loss_summary: j.loss_summary,
       customer_notes: j.customer_notes, internal_notes: j.internal_notes, warning: j.warning, billing_contact_id: j.billing_contact_id || '',
     });
-    const [v, ct, jc, ev, st, ph, sk, up] = await Promise.all([
-      sb.from('job_visits').select('*').eq('job_id', id).order('starts_at'),
-      isOffice ? sb.from('contacts').select('*').eq('customer_id', j.customer_id) : Promise.resolve({ data: [] }),
-      sb.from('job_contacts').select('contact_id').eq('job_id', id),
-      sb.from('job_events').select('*').eq('job_id', id).order('at', { ascending: false }).limit(50),
-      sb.from('staff_users').select('id,full_name,email,role').eq('active', true),
-      sb.from('job_photos').select('*').eq('job_id', id).order('taken_at', { ascending: false }),
-      sb.from('job_sketches').select('id,name,sort_order,created_at').eq('job_id', id).order('sort_order').order('created_at'),
-      sb.from('job_updates').select('*').eq('job_id', id).order('created_at', { ascending: false }),
-    ]);
-    setDocsMissing(missingTable(ph.error) || missingTable(sk.error) || missingTable(up.error));
-    setPhotos(ph.data || []);
-    setSketches(sk.data || []);
-    setUpdates(up.data || []);
-    setVisits(v.data || []);
-    setContacts(ct.data || []);
-    setJobContactIds((jc.data || []).map((r) => r.contact_id));
-    setEvents(ev.data || []);
-    setStaffList(st.data || []);
+    setDocsMissing(missingTable(pack.photos.error) || missingTable(pack.sketches.error) || missingTable(pack.updates.error));
+    setPhotos(pack.photos.data || []);
+    setSketches((pack.sketches.data || []).map(({ plan, updated_at, ...rest }) => rest)); // the list does not carry plans
+    setUpdates(pack.updates.data || []);
+    setVisits(pack.visits);
+    setContacts(pack.contacts);
+    setJobContactIds((pack.jobContacts || []).map((r) => r.contact_id));
+    setEvents(pack.events);
+    setStaffList(pack.staff);
+    setFromPhone(!!fromPhone);
+  }, []);
 
+  const load = useCallback(async () => {
+    const sb = getSupabase();
+    const pack = await fetchJobPack(sb, id, isOffice);
+    if (pack.error) {
+      // no signal: open the copy kept on this phone, if there is one
+      const saved = await cacheRead(packKey(id));
+      if (saved) { applyPack(saved, true); return; }
+      setLoadFailed(true);
+      return;
+    }
+    setLoadFailed(false);
+    applyPack(pack, false);
+    if (pack.job) {
+      savePackLocally(id, pack); // also keeps each sketch's plan for opening offline
+    }
     // Double-booking flags: compare this job's visits with the same techs' other visits
-    const techIds = [...new Set((v.data || []).map((x) => x.tech_id).filter(Boolean))];
+    const techIds = [...new Set((pack.visits || []).map((x) => x.tech_id).filter(Boolean))];
     if (isOffice && techIds.length) {
       const { data: others } = await sb.from('job_visits').select('id,tech_id,starts_at,ends_at,status').in('tech_id', techIds).in('status', ['scheduled', 'on_the_way', 'started']);
       const flaggedIds = doubleBookedIds(others || []);
       setFlagged(flaggedIds);
     }
-  }, [id, isOffice]);
+  }, [id, isOffice, applyPack]);
 
   useEffect(() => { load(); }, [load]);
+  // the moment the signal comes back, replace the phone's copy with the real thing
+  useEffect(() => {
+    const back = () => load();
+    window.addEventListener('online', back);
+    return () => window.removeEventListener('online', back);
+  }, [load]);
 
   // Refresh only the history, so edits being typed in the job details form are not wiped.
   const loadEvents = useCallback(async () => {
@@ -160,8 +194,25 @@ function JobInner({ id, staff, token }) {
   }, [id, staff.id, staff.email, loadEvents]);
 
   const uploader = usePhotoUploader({ jobId: id, onUploaded: reloadPhotos, logEvent });
+  useEffect(() => {
+    let alive = true;
+    const refresh = async () => { const o = await getOps(); if (!o) return; const l = await o.list(id); if (alive) setWaitingOps(l.filter((x) => x.type === 'visit_status')); };
+    refresh();
+    const off1 = onQueueChange(refresh);
+    const off2 = onOpsFinished(() => { refresh(); load(); });
+    return () => { alive = false; off1(); off2(); };
+  }, [id, load]);
   const photosById = useMemo(() => new Map(photos.map((p) => [p.id, p])), [photos]);
 
+  if (loadFailed && !job) {
+    return (
+      <div className="card">
+        <h2>This job is not available offline</h2>
+        <p className="hint">There is no signal, and this job was not opened on this phone before. Pictures you take are not lost: open the job once while you have signal and it will be saved here. Anything already waiting to upload is listed under <Link href="/queue">Waiting to upload</Link>.</p>
+        <button className="secondary" onClick={load}>Try again</button>
+      </div>
+    );
+  }
   if (!job || !form) return <p className="muted">Loading job...</p>;
 
   const openViewer = (list, startId) => setViewer({ ids: list.map((p) => p.id), startId });
@@ -222,11 +273,12 @@ function JobInner({ id, staff, token }) {
   // the address warning (pets) shows in the Site card; only the job-level warning stays a banner
   const warnings = [job.warning].filter(Boolean);
   // the visit "On the way" applies to: the next one still waiting, if this person may act on it
-  const otwVisit = visits.find((v) => ['scheduled', 'on_the_way'].includes(v.status) && (isOffice || v.tech_id === staff.id));
+  const visitsShown = useMemo(() => overlayVisits(visits, waitingOps), [visits, waitingOps]);
+  const otwVisit = visitsShown.find((v) => ['scheduled', 'on_the_way'].includes(v.status) && (isOffice || v.tech_id === staff.id));
   // a visit still waiting with nobody on it: the office sees a red Assign Job button
   const unassignedVisit = isOffice ? visits.find((v) => v.status === 'scheduled' && !v.tech_id) : null;
   // the phone's action bar follows the visit under way, otherwise the next one waiting
-  const dockVisit = visits.find((v) => v.status === 'started' && (isOffice || v.tech_id === staff.id)) || otwVisit;
+  const dockVisit = visitsShown.find((v) => v.status === 'started' && (isOffice || v.tech_id === staff.id)) || otwVisit;
   // phone action button: Start Recheck / Start Sketch / Start Job, which becomes Complete Job once the visit is under way
   const fabKeys = FAB_HIDDEN_TABS.includes(tab) ? [] : fabActions({ hasSketch: sketches.length > 0, visitStatus: dockVisit?.status || null, docsMissing });
   const fabRun = {
@@ -234,7 +286,7 @@ function JobInner({ id, staff, token }) {
     sketch: () => openTab('sketch'),
     otw: () => setOtwOpen(true),
     start: async () => {
-      await apiFetch(`/api/visits/${dockVisit.id}/status`, token, { method: 'POST', body: JSON.stringify({ action: 'started' }) });
+      await sendVisitAction({ visit: dockVisit, action: 'started', jobId: id });
       await load();
     },
     complete: () => { openTab('updates'); setUpdCmd({ kind: 'internal', category: 'Completed Job', n: Date.now() }); },
@@ -270,6 +322,9 @@ function JobInner({ id, staff, token }) {
         <div className="banner">Photos, sketches and updates are switched off until migration 007 is run in Supabase (SQL Editor, file supabase/migrations/007_job_documentation.sql).</div>
       )}
 
+      {fromPhone && (
+        <div className="msg err" role="status">You are looking at a copy saved on this phone (no signal). Photos, notes and sketch changes you make are kept and sent when you have signal. Visit and status buttons need a connection.</div>
+      )}
       <div className="tabs" role="tablist">
         {JOB_TABS.map(([k, label]) => {
           const n = k === 'photos' ? photos.filter((p) => !p.archived_at).length : k === 'sketch' ? sketches.length : k === 'updates' ? updates.length : 0;
@@ -316,7 +371,7 @@ function JobInner({ id, staff, token }) {
               <h2>Visits</h2>
               {isOffice && <button className="secondary small" onClick={() => setVisitEdit({})}>Add visit</button>}
             </div>
-            {visits.map((v) => (
+            {visitsShown.map((v) => (
               <div key={v.id} className="visit-row">
                 <div className="visit-main">
                   <div className="title">
@@ -337,7 +392,7 @@ function JobInner({ id, staff, token }) {
                 </div>
               </div>
             ))}
-            {visits.length === 0 && <p className="muted">No visits scheduled.</p>}
+            {visitsShown.length === 0 && <p className="muted">No visits scheduled.</p>}
             {visitEdit && (
               <VisitForm
                 jobId={id}
@@ -363,6 +418,7 @@ function JobInner({ id, staff, token }) {
               ))}
             </div>
           )}
+          {isOffice && <CustomerPageCard jobId={id} token={token} staff={staff} jobStatus={job.status} />}
         </div>
       )}
 
@@ -409,7 +465,7 @@ function JobInner({ id, staff, token }) {
       )}
 
       {tab === 'photos' && (
-        <PhotosTab photos={photos} isOffice={isOffice} uploader={uploader} onOpen={openViewer} />
+        <PhotosTab photos={photos} isOffice={isOffice} uploader={uploader} onOpen={openViewer} jobId={id} />
       )}
 
       {tab === 'sketch' && (
@@ -434,6 +490,8 @@ function JobInner({ id, staff, token }) {
       )}
 
       {tab === 'moisture' && (
+        <>
+        <UploadStatus uploader={uploader} />
         <MoistureTab
           sketches={sketches}
           startId={sketchId}
@@ -441,9 +499,20 @@ function JobInner({ id, staff, token }) {
           staff={staff}
           staffList={staffList}
           onOpenSketch={() => openTab('sketch')}
+          jobId={id}
+          isOffice={isOffice}
+          jobInfo={{ jobId: id, customer: job.customer.display_name, address: addressLine(job.address), jobNumber: job.job_number, jobType: JOB_TYPES[job.job_type] }}
+          photos={photos}
+          onAddPhoto={addRoomPhoto}
+          onViewPhotos={(list) => list.length && openViewer(list, list[0].id)}
           command={moistCmd}
           onCommandDone={() => setMoistCmd(null)}
         />
+        </>
+      )}
+
+      {tab === 'inspection' && (
+        <InspectionTab jobId={id} staff={staff} sketches={sketches} canEdit={!['closed', 'cancelled'].includes(job.status)} />
       )}
 
       {tab === 'updates' && (

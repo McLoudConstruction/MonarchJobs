@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import SignaturePad from '@/components/SignaturePad';
 import { estimateTotals, lineCents } from '@/lib/estimate';
+import { effectiveLines, tiersPresent, tierTotals, optionalLines, choiceFromEstimate, TIER_LABELS } from '@/lib/estimateOptions';
 import { money, addressLine, fmtDateTime, JOB_TYPES, UNIT_LABELS } from '@/lib/format';
 import { displayPhone } from '@/lib/phone';
 import { logoUrl } from '@/lib/branding';
@@ -11,7 +12,7 @@ import { logoUrl } from '@/lib/branding';
 // Customer-facing estimate page. No sign-in; the secret link is the access. Stands alone, without the
 // app shell. The customer can review the estimate, approve it and sign. Approving tells the office
 // they are ready to be scheduled.
-function Approve({ token, total, business, onDone }) {
+function Approve({ token, total, business, choice, onDone }) {
   const [name, setName] = useState('');
   const [sig, setSig] = useState(null);
   const [times, setTimes] = useState('');
@@ -28,7 +29,7 @@ function Approve({ token, total, business, onDone }) {
       const res = await fetch(`/api/public/estimate/${token}/accept`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, signature: sig, preferred_times: times }),
+        body: JSON.stringify({ name, signature: sig, preferred_times: times, tier: choice.tier, picks: choice.picks }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || 'Something went wrong. Please try again.');
@@ -64,6 +65,8 @@ function EstimateView() {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [justApproved, setJustApproved] = useState(false);
+  const [pickedTier, setPickedTier] = useState(null);
+  const [picks, setPicks] = useState([]);
 
   const load = useCallback((isPreview) => {
     fetch(`/api/public/estimate/${token}${isPreview ? '?preview=1' : ''}`)
@@ -80,8 +83,18 @@ function EstimateView() {
   if (error) return <div className="center-wrap"><div className="card"><h2>Estimate unavailable</h2><p className="hint">{error} If you think this is a mistake, please contact us.</p></div></div>;
   if (!data) return <div className="center-wrap"><p>Loading...</p></div>;
 
-  const t = estimateTotals(data.lines, data.minimum_charge);
+  const tiers = tiersPresent(data.lines);
+  const addons = optionalLines(data.lines);
+  const approved = data.status === 'approved';
+  const choice = approved
+    ? choiceFromEstimate({ chosen_tier: data.chosen_tier }, data.lines)
+    : { tier: tiers.length ? (pickedTier || null) : null, picks };
+  const shown = approved || !tiers.length || choice.tier ? effectiveLines(data.lines, choice) : effectiveLines(data.lines, { tier: null, picks });
+  const t = estimateTotals(shown, data.minimum_charge);
   const total = money(t.totalCents / 100);
+  const perTier = tierTotals(data.lines, data.minimum_charge);
+  const needsTier = tiers.length > 0 && !choice.tier && !approved;
+  const togglePick = (id) => setPicks((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const contact = [displayPhone(data.business.phone), data.business.email].filter(Boolean).join(' · ');
   return (
     <div className="page customer-page" style={{ maxWidth: 720 }}>
@@ -93,10 +106,36 @@ function EstimateView() {
       <div className="card">
         <h2>Estimate for {data.job?.customer}</h2>
         <p className="hint">{JOB_TYPES[data.job?.job_type]} · {addressLine(data.job?.address)}</p>
+        {!approved && data.can_accept && tiers.length > 0 && (
+          <div style={{ display: 'grid', gap: 8, margin: '12px 0' }}>
+            <strong>Choose an option</strong>
+            {tiers.map((k) => (
+              <label key={k} className="card" style={{ margin: 0, padding: 12, display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', borderColor: pickedTier === k ? '#1f3a5f' : undefined, borderWidth: pickedTier === k ? 2 : undefined }}>
+                <input type="radio" name="tier" checked={pickedTier === k} onChange={() => setPickedTier(k)} style={{ marginTop: 4 }} />
+                <span style={{ flex: 1 }}>
+                  <strong>{TIER_LABELS[k]}</strong> <span className="muted">{money(perTier[k].totalCents / 100)}</span>
+                  <span className="hint" style={{ display: 'block' }}>{data.lines.filter((l) => l.tier === k).map((l) => l.description).join(', ')}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+        {!approved && data.can_accept && addons.length > 0 && (
+          <div style={{ display: 'grid', gap: 6, margin: '12px 0' }}>
+            <strong>Optional add-ons</strong>
+            {addons.map((l) => (
+              <label key={l.id} style={{ display: 'flex', gap: 10, alignItems: 'center', cursor: 'pointer' }}>
+                <input type="checkbox" checked={picks.includes(l.id)} onChange={() => togglePick(l.id)} />
+                <span style={{ flex: 1 }}>{l.description}</span>
+                <span>{money(lineCents(l) / 100)}</span>
+              </label>
+            ))}
+          </div>
+        )}
         <table className="table">
           <thead><tr><th>Service</th><th>Qty</th><th>Price</th><th style={{ textAlign: 'right' }}>Amount</th></tr></thead>
           <tbody>
-            {data.lines.map((l, i) => (
+            {shown.map((l, i) => (
               <tr key={i}>
                 <td>{l.description}</td>
                 <td>{Number(l.quantity)}</td>
@@ -125,7 +164,9 @@ function EstimateView() {
       )}
 
       {data.can_accept && !preview && (
-        <Approve token={token} total={total} business={data.business.business_name} onDone={() => { setJustApproved(true); load(true); }} />
+        needsTier
+          ? <div className="card"><p className="hint" style={{ margin: 0 }}>Choose an option above to approve this estimate.</p></div>
+          : <Approve token={token} total={total} business={data.business.business_name} choice={choice} onDone={() => { setJustApproved(true); load(true); }} />
       )}
       {data.can_accept && preview && (
         <div className="card"><p className="hint" style={{ margin: 0 }}>Preview: customers see an approve-and-sign form here.</p></div>

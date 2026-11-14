@@ -9,11 +9,18 @@ import {
   ensureRoomNums, insertBreak, isRect, pointInPoly, polyBox, roomTitle, makeId, moveEdgeSnapped, moveVertex, nearestAnchor, nearestEdge, nearestVertex, newArea, newRoom, newSource, normalizePlan, placeGrowth,
   parseFeet, pickArea, planBounds, rectPts, removeVertex, resizeRect, roomAreaText, roomBox, roomSizeText, setEdgeLength,
   simplifyStroke, snap, snapOnEdge, surfaceText, tidyPts, toScreen, toWorld, totalArea, translatePts, fmtFeet,
+  FLOOR_TYPES, MIN_CEIL, MAX_CEIL, cleanCeil, roomArea,
 } from '@/lib/sketch';
+import { turnRoomPts } from '@/lib/roomShapes';
+import RoomBySize from '@/components/job/RoomBySize';
+import EquipmentSizing from '@/components/job/EquipmentSizing';
+import DehuReadings from '@/components/job/DehuReadings';
+import PullPrompt from '@/components/job/PullPrompt';
+import DayOneList, { useDayOne } from '@/components/job/DayOneList';
 import { drawPlan, areaStyle, WATER_LINE } from '@/lib/sketchDraw';
 import {
   MAX_MOISTURE, MAX_READINGS, MOISTURE_COLORS, MOISTURE_MATERIALS, MOISTURE_SURFACES, MOISTURE_TYPES, POINT_KINDS, TREND_MARK,
-  airText, fmtReading, goalFor, gpp, hitMoisture, makeMoisture, makeReading, measuredStandard, moistureCounts, moistureStatus, nextNumber, padEdit, parseReading, sortedReadings, valueText,
+  airText, fmtReading, goalFor, gpp, hitMoisture, makeMoisture, makeReading, measuredStandard, moistureCounts, moistureStatus, nextNumber, padEdit, parseReading, sortedReadings, valueText, readingPhotoKey,
 } from '@/lib/moisture';
 import { OBJECT_TYPES, OBJECT_GROUPS, MAX_OBJECTS, makeObject, objectCounts, isInches, inchesText, parseInches } from '@/lib/objectTypes';
 import { placeObject, hitObject, nearestWall, wallSpan } from '@/lib/sketchObjects';
@@ -27,6 +34,7 @@ import {
   hitEquipment, makeEquipment, moveUnit, nextEquipNumber, pickUpUnit, putBackUnit, unitAt, unitCode,
 } from '@/lib/equipment';
 import { buildEquipment, equipmentLogCsv, unitHistory } from '@/lib/equipmentLog';
+import { equipmentLabelsPdf } from '@/lib/equipmentLabels';
 import { hitComment, tagsFromText, segments, timeAgo, logEntry, withLog, canDeleteComment, activity, MAX_COMMENTS, MAX_REPLIES } from '@/lib/sketchComments';
 import MentionBox from '@/components/job/MentionBox';
 
@@ -156,7 +164,7 @@ function LayersIcon() {
   );
 }
 
-export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, onChange, photoCounts = {}, onAddRoomPhoto, onViewRoomPhotos, exportName = 'sketch', headSlot = null, staff = null, staffList = [], onComment = null, command = null, onCommandDone = null }) {
+export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, onChange, photoCounts = {}, onAddRoomPhoto, onViewRoomPhotos, onAddReadingPhoto = null, onViewReadingPhotos = null, reportInfo = null, onQuoteRoom = null, exportName = 'sketch', headSlot = null, staff = null, staffList = [], onComment = null, command = null, onCommandDone = null, assets = null }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const rootRef = useRef(null);
@@ -191,6 +199,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   const [rd, setRd] = useState({ val: '', note: '' }); // the reading being typed
   const [air, setAir] = useState({ rh: '', temp: '' }); // humidity and temperature carry over to the next reading: the air is the same
   const [rdErr, setRdErr] = useState('');
+  const [dayOneOpen, setDayOneOpen] = useState(false);
   const [stdOpen, setStdOpen] = useState(false); // the dry standards list
   const mode = variant === 'moisture' ? 'moisture' : 'draw'; // the Sketch tab draws; the Moisture tab logs readings on a plain floorplan and leaves the drawing alone
   const [hidden, setHidden] = useState(() => new Set()); // moisture floorplan: affected-area layers switched off
@@ -222,6 +231,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   const moveEqRef = useRef(null);
   moveEqRef.current = moveEqId;
   const [eqListOpen, setEqListOpen] = useState(false); // the list of what is on site
+  const [sizeOpen, setSizeOpen] = useState(false); // the add-a-room-by-size dialog
   const [eqNote, setEqNote] = useState(''); // "AM 3 placed in Kitchen", for a moment
   const [kb, setKb] = useState(0); // how far the phone keyboard covers the bottom of the sketch, in pixels
   const [vvBox, setVvBox] = useState(null); // the part of the screen the phone keyboard leaves free: { top, height }
@@ -478,6 +488,33 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     else commit({ ...p, marks: p.marks.filter((m) => m.id !== s.id) });
     setSel(null);
     setPopup(null);
+  }
+
+  // A room typed in by size (see RoomBySize). Returns true when it was added.
+  function addRoomBySize(room) {
+    if (planRef.current.rooms.length >= MAX_ROOMS) return false;
+    commit({ ...planRef.current, rooms: [...planRef.current.rooms, room] });
+    setSel({ kind: 'room', id: room.id });
+    setPopup(null);
+    fit();
+    return true;
+  }
+  function setSizingClass(cls) {
+    commit({ ...planRef.current, sizing: { cls } });
+  }
+  function setCeilText(text) {
+    if (!selected || sel.kind !== 'room') return;
+    const t = String(text).trim();
+    if (!t) { const { ceil, ...rest } = selected; commit({ ...planRef.current, rooms: planRef.current.rooms.map((r) => (r.id === selected.id ? rest : r)) }); setDimErr(''); return; }
+    const ft = parseFeet(t);
+    if (!Number.isFinite(ft) || !cleanCeil(ft)) { setDimErr(`Ceiling height is between ${MIN_CEIL} and ${MAX_CEIL} feet.`); return; }
+    setDimErr('');
+    patchRoom(selected.id, { ceil: cleanCeil(ft) });
+  }
+  function setFloorType(key) {
+    if (!selected || sel.kind !== 'room') return;
+    if (!key) { const { floor, ...rest } = selected; commit({ ...planRef.current, rooms: planRef.current.rooms.map((r) => (r.id === selected.id ? rest : r)) }); return; }
+    patchRoom(selected.id, { floor: key });
   }
 
   function duplicateRoom() {
@@ -1274,6 +1311,13 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     setRecheckDone({ name: d ? dayName(planRef.current.days, d.id) : 'Recheck', ...c });
   }
   useEffect(() => { if (recheck && dayId !== recheck) setRecheck(null); }, [dayId, recheck]);
+  // A scanned equipment label: open the job on that unit
+  useEffect(() => {
+    if (!command || command.type !== 'unit' || mode !== 'moisture') return;
+    setWork('equipment'); workRef.current = 'equipment';
+    gotoUnit(command.unitId);
+    onCommandDone?.();
+  }, [command]); // eslint-disable-line react-hooks/exhaustive-deps
   // "Start recheck" from the job page's action button: same rules as the button on the floorplan
   useEffect(() => {
     if (!command || command.type !== 'recheck' || mode !== 'moisture') return;
@@ -1433,6 +1477,14 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     closePopup();
     setSel(null);
   }
+  function pickUpRoomUnits(s) { // the units of a dry room, picked up on the day on screen
+    const pl = planRef.current;
+    const d = pl.days.find((x) => x.id === dayRef.current);
+    if (!window.confirm(`Pick up ${s.units.length} unit${s.units.length === 1 ? '' : 's'} in ${s.roomName}${d ? ` on ${dayName(pl.days, d.id)} (${dateText(d.date)})` : ''}? Each stays in the log with this pick-up date.`)) return;
+    const st = eqStamp(pl);
+    const ids = new Set(s.units.map((u) => u.id));
+    commit({ ...pl, equipment: pl.equipment.map((u) => (ids.has(u.id) ? pickUpUnit(pl, u, st) : u)) });
+  }
   function pickUpAll() {
     const pl = planRef.current;
     const on = equipmentOnSite(pl, dayRef.current);
@@ -1481,7 +1533,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     return out;
   }
   // The customer report: the plan as of the latest day (every layer, numbered pins), the equipment as placed on its busiest day, then the tables and curves.
-  async function exportReport() {
+  async function exportReport(variant = 'full') {
     const full = planRef.current;
     const ds = full.days || [];
     const plan = dayView(full, ds.length ? ds[ds.length - 1].id : null);
@@ -1503,8 +1555,16 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     const planImage = await snapshot(plan, { moisture: true });
     const peak = buildEquipment(full).peak;
     const equipImage = peak ? await snapshot(full, { moisture: false, equipment: true, equipDay: peak.day.id }) : null;
-    const pdf = renderMoistureReport(full, { title, planImage, equipImage, preparedAt: new Date() });
-    download(new Blob([pdf], { type: 'application/pdf' }), 'pdf', '-report');
+    let roomImages = [];
+    if (variant === 'carrier') { // one map per room that has readings or equipment, the room itself in focus
+      const withStuff = full.rooms.filter((r) => full.moisture.some((m) => hitRoom(full, m.x, m.y)?.id === r.id) || (full.equipment || []).some((u) => { const s = unitAt(full, u, ds.length ? ds[ds.length - 1].id : null); return s.state !== 'none' && hitRoom(full, s.x, s.y)?.id === r.id; }));
+      for (const r of withStuff.slice(0, 40)) {
+        const image = await snapshot(plan, { moisture: true, equipment: true, equipDay: ds.length ? ds[ds.length - 1].id : null, focusRoom: r.id, moistLabels: true });
+        if (image) roomImages.push({ id: r.id, name: roomTitle(r), image });
+      }
+    }
+    const pdf = renderMoistureReport(full, { title, planImage, equipImage, roomImages, variant, info: reportInfo || {}, preparedAt: new Date() });
+    download(new Blob([pdf], { type: 'application/pdf' }), 'pdf', variant === 'full' ? '-report' : `-report-${variant}`);
   }
   function download(blob, ext, suffix = '') {
     const url = URL.createObjectURL(blob);
@@ -1519,8 +1579,15 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   function exportAs(kind) {
     setExportOpen(false);
     if (kind === 'report') { exportReport(); return; }
+    if (kind === 'summary-report' || kind === 'equipment-report' || kind === 'carrier-report') { exportReport(kind.replace('-report', '')); return; }
     if (kind === 'summary') { download(new Blob([moistureSummaryCsv(planRef.current)], { type: 'text/csv;charset=utf-8' }), 'csv', '-moisture-summary'); return; }
     if (kind === 'csv') { download(new Blob([moistureLogCsv(planRef.current)], { type: 'text/csv;charset=utf-8' }), 'csv', '-moisture-log'); return; }
+    if (kind === 'labels') {
+      const info = reportInfo || {};
+      if (!info.jobId || !planRef.current.equipment.length) return;
+      download(new Blob([equipmentLabelsPdf(planRef.current.equipment, { origin: window.location.origin, jobId: info.jobId, jobNumber: info.jobNumber || '' })], { type: 'application/pdf' }), 'pdf', '-equipment-labels');
+      return;
+    }
     if (kind === 'equipment') { download(new Blob([equipmentLogCsv(planRef.current)], { type: 'text/csv;charset=utf-8' }), 'csv', '-equipment-log'); return; }
     const out = renderExport();
     if (!out) return;
@@ -1536,6 +1603,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   }
   const plan = planRef.current;
   const days = plan.days || [];
+  const dayOne = useDayOne(plan);
   const curDay = days.find((d) => d.id === dayId) || days[days.length - 1] || null;
   dayRef.current = curDay ? curDay.id : null;
   const dayPlan = dayView(plan, dayRef.current);
@@ -1765,6 +1833,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                 {label}
               </button>
             )))}
+            <button type="button" className="sk-bysize" title="Add a room by typing its size" onClick={() => { setMenuOpen(false); setObjMenu(false); setSizeOpen(true); }}>By size</button>
             <select className="sketch-view" value={surfaceView} onChange={(e) => { setSurfaceView(e.target.value); if (e.target.value !== 'all') setMoist((m) => ({ ...m, surface: e.target.value })); }} aria-label="Surface to show" title="Which surface to show">
               {SURFACE_VIEWS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
             </select>
@@ -1787,6 +1856,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                 <button type="button" className="sk-iconbtn" style={work === 'equipment' ? { display: 'none' } : undefined} aria-label="New point settings" aria-expanded={moistOpen} title={`New points: ${MOISTURE_SURFACES[moist.surface]} \u00b7 ${MOISTURE_MATERIALS[moist.material]} \u00b7 ${MOISTURE_TYPES[moist.type].short.trim()}`} onClick={() => { setMoistOpen(!moistOpen); setLayersOpen(false); setDayOpen(false); }}>
                   <GearIcon />
                 </button>
+                <button type="button" className="sk-dayone-btn" aria-label="Day 1 checklist" onClick={() => { setDayOneOpen(true); setDayOpen(false); setLayersOpen(false); setMoistOpen(false); }}>Day 1 {dayOne.done}/{dayOne.total}</button>
               </div>
               <div className="sk-work" role="group" aria-label="What a tap does">
                 <button type="button" className={work === 'readings' ? 'on' : ''} aria-pressed={work === 'readings'} onClick={() => switchWork('readings')}>Readings</button>
@@ -1810,6 +1880,8 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                   </button>
                   {eqListOpen && (
                     <div className="sk-moist-opts sk-layers sk-eq-list" role="group" aria-label="Equipment on site">
+                      <PullPrompt plan={plan} onPickUp={pickUpRoomUnits} />
+                      <EquipmentSizing plan={plan} onClass={setSizingClass} onChambers={(list) => commit({ ...planRef.current, chambers: list })} />
                       {(() => {
                         const rows = equipmentOnPlan(plan, dayRef.current);
                         if (!rows.length) return <div className="muted" style={{ fontSize: 13 }}>Nothing placed yet. Tap a room to zoom in, then tap where each piece goes.</div>;
@@ -2067,6 +2139,17 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                 <div className="field"><label htmlFor="sk-room-name">Name (optional)</label>
                   <input id="sk-room-name" key={`${room.id}-l-${room.label}`} defaultValue={room.label} maxLength={40} onBlur={(e) => e.target.value !== room.label && patchRoom(room.id, { label: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} placeholder="Primary bedroom" />
                 </div>
+                <div className="grid2">
+                  <div className="field"><label htmlFor="sk-room-ceil">Ceiling height (ft)</label>
+                    <input id="sk-room-ceil" key={`${room.id}-c-${room.ceil || ''}`} inputMode="decimal" defaultValue={room.ceil ? fmtFeet(room.ceil) : ''} placeholder="8" onBlur={(e) => setCeilText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
+                  </div>
+                  <div className="field"><label htmlFor="sk-room-floor">Floor</label>
+                    <select id="sk-room-floor" value={room.floor || ''} onChange={(e) => setFloorType(e.target.value)}>
+                      <option value="">Not set</option>
+                      {Object.entries(FLOOR_TYPES).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                    </select>
+                  </div>
+                </div>
                 {rect ? (
                   <div className="grid2">
                     <div className="field"><label htmlFor="sk-room-w">Width</label>
@@ -2085,7 +2168,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                   </div>
                 )}
                 {dimErr && <div className="msg err" style={{ margin: 0 }}>{dimErr}</div>}
-                <div className="muted">{roomAreaText(room)}</div>
+                <div className="muted">{roomAreaText(room)}{room.ceil ? ` \u00b7 ${Math.round(roomArea(room) * room.ceil).toLocaleString('en-US')} cu ft` : ''}</div>
                 {roomAffected && ['water', 'growth', 'smoke'].filter((kd) => roomAffected[kd]).map((kd) => (
                   <div key={kd} className="sk-aff" style={{ color: kindDot(kd) }}><strong>{AREA_KINDS[kd]}</strong> {surfaceText(roomAffected[kd])} sq ft</div>
                 ))}
@@ -2094,6 +2177,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                 </div>
                 <div className="row">
                   {onAddRoomPhoto && <button type="button" className="secondary small" onClick={() => onAddRoomPhoto(room)}>Add photo</button>}
+                  {onQuoteRoom && <button type="button" className="secondary small" onClick={() => onQuoteRoom(room)}>Add to quote</button>}
                   {onViewRoomPhotos && roomPhotos > 0 && <button type="button" className="secondary small" onClick={() => onViewRoomPhotos(room)}>Photos ({roomPhotos})</button>}
                   {sel.vi != null && sel.vi >= 0 && room.pts.length > 3 && <button type="button" className="secondary small" onClick={removeSelected}>Remove corner</button>}
                   <button type="button" className="danger small" onClick={() => { commit({ ...planRef.current, rooms: planRef.current.rooms.filter((r) => r.id !== room.id) }); setSel(null); setPopup(null); }}>Delete</button>
@@ -2104,6 +2188,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                     <button type="button" className="secondary small" onClick={duplicateRoom}>Duplicate</button>
                     {rect && <button type="button" className="secondary small" onClick={() => patchRoom(room.id, resizeRect(room, box.h, box.w))}>Swap width and length</button>}
                     {!rect && <button type="button" className="secondary small" onClick={() => patchRoom(room.id, { pts: tidyPts(room.pts) })}>Tidy corners</button>}
+                    {!rect && <button type="button" className="secondary small" onClick={() => patchRoom(room.id, { pts: turnRoomPts(room.pts, 1) })}>Turn 90{'\u00b0'}</button>}
                   </div>
                 </details>
               </>
@@ -2400,6 +2485,12 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                             <li key={r.id}>
                               <div><strong>{valueText(mp, r)}</strong>{tr ? ` ${TREND_MARK[tr]}` : ''} {r.val != null && <span className="muted">{airText(r)}</span>}</div>
                               <div className="muted">{dayName(days, r.day) ? `${dayName(days, r.day)} · ` : ''}{whenText(r.at)}{r.by?.name ? ` · ${r.by.name}` : ''}{r.note ? ` · ${r.note}` : ''}</div>
+                              {(onAddReadingPhoto || onViewReadingPhotos) && (
+                                <div className="sk-rd-photo">
+                                  {onViewReadingPhotos && (photoCounts[readingPhotoKey(r.id)] || 0) > 0 && <button type="button" className="secondary small" onClick={() => onViewReadingPhotos(readingPhotoKey(r.id))}>Meter photo ({photoCounts[readingPhotoKey(r.id)]})</button>}
+                                  {onAddReadingPhoto && <button type="button" className="secondary small" onClick={() => onAddReadingPhoto(readingPhotoKey(r.id))}>{(photoCounts[readingPhotoKey(r.id)] || 0) > 0 ? 'Add another' : 'Meter photo'}</button>}
+                                </div>
+                              )}
                               {canDel(r) && <button type="button" className="sk-x" aria-label="Delete this reading" onClick={() => patchMoisture(mp.id, { readings: mp.readings.filter((x) => x.id !== r.id) })}>{'×'}</button>}
                             </li>
                           );
@@ -2483,13 +2574,41 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                     ))}
                   </select>
                 </label>
+                {assets && (
+                  <label className="sk-field">Asset tag (company inventory)
+                    <select value={eq.asset || ''} onChange={(e) => {
+                      const a = assets.list.find((x) => x.id === e.target.value);
+                      if (!a) { patchEquip(eq.id, { asset: undefined }); return; }
+                      const patch = { asset: a.id };
+                      if (!eq.label && a.label) patch.label = a.label.slice(0, 40);
+                      if (!eq.ppd && a.ppd) patch.ppd = a.ppd;
+                      patchEquip(eq.id, patch);
+                    }}>
+                      <option value="">None</option>
+                      {assets.list.filter((a) => a.id === eq.asset || (a.status === 'available' && a.type === eq.t)).map((a) => <option key={a.id} value={a.id}>{a.tag}{a.label ? ` - ${a.label}` : ''}</option>)}
+                    </select>
+                  </label>
+                )}
                 <label className="sk-field">Model or unit no.
                   <input key={`l-${eq.id}`} defaultValue={eq.label} maxLength={40} placeholder="Optional" onBlur={(e) => { const t = e.target.value.trim(); if (t !== eq.label) patchEquip(eq.id, { label: t }); }} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
                 </label>
+                {EQUIPMENT_TYPES[eq.t].group === 'Dehumidifiers' && (
+                  <label className="sk-field">Pints per day (rating)
+                    <input key={`p-${eq.id}-${eq.ppd || ''}`} inputMode="numeric" defaultValue={eq.ppd || ''} placeholder="e.g. 70" onBlur={(e) => { const n = Math.round(Number(e.target.value)); const next = Number.isFinite(n) && n > 0 && n <= 999 ? n : 0; if (next !== (eq.ppd || 0)) { patchEquip(eq.id, { ppd: next || undefined }); } }} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
+                  </label>
+                )}
                 <label className="sk-field">Note
                   <input key={`n-${eq.id}`} defaultValue={eq.note} maxLength={80} placeholder="Optional" onBlur={(e) => { const t = e.target.value.trim(); if (t !== eq.note) patchEquip(eq.id, { note: t }); }} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
                 </label>
               </div>
+              {/^dehu|^desiccant$/.test(eq.t) && (
+                <details>
+                  <summary>Inlet / outlet readings ({(eq.dr || []).length})</summary>
+                  <div className="sk-details">
+                    <DehuReadings plan={plan} unit={eq} dayId={dayRef.current} by={meRef.current} atForNow={() => atForDay(curDay)} onChange={(u) => patchEquip(eq.id, { dr: u.dr })} />
+                  </div>
+                </details>
+              )}
               <details>
                 <summary>History ({hist.length})</summary>
                 <div className="sk-details">
@@ -2506,6 +2625,9 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
             : sheet;
         })()}
       </div>
+
+      {dayOneOpen && <DayOneList items={dayOne.items} onClose={() => setDayOneOpen(false)} />}
+      <RoomBySize open={sizeOpen} onClose={() => setSizeOpen(false)} rooms={plan.rooms} selectedId={sel && sel.kind === 'room' ? sel.id : null} onAdd={addRoomBySize} />
 
       {stdOpen && (
         <div className="sketch-modal" role="presentation" onPointerDown={(e) => { if (e.target === e.currentTarget) setStdOpen(false); }}>
@@ -2539,8 +2661,12 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
             <button type="button" className="secondary" onClick={() => exportAs('png')}>Export as PNG</button>
             <button type="button" className="secondary" onClick={() => exportAs('pdf')}>Export as PDF</button>
             {mode === 'moisture' && <button type="button" className="primary" disabled={!plan.moisture.length && !plan.equipment.length} onClick={() => exportAs('report')} title="Floor plan, readings by day, drying curves, dry dates, equipment placed and the full log">Customer report (PDF)</button>}
+            {mode === 'moisture' && <button type="button" className="secondary" disabled={!plan.moisture.length && !plan.equipment.length} onClick={() => exportAs('summary-report')} title="The first page: status, the floor plan and a result for each room">Summary report (PDF)</button>}
+            {mode === 'moisture' && <button type="button" className="secondary" disabled={!plan.equipment.length} onClick={() => exportAs('equipment-report')} title="What equipment was set, where, for how long, and how the dehumidifiers performed">Equipment report (PDF)</button>}
+            {mode === 'moisture' && <button type="button" className="secondary" disabled={!plan.moisture.length && !plan.equipment.length} onClick={() => exportAs('carrier-report')} title="The full report plus a map page for each room and dehumidifier performance">Carrier packet (PDF)</button>}
             {mode === 'moisture' && <button type="button" className="secondary" disabled={!plan.moisture.length} onClick={() => exportAs('summary')} title="One row per point, one column per day">Daily summary (CSV)</button>}
             {mode === 'moisture' && <button type="button" className="secondary" disabled={!plan.moisture.length} onClick={() => exportAs('csv')} title="Every reading at every point, oldest first">Full moisture log (CSV)</button>}
+            {mode === 'moisture' && reportInfo?.jobId && <button type="button" className="secondary" disabled={!plan.equipment.length} onClick={() => exportAs('labels')} title="A sheet of QR labels, one per machine; scanning one opens that unit on this job">Equipment QR labels (PDF)</button>}
             {mode === 'moisture' && <button type="button" className="secondary" disabled={!plan.equipment.length} onClick={() => exportAs('equipment')} title="One row per piece of equipment: where, when placed and picked up, days on site">Equipment log (CSV)</button>}
           </div>
         </div>

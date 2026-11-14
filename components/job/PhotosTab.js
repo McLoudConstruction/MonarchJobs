@@ -6,12 +6,13 @@ import { fmtDay } from '@/lib/format';
 import { KindChips, PhotoGrid, UploadStatus } from '@/components/job/PhotoUi';
 import LibraryUploadDialog from '@/components/job/LibraryUploadDialog';
 import CameraCapture from '@/components/job/CameraCapture';
+import WaitingPhotos from '@/components/job/WaitingPhotos';
 
 const dayKey = (iso) => { const d = new Date(iso); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
 
 // Photos tab: add pictures (camera or library, folder chosen in a popup), filter,
 // open one to caption, mark up, move to a room, download or archive.
-export default function PhotosTab({ photos, isOffice, uploader, onOpen }) {
+export default function PhotosTab({ photos, isOffice, uploader, onOpen, jobId = null }) {
   const [filter, setFilter] = useState('all');
   const [showArchived, setShowArchived] = useState(false);
   const [dlg, setDlg] = useState(null); // null | 'camera' | 'library'
@@ -35,6 +36,7 @@ export default function PhotosTab({ photos, isOffice, uploader, onOpen }) {
 
   return (
     <>
+      {jobId && <WaitingPhotos jobId={jobId} />}
       <div className="card">
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <h2>{showArchived ? 'Archived photos' : 'Photos'} <span className="muted">({showArchived ? archivedCount : counts.all})</span></h2>

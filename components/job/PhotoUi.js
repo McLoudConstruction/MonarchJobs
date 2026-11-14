@@ -27,7 +27,7 @@ export function UploadStatus({ uploader }) {
   if (!uploader.busy && !uploader.errors.length) return null;
   return (
     <div className={`msg ${uploader.errors.length && !uploader.busy ? 'err' : 'ok'}`} role="status">
-      {uploader.busy && <div>Uploading picture {Math.min(uploader.done + 1, uploader.total)} of {uploader.total}... keep this page open.</div>}
+      {uploader.busy && <div>Saving picture {Math.min(uploader.done + 1, uploader.total)} of {uploader.total}...</div>}
       {uploader.errors.map((e, i) => <div key={i}>{e}</div>)}
       {!uploader.busy && uploader.errors.length > 0 && <button type="button" className="secondary small" style={{ marginTop: 6 }} onClick={uploader.clearErrors}>Dismiss</button>}
     </div>

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import PopupModal from '@/components/PopupModal';
 import { FilePick, PhotoGrid, UploadStatus } from '@/components/job/PhotoUi';
 import CameraCapture from '@/components/job/CameraCapture';
+import { useWaitingPhotos } from '@/lib/offlineClient';
 
 // The photos on an update being written: the ones chosen so far, plus ways to add more (pick from
 // the job's photos, take them now with the same camera as the Photos tab, or choose from the phone's library).
@@ -18,6 +19,7 @@ export default function PhotoAttach({ photos, ids, onChange, uploader, onOpen })
   useEffect(() => () => { mounted.current = false; }, []);
   const byId = useMemo(() => new Map(photos.map((p) => [p.id, p])), [photos]);
   const chosen = ids.map((i) => byId.get(i)).filter(Boolean);
+  const waiting = useWaitingPhotos(null).filter((w) => ids.includes(w.id)); // taken on this phone, not uploaded yet
   const available = photos.filter((p) => !p.archived_at).sort((a, b) => new Date(b.taken_at) - new Date(a.taken_at));
 
   async function addFiles(files) {
@@ -48,6 +50,21 @@ export default function PhotoAttach({ photos, ids, onChange, uploader, onOpen })
           <div className="row" style={{ marginTop: 6 }}>
             {chosen.map((p, i) => (
               <button key={p.id} type="button" className="secondary small" onClick={() => onChange(ids.filter((x) => x !== p.id))} aria-label={`Remove photo ${i + 1} from this update`}>Remove {i + 1}</button>
+            ))}
+          </div>
+        </div>
+      )}
+      {waiting.length > 0 && (
+        <div className="ph-chosen">
+          <p className="hint" style={{ margin: '6px 0' }}>Saved on this phone, uploading when there is signal:</p>
+          <div className="ph-grid">
+            {waiting.map((w) => (
+              <div key={w.id} className="ph-thumb">{w.url && <img src={w.url} alt="" />}<span className="ph-status">Waiting</span></div>
+            ))}
+          </div>
+          <div className="row" style={{ marginTop: 6 }}>
+            {waiting.map((w, i) => (
+              <button key={w.id} type="button" className="secondary small" onClick={() => onChange(ids.filter((x) => x !== w.id))}>Remove waiting photo {i + 1}</button>
             ))}
           </div>
         </div>
