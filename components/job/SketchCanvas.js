@@ -12,6 +12,7 @@ import {
   FLOOR_TYPES, MIN_CEIL, MAX_CEIL, cleanCeil, roomArea,
 } from '@/lib/sketch';
 import { turnRoomPts } from '@/lib/roomShapes';
+import { hasFeature, areaKindsFor } from '@/lib/services';
 import RoomBySize from '@/components/job/RoomBySize';
 import EquipmentSizing from '@/components/job/EquipmentSizing';
 import DehuReadings from '@/components/job/DehuReadings';
@@ -164,7 +165,7 @@ function LayersIcon() {
   );
 }
 
-export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, onChange, photoCounts = {}, onAddRoomPhoto, onViewRoomPhotos, onAddReadingPhoto = null, onViewReadingPhotos = null, reportInfo = null, onQuoteRoom = null, exportName = 'sketch', headSlot = null, staff = null, staffList = [], onComment = null, command = null, onCommandDone = null, assets = null }) {
+export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, onChange, photoCounts = {}, onAddRoomPhoto, onViewRoomPhotos, onAddReadingPhoto = null, onViewReadingPhotos = null, reportInfo = null, onQuoteRoom = null, exportName = 'sketch', headSlot = null, staff = null, staffList = [], onComment = null, command = null, onCommandDone = null, assets = null, service = '' }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const rootRef = useRef(null);
@@ -1217,7 +1218,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
       if (fullRef.current) exitFull();
       return;
     }
-    if (modeRef.current === 'draw' && KEYS[k]) { e.preventDefault(); setTool(KEYS[k]); setTextDraft(null); if (k === 'w') setAreaKind('water'); }
+    if (modeRef.current === 'draw' && KEYS[k] && !(KEYS[k] === 'area' && !hasAreasRef.current)) { e.preventDefault(); setTool(KEYS[k]); setTextDraft(null); if (k === 'w') setAreaKind(areaKindsRef.current[0] || 'water'); }
   };
   useEffect(() => {
     const h = (e) => keyRef.current?.(e);
@@ -1763,6 +1764,11 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     setMenuOpen(false);
   }
 
+  const areaKinds = areaKindsFor(service, KIND_ORDER);
+  const hasAreasRef = useRef(areaKinds.length > 0);
+  const areaKindsRef = useRef(areaKinds);
+  hasAreasRef.current = areaKinds.length > 0;
+  areaKindsRef.current = areaKinds;
   const layerList = areaLayers(plan);
   const toggleLayer = (id) => setHidden((h) => { const n = new Set(h); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
@@ -1784,7 +1790,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
         <div className={variant === 'moisture' ? 'sk-topstack' : 'sk-topfrag'}>
         <div className="sketch-over sketch-over-tl">
           {mode === 'draw' && (<div className="sketch-tools" role="toolbar" aria-label="Sketch tools">
-            {TOOLS.map(([k, label, key]) => (k === 'object' ? (
+            {TOOLS.filter(([k]) => k !== 'area' || areaKinds.length > 0).map(([k, label, key]) => (k === 'object' ? (
               <div key={k} className="sketch-menu">
                 <button type="button" className={tool === 'object' ? 'on' : ''} aria-haspopup="menu" aria-expanded={objMenu} title={`${label} (${key})`} onClick={(e) => {
                   setMenuOpen(false);
@@ -1820,7 +1826,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                 </button>
                 {menuOpen && (
                   <div className="sketch-menu-list" role="menu">
-                    {KIND_ORDER.map((kind) => (
+                    {areaKinds.map((kind) => (
                       <button key={kind} type="button" role="menuitem" className={tool === 'area' && areaKind === kind ? 'on' : ''} onClick={() => pickKind(kind)}>
                         <span className="sk-dot" style={{ background: kindDot(kind) }} />{AREA_KINDS[kind]}
                       </button>
@@ -2140,9 +2146,9 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                   <input id="sk-room-name" key={`${room.id}-l-${room.label}`} defaultValue={room.label} maxLength={40} onBlur={(e) => e.target.value !== room.label && patchRoom(room.id, { label: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} placeholder="Primary bedroom" />
                 </div>
                 <div className="grid2">
-                  <div className="field"><label htmlFor="sk-room-ceil">Ceiling height (ft)</label>
+                  {hasFeature(service, 'ceilingHeight') && <div className="field"><label htmlFor="sk-room-ceil">Ceiling height (ft)</label>
                     <input id="sk-room-ceil" key={`${room.id}-c-${room.ceil || ''}`} inputMode="decimal" defaultValue={room.ceil ? fmtFeet(room.ceil) : ''} placeholder="8" onBlur={(e) => setCeilText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
-                  </div>
+                  </div>}
                   <div className="field"><label htmlFor="sk-room-floor">Floor</label>
                     <select id="sk-room-floor" value={room.floor || ''} onChange={(e) => setFloorType(e.target.value)}>
                       <option value="">Not set</option>

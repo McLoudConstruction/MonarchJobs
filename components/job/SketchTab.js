@@ -8,12 +8,13 @@ import { isNetworkError } from '@/lib/jobPack';
 import { normalizePlan, roomPhotoCounts } from '@/lib/sketch';
 import SketchCanvas from '@/components/job/SketchCanvas';
 import QuoteFromSketch from '@/components/job/QuoteFromSketch';
+import { hasFeature } from '@/lib/services';
 
 const SAVE_DELAY_MS = 1200;
 
 // Sketch tab: pick or add a sketch (for example one per floor), draw on it, and it saves itself.
 // Photos can be attached to a room: they are ordinary job photos that remember sketch + room.
-export default function SketchTab({ jobId, sketches, photos, isOffice, staff = null, staffList = [], logEvent, onReload, onAddRoomPhoto, onViewPhotos, startId = null, onActive, onOpenMoisture }) {
+export default function SketchTab({ jobId, sketches, photos, isOffice, staff = null, staffList = [], logEvent, onReload, onAddRoomPhoto, onViewPhotos, startId = null, onActive, onOpenMoisture, service = '' }) {
   const [activeId, setActiveId] = useState(startId);
   const [moving, setMoving] = useState(false);
   const [roomCount, setRoomCount] = useState(0); // rooms on the sketch as it is now, drawn or not yet saved
@@ -252,7 +253,8 @@ export default function SketchTab({ jobId, sketches, photos, isOffice, staff = n
             onComment={(c) => logEvent('sketch_comment', { sketch: loaded.name, action: c.action, tagged: c.tags })}
             photoCounts={counts}
             onChange={(plan) => { livePlan.current = plan; setRoomCount(plan.rooms.length); queueSave(loaded.id, plan); }}
-            onQuoteRoom={(room) => setQuote({ roomId: room.id })}
+            service={service}
+            onQuoteRoom={hasFeature(service, 'quoteFromSketch') ? (room) => setQuote({ roomId: room.id }) : null}
             onAddRoomPhoto={(room) => onAddRoomPhoto(loaded.id, room)}
             onViewRoomPhotos={(room) => onViewPhotos(photos.filter((p) => !p.archived_at && p.sketch_id === loaded.id && p.room_key === room.id))}
           />
@@ -260,7 +262,7 @@ export default function SketchTab({ jobId, sketches, photos, isOffice, staff = n
             <label className="muted" htmlFor="sk-name">Sketch name</label>
             <input id="sk-name" key={loaded.id + loaded.name} defaultValue={loaded.name} maxLength={60} onBlur={(e) => rename(e.target.value)} style={{ maxWidth: 240 }} />
             {isOffice && <button type="button" className="danger small" onClick={remove}>Delete sketch</button>}
-            <button type="button" className="secondary small" disabled={!roomCount} onClick={() => setQuote({ roomId: null })}>Quote from sketch</button>
+            {hasFeature(service, 'quoteFromSketch') && <button type="button" className="secondary small" disabled={!roomCount} onClick={() => setQuote({ roomId: null })}>Quote from sketch</button>}
             {quoted > 0 && <span className="muted" role="status">{quoted} line{quoted === 1 ? '' : 's'} added to the estimate.</span>}
             {onOpenMoisture && (
               <button type="button" className="primary sk-to-moisture" style={{ marginLeft: 'auto' }} disabled={moving || !roomCount || save.state === 'error' || save.state === 'conflict'} onClick={moveToMoisture} title={roomCount ? 'Saves the sketch and opens the floorplan for readings' : 'Draw at least one room first'}>

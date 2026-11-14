@@ -5,8 +5,7 @@ import Link from 'next/link';
 import AuthGate from '@/components/AuthGate';
 import AssetLabelDialog from '@/components/AssetLabelDialog';
 import { getSupabase } from '@/lib/supabaseClient';
-import { ASSET_STATUS, assetTag, cleanAssetForm, typeLabel } from '@/lib/assets';
-import { EQUIPMENT_ORDER, EQUIPMENT_TYPES } from '@/lib/equipment';
+import { ASSET_STATUS, ASSET_ORDER, ASSET_TYPES, assetTag, cleanAssetForm, typeLabel, openIssues } from '@/lib/assets';
 
 const BLANK = { type: 'airmover', label: '', serial: '', ppd: '', notes: '', qty: '1' };
 
@@ -24,6 +23,7 @@ function InventoryInner({ staff }) {
   const [msg, setMsg] = useState(null);
   const [printing, setPrinting] = useState(false);
   const [prefix, setPrefix] = useState('');
+  const [issues, setIssues] = useState({}); // asset id -> open damage / not-working notes
 
   const load = useCallback(async () => {
     const sb = getSupabase();
@@ -34,6 +34,11 @@ function InventoryInner({ staff }) {
     setAssets(a || []);
     setSettings(s || {});
     setPrefix(s?.asset_prefix || 'EQ');
+    // Open damage / not-working notes; the page still works before migration 016 is run.
+    const { data: n, error: nErr } = await sb.from('equipment_notes').select('asset_id,kind,resolved_at').is('resolved_at', null).neq('kind', 'note');
+    const by = {};
+    if (!nErr) for (const x of n || []) (by[x.asset_id] ||= []).push(x);
+    setIssues(by);
     const ids = [...new Set((a || []).map((x) => x.job_id).filter(Boolean))];
     if (ids.length) {
       const { data: j } = await sb.from('jobs').select('id,job_number,customer:customers(display_name)').in('id', ids);
@@ -96,7 +101,7 @@ function InventoryInner({ staff }) {
         <form className="card asset-form" onSubmit={add}>
           <h3>Add equipment</h3>
           <label className="field">Type
-            <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>{EQUIPMENT_ORDER.map((t) => <option key={t} value={t}>{EQUIPMENT_TYPES[t].label}</option>)}</select>
+            <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>{ASSET_ORDER.map((t) => <option key={t} value={t}>{ASSET_TYPES[t].label}</option>)}</select>
           </label>
           <label className="field">Make and model<input value={form.label} maxLength={60} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="Dri-Eaz LGR 3500i" /></label>
           <label className="field">Serial number (optional)<input value={form.serial} maxLength={60} onChange={(e) => setForm({ ...form, serial: e.target.value })} /></label>
@@ -116,7 +121,7 @@ function InventoryInner({ staff }) {
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
         <select aria-label="Type" value={type} onChange={(e) => setType(e.target.value)}>
           <option value="">All types</option>
-          {EQUIPMENT_ORDER.map((t) => <option key={t} value={t}>{EQUIPMENT_TYPES[t].label}</option>)}
+          {ASSET_ORDER.map((t) => <option key={t} value={t}>{ASSET_TYPES[t].label}</option>)}
         </select>
         {isOffice && <button className="secondary" disabled={!shown.length} onClick={() => setPicked(picked.length === shown.length ? [] : shown.map((a) => a.id))}>{picked.length === shown.length && shown.length ? 'Clear selection' : 'Select all shown'}</button>}
         {isOffice && <button className="primary" disabled={!picked.length} onClick={() => setPrinting(true)}>Print labels ({picked.length})</button>}
@@ -129,7 +134,7 @@ function InventoryInner({ staff }) {
           <div key={a.id} className="asset-row">
             {isOffice && <input type="checkbox" aria-label={`Select ${tag(a)}`} checked={picked.includes(a.id)} onChange={() => toggle(a.id)} />}
             <Link href={`/equipment/${a.id}`} className="list-item">
-              <div className="title">{tag(a)} <span className={`badge as-${a.status}`}>{ASSET_STATUS[a.status]}</span></div>
+              <div className="title">{tag(a)} <span className={`badge as-${a.status}`}>{ASSET_STATUS[a.status]}</span>{openIssues(issues[a.id]).length > 0 && <span className="badge as-repair" title="Has an open damage or not-working note"> Needs attention</span>}</div>
               <div className="meta">{[typeLabel(a.type), a.label, a.serial && `S/N ${a.serial}`, a.ppd && `${a.ppd} pints/day`].filter(Boolean).join(' · ')}{a.job_id && jobs[a.job_id] ? ` · Job #${jobs[a.job_id].job_number} ${jobs[a.job_id].customer?.display_name || ''}` : ''}</div>
             </Link>
           </div>

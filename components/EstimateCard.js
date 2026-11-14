@@ -6,6 +6,7 @@ import { apiFetch } from '@/lib/useAuth';
 import { lineCents, estimateSnapshot, sameSnapshot, ESTIMATE_STATUS } from '@/lib/estimate';
 import { money, fmtDateTime, UNIT_LABELS } from '@/lib/format';
 import { displayPhone, toE164 } from '@/lib/phone';
+import { hasFeature } from '@/lib/services';
 import { LINE_KINDS, lineKind, kindFields, lineKindLabel, hasTiers, tiersPresent, tierTotals, currentTotals, effectiveLines, choiceFromEstimate, TIER_LABELS } from '@/lib/estimateOptions';
 
 const BLANK_CUSTOM = { description: '', quantity: '1', unit: 'flat', unit_price: '', kind: 'included' };
@@ -14,7 +15,7 @@ const BLANK_CUSTOM = { description: '', quantity: '1', unit: 'flat', unit_price:
 // on a job, can add, change and remove lines while it is open; every change is logged by the database
 // with who and when. The office sends it to the customer by text and email; the customer approves and
 // signs on the secure link.
-export default function EstimateCard({ scope, open, staff, token, contact, onChanged }) {
+export default function EstimateCard({ service = '', scope, open, staff, token, contact, onChanged }) {
   const isOffice = staff.role !== 'tech';
   const scopeCol = scope.leadId ? 'lead_id' : 'job_id';
   const scopeId = scope.leadId || scope.jobId;
@@ -162,6 +163,8 @@ export default function EstimateCard({ scope, open, staff, token, contact, onCha
   }
 
   const tiered = hasTiers(lines);
+  // Good / Better / Best and add-ons are for carpet; a quote that already has them keeps showing the controls.
+  const showOptions = hasFeature(service, 'estimateOptions') || tiered || lines.some((l) => l.optional);
   const totals = currentTotals(est, lines);
   const perTier = tierTotals(lines, est.minimum_charge);
   const addonItems = items.filter((i) => i.is_addon);
@@ -188,11 +191,11 @@ export default function EstimateCard({ scope, open, staff, token, contact, onCha
                       <div className="field" style={{ flex: 1 }}><label>Qty</label><input type="number" step="0.001" min="0" value={edit.quantity} onChange={(e) => setEdit({ ...edit, quantity: e.target.value })} /></div>
                       <div className="field" style={{ flex: 1 }}><label>Price</label><input type="number" step="0.01" value={edit.unit_price} onChange={(e) => setEdit({ ...edit, unit_price: e.target.value })} /></div>
                     </div>
-                    <div className="field"><label>Line type</label>
+                    {showOptions && <div className="field"><label>Line type</label>
                       <select value={edit.kind} onChange={(e) => setEdit({ ...edit, kind: e.target.value })}>
                         {LINE_KINDS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                       </select>
-                    </div>
+                    </div>}
                     <div className="row"><button className="primary small">Save</button><button type="button" className="secondary small" onClick={() => setEditId(null)}>Cancel</button></div>
                   </form>
                 </td>
@@ -235,21 +238,21 @@ export default function EstimateCard({ scope, open, staff, token, contact, onCha
               </select>
             </div>
             <div className="field" style={{ width: 110, marginBottom: 0 }}><label>Qty</label><input type="number" step="0.001" min="0" value={pickQty} onChange={(e) => setPickQty(e.target.value)} /></div>
-            <div className="field" style={{ width: 150, marginBottom: 0 }}><label>Line type</label>
+            {showOptions && <div className="field" style={{ width: 150, marginBottom: 0 }}><label>Line type</label>
               <select value={pickKind} onChange={(e) => setPickKind(e.target.value)}>
                 {LINE_KINDS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
-            </div>
+            </div>}
             <button className="primary">Add</button>
             <button type="button" className="secondary" onClick={() => setCustom(custom ? null : { ...BLANK_CUSTOM })}>Custom line</button>
           </form>
-          {addonItems.length > 0 && (
+          {showOptions && addonItems.length > 0 && (
             <div className="row" style={{ marginTop: 10, gap: 6, flexWrap: 'wrap' }}>
               <span className="muted">Add-ons:</span>
               {addonItems.map((i) => <button key={i.id} type="button" className="secondary small" onClick={() => addAddon(i)}>+ {i.name} ({money(i.price)})</button>)}
             </div>
           )}
-          <p className="hint" style={{ marginTop: 8 }}>Good, Better and Best options let the customer pick one when they approve. Optional add-ons are ticked by the customer.</p>
+          {showOptions && <p className="hint" style={{ marginTop: 8 }}>Good, Better and Best options let the customer pick one when they approve. Optional add-ons are ticked by the customer.</p>}
           {items.length === 0 && <p className="hint" style={{ marginTop: 8 }}>The price list is empty. The owner adds services in Settings.</p>}
           {custom && (
             <form onSubmit={addCustom} style={{ marginTop: 12 }}>
@@ -265,11 +268,11 @@ export default function EstimateCard({ scope, open, staff, token, contact, onCha
                   </div>
                 </div>
               </div>
-              <div className="field"><label>Line type</label>
+              {showOptions && <div className="field"><label>Line type</label>
                 <select value={custom.kind} onChange={(e) => setCustom({ ...custom, kind: e.target.value })}>
                   {LINE_KINDS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
-              </div>
+              </div>}
               <button className="primary small">Add custom line</button>
             </form>
           )}

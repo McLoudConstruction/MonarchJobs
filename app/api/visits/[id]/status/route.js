@@ -94,7 +94,10 @@ export async function POST(request, { params }) {
         const next = advancePlan(p, plan.touchCustomerLastVisit, st?.timezone || undefined);
         if (next) await admin.from('service_plans').update({ next_due: next }).eq('id', p.id);
       }
-      if (st?.aftercare_auto !== false) await sendAftercare({ admin, jobId: job.id, origin: siteUrl(request) });
+      // Care instructions and the customer page are for carpet; restoration jobs are not texted automatically.
+      const { data: svc } = await admin.from('jobs').select('service,job_type').eq('id', job.id).maybeSingle();
+      const carpetJob = !svc?.service ? svc?.job_type !== 'water_restoration' : svc.service === 'carpet';
+      if (st?.aftercare_auto !== false && carpetJob) await sendAftercare({ admin, jobId: job.id, origin: siteUrl(request) });
     } catch {
       /* the visit is already saved */
     }

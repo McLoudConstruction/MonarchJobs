@@ -6,6 +6,7 @@ import PhotoAttach from '@/components/job/PhotoAttach';
 import { PhotoGrid } from '@/components/job/PhotoUi';
 import { getSupabase } from '@/lib/supabaseClient';
 import { INTERNAL_CATEGORIES } from '@/lib/jobDocs';
+import { hasFeature, noteCategories } from '@/lib/services';
 import { fmtDateTime } from '@/lib/format';
 import { displayPhone } from '@/lib/phone';
 import { apiFetch } from '@/lib/useAuth';
@@ -83,7 +84,7 @@ function SendDialog({ update, recipients, token, jobId, onClose, onDone }) {
 
 // Updates tab. Internal notes are for staff only. Progress updates are written for the customer:
 // saved as a draft, then sent as a link by text and email.
-export default function UpdatesTab({ jobId, updates, photos, isOffice, staff, token, authorName, logEvent, onReload, uploader, onOpenPhotos, recipients, baseUrl, command = null, onCommandDone = null }) {
+export default function UpdatesTab({ service = '', jobId, updates, photos, isOffice, staff, token, authorName, logEvent, onReload, uploader, onOpenPhotos, recipients, baseUrl, command = null, onCommandDone = null }) {
   const [mode, setMode] = useState('internal'); // internal | progress
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -173,10 +174,10 @@ export default function UpdatesTab({ jobId, updates, photos, isOffice, staff, to
 
   return (
     <>
-      <div className="seg" role="tablist" aria-label="Update type">
+      {(hasFeature(service, 'progressUpdates') || counts.progress > 0) && <div className="seg" role="tablist" aria-label="Update type">
         <button type="button" role="tab" aria-selected={mode === 'internal'} className={mode === 'internal' ? 'on' : ''} onClick={() => setMode('internal')}>Internal notes ({counts.internal})</button>
         <button type="button" role="tab" aria-selected={mode === 'progress'} className={mode === 'progress' ? 'on' : ''} onClick={() => setMode('progress')}>Progress updates ({counts.progress})</button>
-      </div>
+      </div>}
 
       {notice && <div className="msg ok" role="status">{notice}</div>}
       {!form && (
@@ -204,7 +205,7 @@ export default function UpdatesTab({ jobId, updates, photos, isOffice, staff, to
             <>
               <div className="field"><label>Category</label>
                 <select value={form.category} onChange={set('category')}>
-                  {INTERNAL_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  {noteCategories(INTERNAL_CATEGORIES, service, form.category).map((c) => <option key={c} value={c}>{c}</option>)}
                   {form.category && !INTERNAL_CATEGORIES.includes(form.category) && <option value={form.category}>{form.category}</option>}
                 </select>
               </div>

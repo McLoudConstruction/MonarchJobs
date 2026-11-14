@@ -26,6 +26,7 @@ import { fabActions, FAB_LABELS, FAB_HIDDEN_TABS } from '@/lib/jobFab';
 import { getSupabase } from '@/lib/supabaseClient';
 import { doubleBookedIds } from '@/lib/schedule';
 import { fmtDateTime, fmtDuration, JOB_STATUS, JOB_TYPES, addressLine } from '@/lib/format';
+import { hasFeature, serviceOf, serviceTitle, tabsFor, SERVICES, SERVICE_HINTS } from '@/lib/services';
 import { displayPhone, telHref } from '@/lib/phone';
 import { staffName, displayNameFor } from '@/lib/userDisplay';
 import { apiFetch } from '@/lib/useAuth';
@@ -74,7 +75,7 @@ function JobInner({ id, staff, token }) {
   const [msg, setMsg] = useState(null);
   const [form, setForm] = useState(null);
   const [visitEdit, setVisitEdit] = useState(null); // visit object, or {} for new
-  const [tab, setTab] = useState('overview');
+  const [tabState, setTab] = useState('overview');
   const [sketchId, setSketchId] = useState(null); // the sketch both the Sketch and Moisture tabs have open
   const [photos, setPhotos] = useState([]);
   const [sketches, setSketches] = useState([]);
@@ -111,9 +112,9 @@ function JobInner({ id, staff, token }) {
   }, []);
   // a request left over for a tab that is no longer open is dropped
   useEffect(() => {
-    if (tab !== 'moisture') setMoistCmd(null);
-    if (tab !== 'updates') setUpdCmd(null);
-  }, [tab]);
+    if (tabState !== 'moisture') setMoistCmd(null);
+    if (tabState !== 'updates') setUpdCmd(null);
+  }, [tabState]);
 
   // Shows a job pack (fresh from the server, or the copy kept on this phone).
   const applyPack = useCallback((pack, fromPhone) => {
@@ -121,7 +122,7 @@ function JobInner({ id, staff, token }) {
     setJob(j);
     if (!j) return;
     setForm({
-      status: j.status, job_type: j.job_type, po_number: j.po_number, loss_summary: j.loss_summary,
+      status: j.status, service: j.service || '', po_number: j.po_number, loss_summary: j.loss_summary,
       customer_notes: j.customer_notes, internal_notes: j.internal_notes, warning: j.warning, billing_contact_id: j.billing_contact_id || '',
     });
     setDocsMissing(missingTable(pack.photos.error) || missingTable(pack.sketches.error) || missingTable(pack.updates.error));
@@ -216,6 +217,11 @@ function JobInner({ id, staff, token }) {
   }
   if (!job || !form) return <p className="muted">Loading job...</p>;
 
+  // What this kind of job shows. A tab the service does not have falls back to Overview (its data stays saved).
+  const service = serviceOf(job);
+  const shownTabs = tabsFor(JOB_TABS, service);
+  const tab = shownTabs.some(([k]) => k === tabState) ? tabState : 'overview';
+
   const openViewer = (list, startId) => setViewer({ ids: list.map((p) => p.id), startId });
   const viewerList = viewer ? viewer.ids.map((i) => photosById.get(i)).filter(Boolean) : [];
   const authorName = (uid) => {
@@ -242,13 +248,13 @@ function JobInner({ id, staff, token }) {
   async function saveJob(e) {
     e.preventDefault();
     setMsg(null);
-    const patch = { ...form, billing_contact_id: form.billing_contact_id || null };
+    const patch = { ...form, service: form.service || null, billing_contact_id: form.billing_contact_id || null };
     if (patch.status === 'completed' && job.status !== 'completed') patch.completed_at = new Date().toISOString();
     const { error } = await getSupabase().from('jobs').update(patch).eq('id', id);
     if (error) { setMsg({ err: true, text: error.message }); return; }
     const changed = {};
     for (const k of Object.keys(form)) {
-      const before = k === 'billing_contact_id' ? job[k] || '' : job[k];
+      const before = k === 'billing_contact_id' || k === 'service' ? job[k] || '' : job[k];
       if (before !== form[k]) changed[k] = { from: before, to: form[k] };
     }
     if (Object.keys(changed).length) await logEvent(changed.status ? 'status' : 'edited', changed);
@@ -280,7 +286,7 @@ function JobInner({ id, staff, token }) {
   // the phone's action bar follows the visit under way, otherwise the next one waiting
   const dockVisit = visitsShown.find((v) => v.status === 'started' && (isOffice || v.tech_id === staff.id)) || otwVisit;
   // phone action button: Start Recheck / Start Sketch / Start Job, which becomes Complete Job once the visit is under way
-  const fabKeys = FAB_HIDDEN_TABS.includes(tab) ? [] : fabActions({ hasSketch: sketches.length > 0, visitStatus: dockVisit?.status || null, docsMissing });
+  const fabKeys = FAB_HIDDEN_TABS.includes(tab) ? [] : fabActions({ hasSketch: sketches.length > 0, visitStatus: dockVisit?.status || null, docsMissing, recheck: hasFeature(service, 'recheck') });
   const fabRun = {
     recheck: () => { openTab('moisture'); setMoistCmd({ type: 'recheck', n: Date.now() }); },
     sketch: () => openTab('sketch'),
@@ -310,7 +316,7 @@ function JobInner({ id, staff, token }) {
       {otwVisit && <OnTheWayModal open={otwOpen} visit={otwVisit} token={token} onClose={() => setOtwOpen(false)} onDone={load} />}
       <p className="sub">
         {isOffice ? <Link href={`/customers/${job.customer.id}`}>{job.customer.display_name}</Link> : job.customer.display_name}
-        {' · '}{JOB_TYPES[job.job_type]}
+        {' · '}{serviceTitle(service) || JOB_TYPES[job.job_type]}
         {isOffice && job.lead_id && <>{' · '}<Link href={`/leads/${job.lead_id}`}>From lead</Link></>}
       </p>
 
@@ -326,7 +332,7 @@ function JobInner({ id, staff, token }) {
         <div className="msg err" role="status">You are looking at a copy saved on this phone (no signal). Photos, notes and sketch changes you make are kept and sent when you have signal. Visit and status buttons need a connection.</div>
       )}
       <div className="tabs" role="tablist">
-        {JOB_TABS.map(([k, label]) => {
+        {shownTabs.map(([k, label]) => {
           const n = k === 'photos' ? photos.filter((p) => !p.archived_at).length : k === 'sketch' ? sketches.length : k === 'updates' ? updates.length : 0;
           return (
             <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => openTab(k)}>
@@ -418,7 +424,7 @@ function JobInner({ id, staff, token }) {
               ))}
             </div>
           )}
-          {isOffice && <CustomerPageCard jobId={id} token={token} staff={staff} jobStatus={job.status} />}
+          {isOffice && hasFeature(service, 'customerPage') && <CustomerPageCard jobId={id} token={token} staff={staff} jobStatus={job.status} />}
         </div>
       )}
 
@@ -433,10 +439,12 @@ function JobInner({ id, staff, token }) {
                 {Object.entries(JOB_STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </div>
-            <div className="field"><label>Type</label>
-              <select value={form.job_type} onChange={set('job_type')}>
-                {Object.entries(JOB_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            <div className="field"><label>Service</label>
+              <select value={form.service} onChange={set('service')}>
+                <option value="">Not set (shows every tool)</option>
+                {Object.entries(SERVICES).map(([k, v]) => <option key={k} value={k}>{v} · {SERVICE_HINTS[k]}</option>)}
               </select>
+              <div className="note">Decides which tabs and tools this job shows. Anything already saved on the job stays saved if you change it.</div>
             </div>
             <div className="field"><label>PO number</label><input value={form.po_number} onChange={set('po_number')} /></div>
             <div className="field"><label>Billing contact</label>
@@ -484,7 +492,8 @@ function JobInner({ id, staff, token }) {
             onViewPhotos={(list) => list.length && openViewer(list, list[0].id)}
             startId={sketchId}
             onActive={setSketchId}
-            onOpenMoisture={() => openTab('moisture')}
+            service={service}
+            onOpenMoisture={hasFeature(service, 'moveToMoisture') ? () => openTab('moisture') : undefined}
           />
         </>
       )}
@@ -501,7 +510,7 @@ function JobInner({ id, staff, token }) {
           onOpenSketch={() => openTab('sketch')}
           jobId={id}
           isOffice={isOffice}
-          jobInfo={{ jobId: id, customer: job.customer.display_name, address: addressLine(job.address), jobNumber: job.job_number, jobType: JOB_TYPES[job.job_type] }}
+          jobInfo={{ jobId: id, customer: job.customer.display_name, address: addressLine(job.address), jobNumber: job.job_number, jobType: serviceTitle(service) || JOB_TYPES[job.job_type] }}
           photos={photos}
           onAddPhoto={addRoomPhoto}
           onViewPhotos={(list) => list.length && openViewer(list, list[0].id)}
@@ -517,6 +526,7 @@ function JobInner({ id, staff, token }) {
 
       {tab === 'updates' && (
         <UpdatesTab
+          service={service}
           jobId={id}
           updates={updates}
           photos={photos}
@@ -541,6 +551,7 @@ function JobInner({ id, staff, token }) {
       {tab === 'estimate' && (
         <>
       <EstimateCard
+        service={service}
         scope={{ jobId: id }}
         open={!['closed', 'cancelled'].includes(job.status)}
         staff={staff}

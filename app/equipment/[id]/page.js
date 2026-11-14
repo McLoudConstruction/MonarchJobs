@@ -6,8 +6,7 @@ import { useParams } from 'next/navigation';
 import AuthGate from '@/components/AuthGate';
 import AssetLabelDialog from '@/components/AssetLabelDialog';
 import { getSupabase } from '@/lib/supabaseClient';
-import { ASSET_STATUS, assetTag, cleanAssetForm } from '@/lib/assets';
-import { EQUIPMENT_ORDER, EQUIPMENT_TYPES } from '@/lib/equipment';
+import { ASSET_STATUS, assetTag, cleanAssetForm, ASSET_ORDER, ASSET_TYPES, NOTE_KINDS, cleanEquipmentNote, isOpenIssue } from '@/lib/assets';
 import { fmtDateTime } from '@/lib/format';
 
 // The page a label's QR code opens.
@@ -20,6 +19,8 @@ function AssetInner({ staff }) {
   const [form, setForm] = useState(null);
   const [msg, setMsg] = useState(null);
   const [printing, setPrinting] = useState(false);
+  const [notes, setNotes] = useState([]);
+  const [noteForm, setNoteForm] = useState(null);
 
   const load = useCallback(async () => {
     const sb = getSupabase();
@@ -34,6 +35,29 @@ function AssetInner({ staff }) {
     } else setJob(null);
   }, [id]);
   useEffect(() => { load(); }, [load]);
+
+  // Damage and not-working notes; empty (and the form hidden by the error) until migration 016 has been run.
+  const [notesReady, setNotesReady] = useState(true);
+  const loadNotes = useCallback(async () => {
+    const { data, error } = await getSupabase().from('equipment_notes').select('*').eq('asset_id', id).order('created_at', { ascending: false }).limit(50);
+    if (error) { setNotesReady(false); return; }
+    setNotes(data || []);
+  }, [id]);
+  useEffect(() => { loadNotes(); }, [loadNotes]);
+
+  async function addNote(e) {
+    e.preventDefault();
+    const c = cleanEquipmentNote(noteForm);
+    if (c.error) { setMsg({ err: true, text: c.error }); return; }
+    const { error } = await getSupabase().from('equipment_notes').insert({ asset_id: id, job_id: a?.job_id || null, created_by: staff.id, ...c.value });
+    if (error) { setMsg({ err: true, text: error.message }); return; }
+    setNoteForm(null); setMsg({ text: 'Note saved.' }); loadNotes();
+  }
+  async function markFixed(n) {
+    const { error } = await getSupabase().from('equipment_notes').update({ resolved_at: new Date().toISOString(), resolved_by: staff.id }).eq('id', n.id);
+    if (error) { setMsg({ err: true, text: error.message }); return; }
+    loadNotes();
+  }
 
   async function setStatus(status) {
     const patch = status === 'retired' ? { status, retired_at: new Date().toISOString(), job_id: null, unit_id: null } : { status, retired_at: null, ...(status !== 'on_job' ? { job_id: null, unit_id: null } : {}) };
@@ -62,7 +86,7 @@ function AssetInner({ staff }) {
       </div>
       {msg && <div className={`msg${msg.err ? ' err' : ''}`}>{msg.text}</div>}
       <div className="card">
-        <div className="title">{EQUIPMENT_TYPES[a.type]?.label || 'Equipment'}</div>
+        <div className="title">{ASSET_TYPES[a.type]?.label || 'Equipment'}</div>
         <div className="meta">{[a.label, a.serial && `S/N ${a.serial}`, a.ppd && `${a.ppd} pints per day`].filter(Boolean).join(' · ') || 'No model entered'}</div>
         {a.notes && <p>{a.notes}</p>}
         {a.status === 'on_job' && (job
@@ -80,10 +104,32 @@ function AssetInner({ staff }) {
         </div>
         {a.status === 'available' && <p className="hint">To put it on a job, open the job's Moisture tab, tap the machine on the plan and choose this asset number under Asset.</p>}
       </div>
+      {notesReady && (
+        <div className="card">
+          <h3>Damage and problems</h3>
+          {notes.length === 0 && <p className="muted">Nothing logged for this machine.</p>}
+          {notes.map((n) => (
+            <div key={n.id} style={{ padding: '6px 0', borderTop: '1px solid var(--line, #ddd)' }}>
+              <div><strong>{NOTE_KINDS[n.kind] || 'Note'}</strong>{isOpenIssue(n) && <span className="badge as-repair"> Open</span>}{n.resolved_at && <span className="muted"> · fixed {fmtDateTime(n.resolved_at)}</span>}</div>
+              <div>{n.note}</div>
+              <div className="muted">{fmtDateTime(n.created_at)}</div>
+              {isOpenIssue(n) && <button className="secondary small" onClick={() => markFixed(n)}>Mark fixed</button>}
+            </div>
+          ))}
+          {!noteForm && <button className="secondary" style={{ marginTop: 8 }} onClick={() => setNoteForm({ kind: 'damage', note: '' })}>Report damage or a problem</button>}
+          {noteForm && (
+            <form onSubmit={addNote} style={{ marginTop: 8 }}>
+              <label className="field">What is it?<select value={noteForm.kind} onChange={(e) => setNoteForm({ ...noteForm, kind: e.target.value })}>{Object.entries(NOTE_KINDS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
+              <label className="field">Details<textarea value={noteForm.note} maxLength={500} onChange={(e) => setNoteForm({ ...noteForm, note: e.target.value })} placeholder="What is wrong, where, and what you saw" /></label>
+              <div className="row"><button className="primary">Save</button><button type="button" className="secondary" onClick={() => setNoteForm(null)}>Cancel</button></div>
+            </form>
+          )}
+        </div>
+      )}
       {form && (
         <form className="card asset-form" onSubmit={save}>
           <h3>Edit</h3>
-          <label className="field">Type<select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>{EQUIPMENT_ORDER.map((t) => <option key={t} value={t}>{EQUIPMENT_TYPES[t].label}</option>)}</select></label>
+          <label className="field">Type<select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>{ASSET_ORDER.map((t) => <option key={t} value={t}>{ASSET_TYPES[t].label}</option>)}</select></label>
           <label className="field">Make and model<input value={form.label} maxLength={60} onChange={(e) => setForm({ ...form, label: e.target.value })} /></label>
           <label className="field">Serial number<input value={form.serial} maxLength={60} onChange={(e) => setForm({ ...form, serial: e.target.value })} /></label>
           <label className="field">Pints per day (rating)<input inputMode="numeric" value={form.ppd} onChange={(e) => setForm({ ...form, ppd: e.target.value })} /></label>

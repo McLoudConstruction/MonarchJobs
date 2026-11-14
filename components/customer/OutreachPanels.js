@@ -25,7 +25,15 @@ async function loadAllCustomers() {
     out.push(...(data || []));
     if (!data || data.length < 1000) break;
   }
-  return out;
+  // Postcards are for carpet customers; anyone whose only finished work was restoration is left out.
+  const carpet = new Set();
+  for (let from = 0; from < 40000; from += 1000) {
+    const { data, error } = await sb.from('jobs').select('customer_id').eq('job_type', 'floor_cleaning').in('status', ['completed', 'closed']).order('id').range(from, from + 999);
+    if (error) throw new Error(error.message);
+    for (const j of data || []) carpet.add(j.customer_id);
+    if (!data || data.length < 1000) break;
+  }
+  return out.filter((c) => carpet.has(c.id));
 }
 
 export function PlansDue() {
@@ -110,7 +118,7 @@ export function MailingList() {
       {open && (
         <div className="card" style={{ marginTop: 8 }}>
           <h2>Postcard mailing list</h2>
-          <p className="hint">Past customers last serviced between these ages. Customers marked “no reminders or mailings” and customers with no street address are left out.</p>
+          <p className="hint">Past carpet customers last serviced between these ages. Customers marked “no reminders or mailings” and customers with no street address are left out.</p>
           <div className="row" style={{ alignItems: 'flex-end' }}>
             <div className="field" style={{ width: 130, marginBottom: 0 }}><label>From months ago</label><input type="number" min="0" max="120" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
             <div className="field" style={{ width: 130, marginBottom: 0 }}><label>To months ago</label><input type="number" min="0" max="120" value={to} onChange={(e) => setTo(e.target.value)} /></div>

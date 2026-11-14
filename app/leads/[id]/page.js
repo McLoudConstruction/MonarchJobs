@@ -11,6 +11,7 @@ import AppointmentPicker, { defaultAppointment } from '@/components/AppointmentP
 import { getSupabase } from '@/lib/supabaseClient';
 import { fromLocalInput, fmtDateTime, LEAD_STATUS, JOB_TYPES, leadDisplayName, addressLine } from '@/lib/format';
 import { displayPhone, telHref } from '@/lib/phone';
+import { serviceOf } from '@/lib/services';
 import { kindOf, finishLead, intakeHighlights, PRIORITIES, RESTORATION_TYPES } from '@/lib/leadIntake';
 import { staffName, displayNameFor } from '@/lib/userDisplay';
 
@@ -302,6 +303,7 @@ function LeadInner({ id, staff, token }) {
       {tab === 'estimate' && (
         <div className="lead-tab">
           <EstimateCard
+            service={serviceOf(lead)}
             scope={{ leadId: id }}
             open={open}
             staff={staff}
