@@ -7,12 +7,28 @@ import { apiFetch } from '@/lib/useAuth';
 const FIELDS = 'aftercare_auto,aftercare_default,rebook_enabled,rebook_months,rebook_message,plan_offer_enabled,plan_offer_days,plan_offer_message,plan_remind_enabled,plan_remind_days,plan_remind_message';
 
 // Owner: after-job care instructions, and reminders to past customers (rebooking, plan offers, plan reminders).
+// A collapsed row: click the title to open its settings. The status on the right follows the checkbox inside.
+function OutreachSection({ title, enabled, open, onToggle, children }) {
+  return (
+    <section className={`out-sec${open ? ' open' : ''}`}>
+      <button type="button" className="out-sec-head" aria-expanded={open} onClick={onToggle}>
+        <span className="out-sec-chev" aria-hidden="true">&#9656;</span>
+        <span className="out-sec-title">{title}</span>
+        <span className={`out-status ${enabled ? 'on' : 'off'}`}>{enabled ? 'Enabled' : 'Disabled'}</span>
+      </button>
+      {open && <div className="out-sec-body">{children}</div>}
+    </section>
+  );
+}
+
 export default function RemindersSection({ token }) {
   const [f, setF] = useState(null);
   const [msg, setMsg] = useState(null);
   const [preview, setPreview] = useState(null);
   const [busy, setBusy] = useState(false);
   const [missing, setMissing] = useState(false);
+  const [openSec, setOpenSec] = useState(null); // one section open at a time
+  const tog = (k) => () => setOpenSec((o) => (o === k ? null : k));
 
   useEffect(() => {
     getSupabase().from('settings').select(FIELDS).eq('id', 1).maybeSingle().then(({ data, error }) => {
@@ -60,11 +76,11 @@ export default function RemindersSection({ token }) {
 
   return (
     <form className="card" onSubmit={save}>
-      <h2>Reminders and aftercare</h2>
+      <h2>Outreach</h2>
       <p className="hint">Messages go by text and email to customers who have a phone or email on file. Every message has a way to stop reminders, and customers who stop are never contacted or mailed. Texting must be set up in Integrations.</p>
       {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
 
-      <h3>After a job</h3>
+      <OutreachSection title="After a job" enabled={!!f.aftercare_auto} open={openSec === 'after'} onToggle={tog('after')}>
       <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
         <input type="checkbox" checked={f.aftercare_auto} onChange={set('aftercare_auto')} />
         Send care instructions and the customer page link when a job is finished
@@ -74,7 +90,8 @@ export default function RemindersSection({ token }) {
       </div>
       <p className="hint">Each service can also have its own aftercare text and drying time in the Price list. Nothing is sent after a job unless there is care text or a drying time to share.</p>
 
-      <h3 style={{ marginTop: 20 }}>Rebooking reminders</h3>
+      </OutreachSection>
+      <OutreachSection title="Rebooking reminders" enabled={!!f.rebook_enabled} open={openSec === 'rebook'} onToggle={tog('rebook')}>
       <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
         <input type="checkbox" checked={f.rebook_enabled} onChange={set('rebook_enabled')} />
         Remind past carpet-cleaning customers to book again
@@ -82,7 +99,8 @@ export default function RemindersSection({ token }) {
       <div className="field" style={{ maxWidth: 300 }}><label>Months since their last cleaning</label><input value={f.rebook_months} onChange={set('rebook_months')} placeholder="3, 6, 12, 18, 24" /></div>
       {wording('rebook_message', 'Wording (optional)')}
 
-      <h3 style={{ marginTop: 20 }}>Regular plan offer</h3>
+      </OutreachSection>
+      <OutreachSection title="Regular plan offer" enabled={!!f.plan_offer_enabled} open={openSec === 'offer'} onToggle={tog('offer')}>
       <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
         <input type="checkbox" checked={f.plan_offer_enabled} onChange={set('plan_offer_enabled')} />
         Offer a regular cleaning plan to one-time customers
@@ -90,7 +108,8 @@ export default function RemindersSection({ token }) {
       <div className="field" style={{ maxWidth: 300 }}><label>Days after their cleaning</label><input type="number" min="7" max="365" value={f.plan_offer_days} onChange={set('plan_offer_days')} /></div>
       {wording('plan_offer_message', 'Wording (optional)')}
 
-      <h3 style={{ marginTop: 20 }}>Plan reminders</h3>
+      </OutreachSection>
+      <OutreachSection title="Plan reminders" enabled={!!f.plan_remind_enabled} open={openSec === 'remind'} onToggle={tog('remind')}>
       <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
         <input type="checkbox" checked={f.plan_remind_enabled} onChange={set('plan_remind_enabled')} />
         Remind customers who have a plan before their visit is due
@@ -98,6 +117,7 @@ export default function RemindersSection({ token }) {
       <div className="field" style={{ maxWidth: 300 }}><label>Days before it is due</label><input type="number" min="1" max="60" value={f.plan_remind_days} onChange={set('plan_remind_days')} /></div>
       {wording('plan_remind_message', 'Wording (optional)')}
 
+      </OutreachSection>
       <div className="row" style={{ marginTop: 14 }}>
         <button className="primary">Save</button>
         <button type="button" className="secondary" disabled={busy} onClick={runPreview}>{busy ? 'Checking...' : 'Who would get a reminder today?'}</button>

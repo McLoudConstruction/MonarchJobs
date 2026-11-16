@@ -15,7 +15,7 @@ const TABS = [
   { id: 'business', label: 'Business' },
   { id: 'users', label: 'Users' },
   { id: 'prices', label: 'Price list' },
-  { id: 'reminders', label: 'Reminders' },
+  { id: 'reminders', label: 'Outreach' },
   { id: 'equipment', label: 'Equipment' },
   { id: 'integrations', label: 'Integrations' },
 ];

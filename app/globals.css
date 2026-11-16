@@ -2188,3 +2188,15 @@ button.danger-link{ background: none; border: 0; padding: 6px 4px; color: var(--
 /* Checkboxes and radios keep their own size; the global input width made them stretch across flex rows */
 input[type="checkbox"], input[type="radio"]{ width: auto; flex: 0 0 auto; padding: 0; margin: 0; accent-color: var(--rust, #0f766e); }
 label:has(> input[type="checkbox"]), label:has(> input[type="radio"]){ margin: 0; color: var(--ink); font-size: 13.5px; }
+
+/* Settings > Outreach: collapsed sections with a status on the right */
+.out-sec{ border: 1px solid var(--panel-line); border-radius: 8px; margin-top: 10px; background: var(--card-bg); }
+.out-sec-head{ all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 8px; width: 100%; padding: 12px 14px; cursor: pointer; }
+.out-sec-head:focus-visible{ outline: 2px solid var(--rust, #0f766e); outline-offset: -2px; border-radius: 8px; }
+.out-sec-chev{ display: inline-block; transition: transform .15s; color: var(--ink-soft); }
+.out-sec.open .out-sec-chev{ transform: rotate(90deg); }
+.out-sec-title{ flex: 1; font-weight: 600; font-size: 14px; color: var(--ink); }
+.out-status{ font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; }
+.out-status.on{ background: var(--ok-bg, #dcfce7); color: var(--ok, #15803d); }
+.out-status.off{ background: var(--bad-bg, #fee2e2); color: var(--danger, #b91c1c); }
+.out-sec-body{ padding: 2px 14px 14px; border-top: 1px solid var(--line); }
