@@ -2184,3 +2184,7 @@ button.danger-link{ background: none; border: 0; padding: 6px 4px; color: var(--
 .cust-table .filter-row th{ position: static; }
 
 .activity-tabs{ margin-top: 4px; }
+
+/* Checkboxes and radios keep their own size; the global input width made them stretch across flex rows */
+input[type="checkbox"], input[type="radio"]{ width: auto; flex: 0 0 auto; padding: 0; margin: 0; accent-color: var(--rust, #0f766e); }
+label:has(> input[type="checkbox"]), label:has(> input[type="radio"]){ margin: 0; color: var(--ink); font-size: 13.5px; }
