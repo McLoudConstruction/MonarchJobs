@@ -6,6 +6,9 @@ import { useParams, useRouter } from 'next/navigation';
 import AuthGate from '@/components/AuthGate';
 import LeadForm, { pickLeadFields } from '@/components/LeadForm';
 import EstimateCard from '@/components/EstimateCard';
+import ThreadPanel from '@/components/chat/ThreadPanel';
+import { useChatCenter } from '@/lib/useChatInbox';
+import { countForTarget } from '@/lib/chat';
 import PopupModal from '@/components/PopupModal';
 import AppointmentPicker, { defaultAppointment } from '@/components/AppointmentPicker';
 import { getSupabase } from '@/lib/supabaseClient';
@@ -29,6 +32,7 @@ const LEAD_TABS = [
   ['overview', 'Overview'],
   ['details', 'Details'],
   ['estimate', 'Estimate'],
+  ['thread', 'Chat'],
   ['history', 'History'],
 ];
 const tabFromHash = () => {
@@ -37,6 +41,7 @@ const tabFromHash = () => {
 };
 
 function LeadInner({ id, staff, token }) {
+  const chatRows = useChatCenter().rows;
   const router = useRouter();
   const [lead, setLead] = useState(null);
   const [form, setForm] = useState(null);
@@ -214,6 +219,7 @@ function LeadInner({ id, staff, token }) {
           <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => openTab(k)}>
             {label}
             {k === 'details' && dirty && <span className="tab-count" title="Unsaved changes">!</span>}
+            {k === 'thread' && countForTarget(chatRows, { leadId: id }) > 0 && <span className="tab-count">{countForTarget(chatRows, { leadId: id })}</span>}
             {k === 'history' && events.length > 0 && <span className="tab-count">{events.length}</span>}
           </button>
         ))}
@@ -313,6 +319,8 @@ function LeadInner({ id, staff, token }) {
           />
         </div>
       )}
+
+      {tab === 'thread' && <div className="lead-tab"><ThreadPanel kind="lead" refId={id} staff={staff} /></div>}
 
       {tab === 'history' && (
         <div className="lead-tab">

@@ -17,6 +17,9 @@ import MoistureTab from '@/components/job/MoistureTab';
 import InspectionTab from '@/components/job/InspectionTab';
 import CustomerPageCard from '@/components/job/CustomerPageCard';
 import UpdatesTab from '@/components/job/UpdatesTab';
+import ThreadPanel from '@/components/chat/ThreadPanel';
+import { useChatCenter } from '@/lib/useChatInbox';
+import { countForTarget } from '@/lib/chat';
 import JobFab from '@/components/job/JobFab';
 import PhotoViewer from '@/components/job/PhotoViewer';
 import { UploadStatus } from '@/components/job/PhotoUi';
@@ -45,6 +48,7 @@ const JOB_TABS = [
   ['moisture', 'Moisture'],
   ['inspection', 'Inspection'],
   ['updates', 'Updates'],
+  ['thread', 'Chat'],
   ['estimate', 'Estimate'],
   ['history', 'History'],
 ];
@@ -63,6 +67,7 @@ const VISIT_STATUS = { scheduled: 'Scheduled', on_the_way: 'On the way', started
 
 function JobInner({ id, staff, token }) {
   const isOffice = staff.role !== 'tech';
+  const chatRows = useChatCenter().rows;
   const [job, setJob] = useState(null);
   const [visits, setVisitsRaw] = useState([]);
   const [waitingOps, setWaitingOps] = useState([]);
@@ -333,7 +338,7 @@ function JobInner({ id, staff, token }) {
       )}
       <div className="tabs" role="tablist">
         {shownTabs.map(([k, label]) => {
-          const n = k === 'photos' ? photos.filter((p) => !p.archived_at).length : k === 'sketch' ? sketches.length : k === 'updates' ? updates.length : 0;
+          const n = k === 'photos' ? photos.filter((p) => !p.archived_at).length : k === 'sketch' ? sketches.length : k === 'updates' ? updates.length : k === 'thread' ? countForTarget(chatRows, { jobId: id }) : 0;
           return (
             <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => openTab(k)}>
               {label}{n > 0 && <span className="tab-count">{n}</span>}
@@ -547,6 +552,8 @@ function JobInner({ id, staff, token }) {
           onCommandDone={() => setUpdCmd(null)}
         />
       )}
+
+      {tab === 'thread' && <ThreadPanel kind="job" refId={id} staff={staff} />}
 
       {tab === 'estimate' && (
         <>

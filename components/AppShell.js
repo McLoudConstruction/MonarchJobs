@@ -7,11 +7,12 @@ import { usePathname } from 'next/navigation';
 import { getSupabase } from '@/lib/supabaseClient';
 import { useTheme } from '@/lib/useTheme';
 import { initialsFor, displayNameFor } from '@/lib/userDisplay';
-import { DashboardIcon, SalesIcon, ScheduleIcon, JobDashboardIcon, SettingsIcon, SunIcon, MoonIcon, UserIcon, SignOutIcon, MoreIcon, BellIcon, EquipmentIcon } from '@/components/icons';
+import { DashboardIcon, SalesIcon, ScheduleIcon, JobDashboardIcon, SettingsIcon, SunIcon, MoonIcon, UserIcon, SignOutIcon, MoreIcon, BellIcon, EquipmentIcon, ChatIcon } from '@/components/icons';
 import BottomSheet from '@/components/BottomSheet';
 import JobJumpSearch from '@/components/JobJumpSearch';
 import { logoUrl } from '@/lib/branding';
 import { NotificationsProvider, useNotificationCenter } from '@/lib/useNotifications';
+import { ChatInboxProvider, useChatCenter } from '@/lib/useChatInbox';
 import { readPushStatus, resyncPush } from '@/lib/push';
 
 const ALL = ['owner', 'office', 'tech'];
@@ -28,6 +29,7 @@ const NAV = [
   { href: '/customers', label: 'Customers', icon: UserIcon, roles: OFFICE },
   { href: '/equipment', label: 'Equipment', icon: EquipmentIcon, roles: ALL },
   // sideOnly: phones reach it from the bell in the top bar
+  { href: '/inbox', label: 'Inbox', icon: ChatIcon, roles: ALL, sideOnly: true },
   { href: '/notifications', label: 'Notifications', icon: BellIcon, roles: ALL, sideOnly: true },
 ];
 
@@ -73,7 +75,9 @@ const isActive = (item, pathname) => pathname === item.href || pathname.startsWi
 export default function AppShell(props) {
   return (
     <NotificationsProvider userId={props.staff.id}>
-      <AppShellInner {...props} />
+      <ChatInboxProvider userId={props.staff.id}>
+        <AppShellInner {...props} />
+      </ChatInboxProvider>
     </NotificationsProvider>
   );
 }
@@ -81,6 +85,7 @@ export default function AppShell(props) {
 function AppShellInner({ staff, signOut, children }) {
   const pathname = usePathname() || '';
   const { unread } = useNotificationCenter();
+  const { unread: chatUnread } = useChatCenter();
   const [nudge, setNudge] = useState(null);
   const { theme, setTheme } = useTheme();
   const [ready, setReady] = useState(0);
@@ -158,6 +163,7 @@ function AppShellInner({ staff, signOut, children }) {
               <n.icon className="side-icon" />
               <span>{n.label}</span>
               {n.href === '/leads' && ready > 0 && <span className="nav-count" title="Approved estimates waiting to be scheduled">{ready}</span>}
+              {n.href === '/inbox' && chatUnread > 0 && <span className="nav-count" title="Unread chats and changes waiting for your OK">{chatUnread > 99 ? '99+' : chatUnread}</span>}
               {n.href === '/notifications' && unread > 0 && <span className="nav-count" title="Unread notifications">{unread > 99 ? '99+' : unread}</span>}
             </Link>
           ))}
@@ -199,6 +205,10 @@ function AppShellInner({ staff, signOut, children }) {
       <div className="shell-topbar shell-topbar-mobile">
         <div className="shell-logo"><Brand brand={brand} /></div>
         <div className="shell-topbar-actions">
+          <Link href="/inbox" className="shell-topbar-icon-btn chat-btn" aria-label={`Inbox${chatUnread ? `, ${chatUnread} waiting` : ''}`}>
+            <ChatIcon />
+            {chatUnread > 0 && <span className="shell-topbar-count">{chatUnread > 99 ? '99+' : chatUnread}</span>}
+          </Link>
           <Link href="/notifications" className="shell-topbar-icon-btn" aria-label={`Notifications${unread ? `, ${unread} unread` : ''}`}>
             <BellIcon />
             {unread > 0 && <span className="shell-topbar-count">{unread > 99 ? '99+' : unread}</span>}

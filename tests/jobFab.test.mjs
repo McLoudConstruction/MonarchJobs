@@ -27,5 +27,5 @@ test('documentation tables missing: only Start Job is offered', () => {
 });
 
 test('hidden on the sketch and moisture tabs', () => {
-  assert.deepEqual(FAB_HIDDEN_TABS, ['sketch', 'moisture']);
+  assert.deepEqual(FAB_HIDDEN_TABS, ['sketch', 'moisture', 'thread']);
 });

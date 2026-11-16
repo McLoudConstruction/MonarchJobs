@@ -5,7 +5,7 @@ import { applyMention, filterPeople, mentionQuery, MAX_COMMENT_TEXT } from '@/li
 
 // A text box where typing "@" lists the team, filtered as you type. Pick with the arrow keys + Enter/Tab, or tap a name.
 // Ctrl/Cmd+Enter posts. `people` is [{ id, name, email }].
-export default function MentionBox({ people, value, onChange, onSubmit, placeholder, rows = 3, autoFocus = false, id }) {
+export default function MentionBox({ people, value, onChange, onSubmit, placeholder, rows = 3, autoFocus = false, id, maxLength = MAX_COMMENT_TEXT }) {
   const ref = useRef(null);
   const [caret, setCaret] = useState(0);
   const [active, setActive] = useState(0);
@@ -34,7 +34,7 @@ export default function MentionBox({ people, value, onChange, onSubmit, placehol
   return (
     <div className="mention-box">
       <textarea
-        ref={ref} id={id} rows={rows} autoFocus={autoFocus} maxLength={MAX_COMMENT_TEXT} value={value} placeholder={placeholder}
+        ref={ref} id={id} rows={rows} autoFocus={autoFocus} maxLength={maxLength} value={value} placeholder={placeholder}
         onChange={(e) => { onChange(e.target.value); track(e); setActive(0); setDismissed(null); }}
         onKeyUp={track} onClick={track} onSelect={track}
         onKeyDown={(e) => {

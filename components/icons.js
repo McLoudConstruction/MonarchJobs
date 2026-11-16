@@ -152,3 +152,12 @@ export function BellIcon(props) {
     </svg>
   );
 }
+
+export function ChatIcon(props) {
+  return (
+    <svg {...common} {...props} aria-hidden="true">
+      <path d="M3.5 4.5h13a1 1 0 0 1 1 1v7.5a1 1 0 0 1-1 1H9.5l-3.5 3v-3H3.5a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1z" />
+      <path d="M6.5 8h7M6.5 10.8h4.5" />
+    </svg>
+  );
+}
