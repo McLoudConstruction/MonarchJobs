@@ -2163,3 +2163,24 @@ button.danger-link{ background: none; border: 0; padding: 6px 4px; color: var(--
 .wizard .lead-form .card h2{ font-size: 13px; letter-spacing: 0.06em; margin-bottom: 10px; }
 .wizard-actions{ border-top: 1px solid var(--line); padding-top: 12px; margin-top: 8px; }
 @media (max-width: 700px){ .wizard-steps li span:not(.wizard-num){ display: none; } .wizard-steps li.current span:not(.wizard-num){ display: inline; } }
+
+/* Equipment: compact add form in a popup, search + type on one line */
+.eq-add{ display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+.eq-add .field{ margin: 0; }
+.eq-add .eq-wide{ grid-column: 1 / -1; margin: 0; }
+.eq-add input, .eq-add select{ min-height: 40px; font-size: 16px; }
+.eq-actions{ display: flex; justify-content: flex-end; gap: 8px; }
+.eq-toolbar{ display: flex; gap: 8px; }
+.eq-toolbar input{ flex: 1; min-width: 0; }
+.eq-toolbar select{ flex: 0 0 auto; max-width: 45%; }
+@media (max-width: 480px){ .eq-add{ grid-template-columns: 1fr; } }
+
+/* Customers table: header sort buttons and a filter row under the headings */
+.th-sort{ all: unset; cursor: pointer; font: inherit; text-transform: inherit; letter-spacing: inherit; color: inherit; }
+.filter-row th{ padding: 4px 6px; background: var(--card-bg); text-transform: none; letter-spacing: 0; }
+.filter-row input, .filter-row select{ width: 100%; min-height: 30px; padding: 3px 6px; font-size: 13px; box-sizing: border-box; }
+.cust-table tbody tr:focus-visible{ outline: 2px solid var(--brand, #2563eb); outline-offset: -2px; }
+.cust-table td{ max-width: 260px; }
+.cust-table .filter-row th{ position: static; }
+
+.activity-tabs{ margin-top: 4px; }

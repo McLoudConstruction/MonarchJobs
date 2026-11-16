@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation';
 import { getSupabase } from '@/lib/supabaseClient';
 import { useTheme } from '@/lib/useTheme';
 import { initialsFor, displayNameFor } from '@/lib/userDisplay';
-import { DashboardIcon, SalesIcon, ScheduleIcon, JobDashboardIcon, SettingsIcon, SunIcon, MoonIcon, UserIcon, SignOutIcon, MoreIcon, BellIcon, EquipmentIcon, ChatIcon } from '@/components/icons';
+import { DashboardIcon, SalesIcon, ScheduleIcon, JobDashboardIcon, SettingsIcon, SunIcon, MoonIcon, UserIcon, SignOutIcon, MoreIcon, BellIcon, EquipmentIcon } from '@/components/icons';
 import BottomSheet from '@/components/BottomSheet';
 import JobJumpSearch from '@/components/JobJumpSearch';
 import { logoUrl } from '@/lib/branding';
@@ -29,8 +29,7 @@ const NAV = [
   { href: '/customers', label: 'Customers', icon: UserIcon, roles: OFFICE },
   { href: '/equipment', label: 'Equipment', icon: EquipmentIcon, roles: ALL },
   // sideOnly: phones reach it from the bell in the top bar
-  { href: '/inbox', label: 'Inbox', icon: ChatIcon, roles: ALL, sideOnly: true },
-  { href: '/notifications', label: 'Notifications', icon: BellIcon, roles: ALL, sideOnly: true },
+  { href: '/activity', label: 'Activity', icon: BellIcon, roles: ALL, sideOnly: true },
 ];
 
 const NUDGE_KEY = 'mj_push_nudge';
@@ -86,6 +85,7 @@ function AppShellInner({ staff, signOut, children }) {
   const pathname = usePathname() || '';
   const { unread } = useNotificationCenter();
   const { unread: chatUnread } = useChatCenter();
+  const activityCount = (unread || 0) + (chatUnread || 0);
   const [nudge, setNudge] = useState(null);
   const { theme, setTheme } = useTheme();
   const [ready, setReady] = useState(0);
@@ -163,8 +163,7 @@ function AppShellInner({ staff, signOut, children }) {
               <n.icon className="side-icon" />
               <span>{n.label}</span>
               {n.href === '/leads' && ready > 0 && <span className="nav-count" title="Approved estimates waiting to be scheduled">{ready}</span>}
-              {n.href === '/inbox' && chatUnread > 0 && <span className="nav-count" title="Unread chats and changes waiting for your OK">{chatUnread > 99 ? '99+' : chatUnread}</span>}
-              {n.href === '/notifications' && unread > 0 && <span className="nav-count" title="Unread notifications">{unread > 99 ? '99+' : unread}</span>}
+              {n.href === '/activity' && activityCount > 0 && <span className="nav-count" title="Unread alerts, chats and changes waiting for your OK">{activityCount > 99 ? '99+' : activityCount}</span>}
             </Link>
           ))}
         </nav>
@@ -205,13 +204,9 @@ function AppShellInner({ staff, signOut, children }) {
       <div className="shell-topbar shell-topbar-mobile">
         <div className="shell-logo"><Brand brand={brand} /></div>
         <div className="shell-topbar-actions">
-          <Link href="/inbox" className="shell-topbar-icon-btn chat-btn" aria-label={`Inbox${chatUnread ? `, ${chatUnread} waiting` : ''}`}>
-            <ChatIcon />
-            {chatUnread > 0 && <span className="shell-topbar-count">{chatUnread > 99 ? '99+' : chatUnread}</span>}
-          </Link>
-          <Link href="/notifications" className="shell-topbar-icon-btn" aria-label={`Notifications${unread ? `, ${unread} unread` : ''}`}>
+          <Link href="/activity" className="shell-topbar-icon-btn" aria-label={`Activity${activityCount ? `, ${activityCount} waiting` : ''}`}>
             <BellIcon />
-            {unread > 0 && <span className="shell-topbar-count">{unread > 99 ? '99+' : unread}</span>}
+            {activityCount > 0 && <span className="shell-topbar-count">{activityCount > 99 ? '99+' : activityCount}</span>}
           </Link>
         </div>
       </div>
@@ -259,10 +254,10 @@ function AppShellInner({ staff, signOut, children }) {
 
         <div className="shell-content">
           <div className="page">
-            {nudge && pathname !== '/notifications' && (
+            {nudge && pathname !== '/activity' && (
               <div className="push-nudge" role="status">
                 <span>{nudge === 'needs_install' ? 'Add MonarchJobs to your Home Screen to get notifications.' : 'Get notified when something needs you, even when the app is closed.'}</span>
-                <Link href="/notifications" onClick={dismissNudge}>Set up</Link>
+                <Link href="/activity" onClick={dismissNudge}>Set up</Link>
                 <button type="button" aria-label="Dismiss" onClick={dismissNudge}>&times;</button>
               </div>
             )}

@@ -14,7 +14,7 @@ function DashboardInner({ staff }) {
   const [today, setToday] = useState([]);
   const [newLeads, setNewLeads] = useState([]);
   const [ready, setReady] = useState([]);
-  const [unassigned, setUnassigned] = useState(0);
+  const [unassigned, setUnassigned] = useState({ count: 0, jobIds: [] });
   const [flagged, setFlagged] = useState(0);
 
   useEffect(() => {
@@ -34,8 +34,9 @@ function DashboardInner({ staff }) {
         .then(({ data }) => setNewLeads(data || []));
       sb.from('leads').select('id,name,first_name,last_name,company_name,phone,service_requested,accepted_at,preferred_times').eq('status', 'accepted').order('accepted_at').limit(10)
         .then(({ data }) => setReady(data || []));
-      sb.from('job_visits').select('id', { count: 'exact', head: true }).is('tech_id', null).eq('status', 'scheduled')
-        .gte('starts_at', from.toISOString()).then(({ count }) => setUnassigned(count || 0));
+      sb.from('job_visits').select('id,job_id', { count: 'exact' }).is('tech_id', null).eq('status', 'scheduled')
+        .gte('starts_at', from.toISOString()).limit(200)
+        .then(({ data, count }) => setUnassigned({ count: count || 0, jobIds: [...new Set((data || []).map((v) => v.job_id).filter(Boolean))] }));
     }
   }, [isOffice, staff.id]);
 
@@ -50,10 +51,16 @@ function DashboardInner({ staff }) {
         {isOffice && <Link href="/leads" className="stat-tile"><div className="stat-num">{newLeads.length}</div><div className="stat-label">New leads</div></Link>}
       </div>
 
-      {isOffice && (flagged > 0 || unassigned > 0) && (
+      {isOffice && (flagged > 0 || unassigned.count > 0) && (
         <div className="banner flag">
           {flagged > 0 && <div>{flagged} visits today overlap for the same tech.</div>}
-          {unassigned > 0 && <div>{unassigned} upcoming visits have no tech assigned.</div>}
+          {unassigned.count > 0 && (
+            <div>
+              <Link href={unassigned.jobIds.length === 1 ? `/jobs/${unassigned.jobIds[0]}` : '/jobs?unassigned=1'} style={{ color: 'inherit', textDecoration: 'underline' }}>
+                {unassigned.count} upcoming visit{unassigned.count === 1 ? ' has' : 's have'} no tech assigned{unassigned.jobIds.length === 1 ? ' (open job)' : ' (see jobs)'} &rsaquo;
+              </Link>
+            </div>
+          )}
         </div>
       )}
 

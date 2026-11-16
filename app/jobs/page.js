@@ -20,11 +20,12 @@ function JobsInner({ staff }) {
   const [tab, setTab] = useState('active');
   const [q, setQ] = useState('');
   const [rows, setRows] = useState([]);
+  const [noTech, setNoTech] = useState(false); // from the dashboard banner: jobs with an upcoming visit that has no tech
   const isOffice = staff.role !== 'tech';
 
   const load = useCallback(async () => {
     let query = getSupabase().from('jobs')
-      .select('id,job_number,status,job_type,po_number,customer:customers(display_name),address:addresses(street,city),visits:job_visits(starts_at,status)')
+      .select('id,job_number,status,job_type,po_number,customer:customers(display_name),address:addresses(street,city),visits:job_visits(starts_at,status,tech_id)')
       .order('created_at', { ascending: false }).limit(200);
     if (tab === 'active') query = query.in('status', ['booked', 'on_the_way', 'in_progress']);
     else if (tab === 'in_progress') query = query.in('status', ['on_the_way', 'in_progress']);
@@ -34,9 +35,14 @@ function JobsInner({ staff }) {
   }, [tab]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('unassigned')) { setNoTech(true); setTab('active'); }
+  }, []);
 
   const term = q.trim().toLowerCase();
+  const startOfToday = new Date(new Date().setHours(0, 0, 0, 0));
   const shown = rows.filter((j) => {
+    if (noTech && !(j.visits || []).some((v) => v.status === 'scheduled' && !v.tech_id && new Date(v.starts_at) >= startOfToday)) return false;
     if (!term) return true;
     return [String(j.job_number), j.customer?.display_name, j.address?.street, j.po_number].filter(Boolean).join(' ').toLowerCase().includes(term);
   });
@@ -55,6 +61,12 @@ function JobsInner({ staff }) {
       <div className="toolbar">
         <input type="search" placeholder="Search job number, customer, street, PO" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
+      {noTech && (
+        <div className="banner flag" style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+          <span>Showing jobs with an upcoming visit that has no tech assigned.</span>
+          <button className="secondary small" onClick={() => { setNoTech(false); window.history.replaceState(null, '', '/jobs'); }}>Show all</button>
+        </div>
+      )}
       <div className="tabs">
         {TABS.map(([k, label]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{label}</button>)}
       </div>

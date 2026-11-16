@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import AuthGate from '@/components/AuthGate';
 import AssetLabelDialog from '@/components/AssetLabelDialog';
+import PopupModal from '@/components/PopupModal';
 import { getSupabase } from '@/lib/supabaseClient';
 import { ASSET_STATUS, ASSET_ORDER, ASSET_TYPES, assetTag, cleanAssetForm, typeLabel, openIssues } from '@/lib/assets';
 
@@ -22,7 +23,6 @@ function InventoryInner({ staff }) {
   const [form, setForm] = useState(BLANK);
   const [msg, setMsg] = useState(null);
   const [printing, setPrinting] = useState(false);
-  const [prefix, setPrefix] = useState('');
   const [issues, setIssues] = useState({}); // asset id -> open damage / not-working notes
 
   const load = useCallback(async () => {
@@ -33,7 +33,6 @@ function InventoryInner({ staff }) {
     ]);
     setAssets(a || []);
     setSettings(s || {});
-    setPrefix(s?.asset_prefix || 'EQ');
     // Open damage / not-working notes; the page still works before migration 016 is run.
     const { data: n, error: nErr } = await sb.from('equipment_notes').select('asset_id,kind,resolved_at').is('resolved_at', null).neq('kind', 'note');
     const by = {};
@@ -71,15 +70,6 @@ function InventoryInner({ staff }) {
     load();
   }
 
-  async function savePrefix() {
-    const p = prefix.trim();
-    if (!/^[A-Za-z0-9]{1,6}$/.test(p)) { setMsg({ err: true, text: 'The prefix is 1 to 6 letters or numbers.' }); return; }
-    const { error } = await getSupabase().from('settings').update({ asset_prefix: p.toUpperCase() }).eq('id', 1);
-    if (error) { setMsg({ err: true, text: error.message }); return; }
-    setMsg({ text: 'Prefix saved. Labels printed earlier keep the old prefix on paper, so reprint them if you change it.' });
-    load();
-  }
-
   const toggle = (id) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const counts = useMemo(() => {
     const c = { available: 0, on_job: 0, repair: 0 };
@@ -92,37 +82,42 @@ function InventoryInner({ staff }) {
     <>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <h1>Equipment</h1>
-        {isOffice && <button className="primary" onClick={() => setAdding((v) => !v)}>{adding ? 'Cancel' : 'Add equipment'}</button>}
+        {isOffice && <button className="primary" onClick={() => { setMsg(null); setAdding(true); }}>Add equipment</button>}
       </div>
-      {assets && <p className="muted">{counts.available} available · {counts.on_job} on jobs · {counts.repair} in repair</p>}
-      {msg && <div className={`msg${msg.err ? ' err' : ''}`}>{msg.text}</div>}
+      {assets && <p className="muted" style={{ margin: '2px 0 8px' }}>{counts.available} available · {counts.on_job} on jobs · {counts.repair} in repair</p>}
+      {msg && !adding && <div className={`msg${msg.err ? ' err' : ''}`}>{msg.text}</div>}
 
-      {adding && (
-        <form className="card asset-form" onSubmit={add}>
-          <h3>Add equipment</h3>
+      <PopupModal open={adding} onClose={() => setAdding(false)} title="Add equipment">
+        <form className="eq-add" onSubmit={add}>
           <label className="field">Type
             <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>{ASSET_ORDER.map((t) => <option key={t} value={t}>{ASSET_TYPES[t].label}</option>)}</select>
           </label>
-          <label className="field">Make and model<input value={form.label} maxLength={60} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="Dri-Eaz LGR 3500i" /></label>
+          <label className="field">How many
+            <input inputMode="numeric" value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} />
+          </label>
+          <label className="field eq-wide">Make and model<input value={form.label} maxLength={60} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="Dri-Eaz LGR 3500i" /></label>
           <label className="field">Serial number (optional)<input value={form.serial} maxLength={60} onChange={(e) => setForm({ ...form, serial: e.target.value })} /></label>
-          {/^dehu|^desiccant$/.test(form.type) && <label className="field">Pints per day (rating)<input inputMode="numeric" value={form.ppd} onChange={(e) => setForm({ ...form, ppd: e.target.value })} placeholder="e.g. 70" /></label>}
-          <label className="field">How many of these<input inputMode="numeric" value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} /></label>
-          <p className="hint">Each one gets its own asset number. Add several at once for a set of identical machines (up to 50).</p>
-          <button className="primary">Add</button>
+          {/^dehu|^desiccant$/.test(form.type) && <label className="field">Pints per day<input inputMode="numeric" value={form.ppd} onChange={(e) => setForm({ ...form, ppd: e.target.value })} placeholder="e.g. 70" /></label>}
+          <p className="hint eq-wide">Each one gets its own asset number. Add up to 50 identical machines at once.</p>
+          {msg?.err && <div className="msg err eq-wide">{msg.text}</div>}
+          <div className="eq-actions eq-wide">
+            <button type="button" className="secondary" onClick={() => setAdding(false)}>Cancel</button>
+            <button className="primary">Add</button>
+          </div>
         </form>
-      )}
+      </PopupModal>
 
-      <div className="toolbar">
+      <div className="toolbar eq-toolbar">
         <input type="search" placeholder="Search asset number, model, serial, job" value={q} onChange={(e) => setQ(e.target.value)} />
+        <select aria-label="Type" value={type} onChange={(e) => setType(e.target.value)}>
+          <option value="">All types</option>
+          {ASSET_ORDER.map((t) => <option key={t} value={t}>{ASSET_TYPES[t].label}</option>)}
+        </select>
       </div>
       <div className="tabs">
         {[['active', 'Active'], ['available', 'Available'], ['on_job', 'On jobs'], ['repair', 'In repair'], ['retired', 'Retired'], ['all', 'All']].map(([k, l]) => <button key={k} className={status === k ? 'on' : ''} onClick={() => setStatus(k)}>{l}</button>)}
       </div>
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-        <select aria-label="Type" value={type} onChange={(e) => setType(e.target.value)}>
-          <option value="">All types</option>
-          {ASSET_ORDER.map((t) => <option key={t} value={t}>{ASSET_TYPES[t].label}</option>)}
-        </select>
         {isOffice && <button className="secondary" disabled={!shown.length} onClick={() => setPicked(picked.length === shown.length ? [] : shown.map((a) => a.id))}>{picked.length === shown.length && shown.length ? 'Clear selection' : 'Select all shown'}</button>}
         {isOffice && <button className="primary" disabled={!picked.length} onClick={() => setPrinting(true)}>Print labels ({picked.length})</button>}
       </div>
@@ -141,13 +136,6 @@ function InventoryInner({ staff }) {
         ))}
       </div>
 
-      {staff.role === 'owner' && settings && (
-        <div className="card" style={{ marginTop: 16 }}>
-          <h3>Asset number prefix</h3>
-          <p className="hint">Printed before the number on every label, for example {assetTag(prefix || 'EQ', 12)}. 1 to 6 letters or numbers.</p>
-          <div className="row"><input value={prefix} maxLength={6} onChange={(e) => setPrefix(e.target.value)} style={{ maxWidth: 120 }} aria-label="Asset prefix" /><button className="secondary" onClick={savePrefix}>Save prefix</button></div>
-        </div>
-      )}
       {printing && <AssetLabelDialog assets={toPrint} settings={settings} onClose={() => setPrinting(false)} />}
     </>
   );

@@ -8,12 +8,15 @@ import UsersSection from '@/components/settings/UsersSection';
 import PriceListSection from '@/components/settings/PriceListSection';
 import IntegrationsSection from '@/components/settings/IntegrationsSection';
 import RemindersSection from '@/components/settings/RemindersSection';
+import EquipmentSection from '@/components/settings/EquipmentSection';
+import { PlansDue, MailingList } from '@/components/customer/OutreachPanels';
 
 const TABS = [
   { id: 'business', label: 'Business' },
   { id: 'users', label: 'Users' },
   { id: 'prices', label: 'Price list' },
   { id: 'reminders', label: 'Reminders' },
+  { id: 'equipment', label: 'Equipment' },
   { id: 'integrations', label: 'Integrations' },
 ];
 
@@ -69,7 +72,18 @@ export default function SettingsPage() {
             )}
             {tab === 'users' && <UsersSection currentUserId={staff.id} token={token} />}
             {tab === 'prices' && <PriceListSection />}
-            {tab === 'reminders' && <RemindersSection token={token} />}
+            {tab === 'reminders' && (
+              <>
+                <RemindersSection token={token} />
+                <div className="card">
+                  <h2>Outreach tools</h2>
+                  <p className="hint">Plans coming due and the postcard mailing list. These used to sit on the Customers page.</p>
+                  <PlansDue />
+                  <MailingList />
+                </div>
+              </>
+            )}
+            {tab === 'equipment' && <EquipmentSection />}
             {tab === 'integrations' && <IntegrationsSection token={token} />}
           </div>
         </>
