@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { getSupabase } from '@/lib/supabaseClient';
+import BrandLogo from '@/components/BrandLogo';
 
 // Staff request a reset link here. The same confirmation shows whether or not the email
 // belongs to an account, so the page cannot be used to find out who has one.
@@ -34,26 +35,29 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="center-wrap">
-      <form className="card" onSubmit={onSubmit}>
-        <span className="brand">Monarch <span>Jobs</span></span>
+      <div className="card compact">
+        <BrandLogo />
+        <h2 className="auth-welcome">Reset your password</h2>
         {sent ? (
           <>
             <div className="msg ok">If that email belongs to a staff account, a reset link is on its way. It can take a few minutes; check spam too.</div>
-            <p className="hint"><Link href="/login">Back to sign in</Link></p>
+            <p className="auth-links"><Link href="/login">Back to sign in</Link></p>
           </>
         ) : (
           <>
-            <p className="hint">Enter your staff email and we will send you a link to choose a new password.</p>
-            <div className="field">
-              <label htmlFor="email">Email</label>
-              <input id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-            </div>
-            {error && <div className="msg err">{error}</div>}
-            <button className="primary" type="submit" disabled={busy}>{busy ? 'Sending...' : 'Send reset link'}</button>
-            <p className="hint" style={{ marginTop: 14, marginBottom: 0 }}><Link href="/login">Back to sign in</Link></p>
+            <p className="hint auth-sub">Enter your staff email and we will send you a link to choose a new password.</p>
+            <form className="pw-form auth-form" onSubmit={onSubmit}>
+              <div className="field">
+                <label htmlFor="email">Email</label>
+                <input id="email" type="email" autoComplete="email" autoCapitalize="off" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
+              </div>
+              {error && <div className="msg err">{error}</div>}
+              <button className="primary big" type="submit" disabled={busy} style={{ width: '100%', marginTop: 12 }}>{busy ? 'Sending...' : 'Send reset link'}</button>
+            </form>
+            <p className="auth-links"><Link href="/login">Back to sign in</Link></p>
           </>
         )}
-      </form>
+      </div>
     </div>
   );
 }
