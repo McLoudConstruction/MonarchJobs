@@ -6,6 +6,8 @@ import AuthGate from '@/components/AuthGate';
 import { getSupabase } from '@/lib/supabaseClient';
 import { doubleBookedIds } from '@/lib/schedule';
 import WeekGrid from '@/components/WeekGrid';
+import MonthGrid from '@/components/MonthGrid';
+import { monthStart } from '@/lib/monthGrid';
 import TechSchedule from '@/components/TechSchedule';
 import { useIsMobile, useIsTablet } from '@/lib/useIsMobile';
 import { addDays, startOfDay, fmtDay, fmtTime, fmtDuration } from '@/lib/format';
@@ -22,7 +24,8 @@ function ScheduleInner({ staff }) {
   const [start, setStart] = useState(weekStart(new Date()));
   const [visits, setVisits] = useState([]);
   const [techs, setTechs] = useState([]);
-  const [view, setView] = useState('board'); // board | timeline
+  const [view, setView] = useState('board'); // board | timeline | month
+  const [month, setMonth] = useState(monthStart(new Date()));
   const end = useMemo(() => addDays(start, 7), [start]);
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(start, i)), [start]);
   const isOffice = staff.role !== 'tech';
@@ -69,6 +72,7 @@ function ScheduleInner({ staff }) {
       <div className="tabs">
         <button className={view === 'board' ? 'on' : ''} onClick={() => setView('board')}>By tech</button>
         <button className={view === 'timeline' ? 'on' : ''} onClick={() => setView('timeline')}>Time of day</button>
+        <button className={view === 'month' ? 'on' : ''} onClick={() => setView('month')}>Month</button>
       </div>
       {view === 'board' && <div className="toolbar">
         <button className="secondary" onClick={() => setStart(addDays(start, -7))}>Previous week</button>
@@ -80,6 +84,15 @@ function ScheduleInner({ staff }) {
         <WeekGrid
           weekStart={start}
           onWeekChange={(d) => setStart(weekStartMonday(d))}
+          techs={isOffice ? techs.filter((t) => t.role === 'tech' || t.role === 'owner') : techs.filter((t) => t.id === staff.id)}
+          focusTechId={isOffice ? '' : staff.id}
+          linkVisits
+        />
+      )}
+      {view === 'month' && (
+        <MonthGrid
+          month={month}
+          onMonthChange={setMonth}
           techs={isOffice ? techs.filter((t) => t.role === 'tech' || t.role === 'owner') : techs.filter((t) => t.id === staff.id)}
           focusTechId={isOffice ? '' : staff.id}
           linkVisits
