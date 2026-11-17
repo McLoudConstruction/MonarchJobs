@@ -63,3 +63,16 @@ export const EditIcon = p => (
 export const MoreIcon = p => (
   <Svg {...p}><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></Svg>
 );
+
+// Map pin: a room, or where a photo was taken.
+export const PinIcon = p => (
+  <Svg {...p}><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" /></Svg>
+);
+// Undo arrow.
+export const UndoIcon = p => (
+  <Svg {...p}><polyline points="9 14 4 9 9 4" /><path d="M20 20v-7a4 4 0 0 0-4-4H4" /></Svg>
+);
+// Cloud with an arrow: waiting to upload.
+export const CloudUpIcon = p => (
+  <Svg {...p}><path d="M7 18a4 4 0 0 1-.6-7.96A6 6 0 0 1 18 9.5 4.3 4.3 0 0 1 17.5 18H7z" /><polyline points="9.5 13 12 10.5 14.5 13" /><line x1="12" y1="10.5" x2="12" y2="17" /></Svg>
+);

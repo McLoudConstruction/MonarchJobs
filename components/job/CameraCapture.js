@@ -1,19 +1,26 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import FolderPicker from '@/components/job/FolderPicker';
+import FolderPicker, { RoomPill } from '@/components/job/FolderPicker';
 import { PHOTO_KIND_KEYS, PHOTO_KINDS } from '@/lib/jobDocs';
 import PhotoMarkupEditor from '@/components/job/PhotoMarkupEditor';
-import { FlashOnIcon, FlashOffIcon, FlipCameraIcon, EditIcon } from '@/components/job/photoIcons';
+import { FlashOnIcon, FlashOffIcon, FlipCameraIcon, EditIcon, UndoIcon } from '@/components/job/photoIcons';
+import { useWaitingPhotos } from '@/lib/offlineClient';
+import { gpsFromPosition, freshGps, splitRoomValue } from '@/lib/photoMeta';
 
 // Full-screen in-browser camera that stays open across shots.
-// Flow: live view -> snap -> review (Retake / Use Photo) -> live view, until
-// the person taps DONE. Works on iPhone Safari, the home-screen app, and
-// Chrome on Android.
+// Flow (Rapid, the default): live view -> snap -> the shot is saved on the phone at once and the camera stays ready,
+// with the last shots below (a dot says waiting / sent) and Undo for the latest. Switch to Review to check every shot
+// (Retake / Use Photo) before it is kept. It runs until the person taps DONE. Works on iPhone Safari, the home-screen
+// app, and Chrome on Android.
 //
 // Props: open, onClose, uploader (the job's shared photo uploader). Pick a folder first (none is chosen
-// when it opens); each accepted photo is uploaded in the background, in order, while the camera stays open.
+// when it opens); each accepted photo is saved on the phone and uploaded in the background while the camera stays open.
+// The room chip (rooms: [{ value, label }]) stays set from shot to shot; the phone's location at the shutter is saved
+// with each photo when the person allows it.
 // Optional: fixedKind puts every photo in that folder and hides the folder picker (an update being
 // written has no folder choice); onUploaded(rows) is called with the saved photo rows after each upload.
+// For an "after" photo: ghostUrl shows the "before" faintly over the live view to line the shot up, pairOf links the new
+// photo to it, and closeAfterOne closes the camera after one shot.
 
 const MAX_DIGITAL_ZOOM = 5;
 const ZOOM_PRESETS = [0.5, 1, 2, 5];
@@ -50,40 +57,109 @@ async function openStream(facingMode) {
 
 const FOLDER_OPTIONS = PHOTO_KIND_KEYS.map((k) => ({ value: k, label: PHOTO_KINDS[k] }));
 
-export default function CameraCapture({ open, onClose, uploader, fixedKind = null, onUploaded = null }) {
+export default function CameraCapture({
+  open, onClose, uploader, fixedKind = null, onUploaded = null, jobId = null,
+  rooms = [], defaultRoom = '', ghostUrl = null, pairOf = null, closeAfterOne = false,
+}) {
   const [kind, setKind] = useState(fixedKind);
+  const [room, setRoom] = useState(defaultRoom || '');
+  const [roomSheetOpen, setRoomSheetOpen] = useState(false);
   const uploadedRef = useRef(onUploaded);
   uploadedRef.current = onUploaded;
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [shots, setShots] = useState([]); // { id, file, kind, status }
+  const [shots, setShots] = useState([]); // { id, file, kind, room, status, rowId, previewUrl }
+  const shotsRef = useRef([]);
+  shotsRef.current = shots;
   const queue = useRef(Promise.resolve());
   const seq = useRef(0);
+  const waiting = useWaitingPhotos(jobId);
+  const [rapid, setRapid] = useState(true); // Rapid: every shot is kept at once. Review: Retake / Use Photo after each.
+  const gpsRef = useRef(null);
+  const [gpsState, setGpsState] = useState('wait'); // wait | on | denied | none
   const destination = { options: FOLDER_OPTIONS, value: kind, setValue: setKind, sheetOpen, setSheetOpen };
-  const pending = shots.filter((x) => x.status === 'waiting' || x.status === 'uploading').length;
+  const roomOptions = [{ value: '', label: 'No room' }, ...rooms];
   const failed = shots.filter((x) => x.status === 'error').length;
+  const waitingIds = new Set(waiting.map((w) => w.id));
+  const shotState = (x) => {
+    if (x.status === 'error') return 'failed';
+    if (x.status === 'done') return 'sent';
+    if (x.status === 'queued') return x.rowId && waitingIds.has(x.rowId) ? 'waiting' : 'sent';
+    return 'saving';
+  };
+  const pending = shots.filter((x) => ['saving', 'waiting'].includes(shotState(x))).length;
+  const lastShot = shots[shots.length - 1] || null;
+
+  useEffect(() => { try { setRapid(localStorage.getItem('mj-cam-rapid') !== '0'); } catch { /* storage blocked */ } }, []);
+  function toggleRapid() {
+    const next = !rapid;
+    setRapid(next);
+    try { localStorage.setItem('mj-cam-rapid', next ? '1' : '0'); } catch { /* storage blocked */ }
+    setNotice(next ? 'Rapid: every shot is kept as soon as you take it.' : 'Review: check each shot before it is kept.');
+  }
 
   // one at a time, in the order taken, so a burst of shots does not overload the phone or connection
   function enqueue(shot) {
     queue.current = queue.current.then(async () => {
+      const target = splitRoomValue(shot.room);
       const rows = await uploader.upload([shot.file], {
         kind: shot.kind,
-        onItem: (_f, status) => setShots((list) => list.map((x) => (x.id === shot.id ? { ...x, status } : x))),
+        sketchId: target ? target.sketchId : null,
+        roomKey: target ? target.roomKey : null,
+        gps: shot.gps,
+        pairOf,
+        onItem: (_f, status, payload) => setShots((list) => list.map((x) => (x.id === shot.id ? { ...x, status, rowId: payload?.id || x.rowId } : x))),
       });
       if (rows?.length) uploadedRef.current?.(rows);
     }).catch(() => {});
   }
-  function onPhotoAccepted(file) {
-    const shot = { id: ++seq.current, file, kind, status: 'waiting' };
+  function onPhotoAccepted(file, gps = null) {
+    const shot = { id: ++seq.current, file, kind, room, status: 'saving', gps: gps || freshGps(gpsRef.current), rowId: null, previewUrl: URL.createObjectURL(file) };
     setShots((list) => [...list, shot]);
     enqueue(shot);
+    return shot;
   }
   function retryAll() {
     shots.filter((x) => x.status === 'error').forEach((x) => {
-      setShots((list) => list.map((y) => (y.id === x.id ? { ...y, status: 'waiting' } : y)));
+      setShots((list) => list.map((y) => (y.id === x.id ? { ...y, status: 'saving' } : y)));
       enqueue(x);
     });
   }
-  useEffect(() => { if (open) { setKind(fixedKind); setShots([]); setSheetOpen(!fixedKind); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  async function undoLast() {
+    const shot = lastShot;
+    if (!shot || !shot.rowId || undoing) return;
+    setUndoing(true);
+    const r = await uploader.undo(shot.rowId);
+    setUndoing(false);
+    if (r === 'failed') { setNotice('Could not undo that shot. Open the photo to archive it.'); return; }
+    if (shot.previewUrl) URL.revokeObjectURL(shot.previewUrl);
+    setShots((list) => list.filter((x) => x.id !== shot.id));
+    setCount((c) => Math.max(0, c - 1));
+    setNotice(r === 'removed' ? 'Shot undone.' : 'Shot undone (it had already been sent, so it is archived).');
+  }
+  const [undoing, setUndoing] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    shotsRef.current.forEach((x) => x.previewUrl && URL.revokeObjectURL(x.previewUrl));
+    setKind(fixedKind); setRoom(defaultRoom || ''); setShots([]); setSheetOpen(!fixedKind); setRoomSheetOpen(false);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => shotsRef.current.forEach((x) => x.previewUrl && URL.revokeObjectURL(x.previewUrl)), []);
+
+  // Where the phone is, kept fresh while the camera is open, so each photo can carry the place it was taken.
+  useEffect(() => {
+    if (!open) return undefined;
+    gpsRef.current = null;
+    if (!navigator.geolocation) { setGpsState('none'); return undefined; }
+    setGpsState('wait');
+    let id = null;
+    try {
+      id = navigator.geolocation.watchPosition(
+        (pos) => { const f = gpsFromPosition(pos); if (f) { gpsRef.current = f; setGpsState('on'); } },
+        (err) => { if (err && err.code === 1) setGpsState('denied'); },
+        { enableHighAccuracy: true, maximumAge: 30000, timeout: 20000 },
+      );
+    } catch { setGpsState('none'); }
+    return () => { try { if (id != null) navigator.geolocation.clearWatch(id); } catch { /* done */ } };
+  }, [open]);
 
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -317,7 +393,15 @@ export default function CameraCapture({ open, onClose, uploader, fixedKind = nul
           setNotice("That shot didn't come through. Try again.");
           return;
         }
-        setReviewFile({ blob, previewUrl: URL.createObjectURL(blob), takenAt });
+        const gps = freshGps(gpsRef.current);
+        if (rapid && !error) {
+          const file = new File([blob], `${takenAt}-camera.jpg`, { type: 'image/jpeg' });
+          onPhotoAccepted(file, gps);
+          setCount((c) => c + 1);
+          if (closeAfterOne) setTimeout(() => handleDone(), 350);
+          return;
+        }
+        setReviewFile({ blob, previewUrl: URL.createObjectURL(blob), takenAt, gps });
       },
       'image/jpeg',
       0.95
@@ -357,9 +441,10 @@ export default function CameraCapture({ open, onClose, uploader, fixedKind = nul
   function handleUsePhoto() {
     if (!reviewFile) return;
     const file = new File([reviewFile.blob], `${reviewFile.takenAt}-camera.jpg`, { type: 'image/jpeg' });
-    onPhotoAccepted(file);
+    onPhotoAccepted(file, reviewFile.gps);
     setCount(c => c + 1);
     dropReview();
+    if (closeAfterOne) setTimeout(() => handleDone(), 350);
   }
 
   function handleDone() {
@@ -393,8 +478,19 @@ export default function CameraCapture({ open, onClose, uploader, fixedKind = nul
           <div className="camera-count" aria-live="polite">
             {count} {count === 1 ? 'photo' : 'photos'}
           </div>
-          <div className="camera-title">Photos</div>
+          <div className="camera-title">
+            {gpsState === 'on' ? 'Location on' : gpsState === 'denied' ? 'Location off' : gpsState === 'wait' ? 'Finding location' : 'Photos'}
+          </div>
           <div className="camera-top-actions">
+            <button
+              type="button"
+              className={`camera-mode-btn${rapid ? '' : ' is-on'}`}
+              onClick={toggleRapid}
+              aria-pressed={!rapid}
+              aria-label={rapid ? 'Rapid mode: every shot is kept at once. Tap to review each shot instead.' : 'Review mode: check each shot. Tap for rapid mode.'}
+            >
+              {rapid ? 'Rapid' : 'Review'}
+            </button>
             {showFlash && (
               <button
                 type="button"
@@ -436,6 +532,7 @@ export default function CameraCapture({ open, onClose, uploader, fixedKind = nul
             transform: digitalScale > 1 ? `scale(${digitalScale})` : undefined,
           }}
         />
+        {ghostUrl && !reviewFile && !error && <img src={ghostUrl} alt="" className="camera-ghost" />}
         {starting && !error && !reviewFile && <div className="camera-status">Starting camera</div>}
         {error && !reviewFile && (
           <div className="camera-error">
@@ -491,16 +588,21 @@ export default function CameraCapture({ open, onClose, uploader, fixedKind = nul
           </div>
         )}
 
-        {!reviewFile && (notice || pending > 0 || failed > 0) && (
+        {!reviewFile && !error && (
+          <div className="camera-chips">
+            {!fixedKind && <FolderPicker destination={destination} />}
+            {rooms.length > 0 && <RoomPill options={roomOptions} value={room} onPick={setRoom} open={roomSheetOpen} setOpen={setRoomSheetOpen} />}
+          </div>
+        )}
+
+        {!reviewFile && (notice || failed > 0) && (
           <div className="camera-notice" role="status">
-            {notice ? notice : failed > 0 ? (
+            {notice ? notice : (
               <>
                 {failed} {failed === 1 ? 'photo' : 'photos'} NOT saved.{' '}
-                {true && (
-                  <button type="button" className="camera-link" onClick={retryAll}>Retry</button>
-                )}
+                <button type="button" className="camera-link" onClick={retryAll}>Retry</button>
               </>
-            ) : `Saving ${pending} ${pending === 1 ? 'photo' : 'photos'}`}
+            )}
           </div>
         )}
       </div>
@@ -508,14 +610,32 @@ export default function CameraCapture({ open, onClose, uploader, fixedKind = nul
       {!reviewFile && (
         <div className="camera-controls">
           <div className="camera-controls-left">
-            {!fixedKind && <FolderPicker destination={destination} />}
+            {shots.length > 0 && (
+              <div className="camera-strip" aria-label="Photos taken this session">
+                <div className="camera-strip-row">
+                  {shots.slice(-3).map((x) => (
+                    <span key={x.id} className="camera-strip-item">
+                      <img src={x.previewUrl} alt="" />
+                      <span className={`camera-dot is-${shotState(x)}`} title={{ saving: 'Saving on this phone', waiting: 'Saved on this phone, waiting to upload', sent: 'Uploaded', failed: 'Not saved' }[shotState(x)]} />
+                    </span>
+                  ))}
+                </div>
+                <div className="camera-strip-meta">
+                  {pending > 0 ? `${pending} waiting` : 'All sent'}
+                  {' '}
+                  <button type="button" className="camera-link camera-undo" onClick={undoLast} disabled={!lastShot?.rowId || undoing} aria-label="Undo the last photo">
+                    <UndoIcon size={14} /> Undo
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
           <button
             type="button"
             className="camera-shutter-btn"
             onClick={handleSnap}
             disabled={!!error || starting || !kind}
-            aria-label="Take photo"
+            aria-label={kind ? 'Take photo' : 'Choose a folder first, then take the photo'}
           />
           <div className="camera-controls-right">
             <button type="button" className="camera-done-btn" onClick={handleDone}>DONE</button>

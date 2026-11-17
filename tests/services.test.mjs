@@ -99,9 +99,9 @@ test('titles', () => {
 });
 
 test('the phone action button offers Start Recheck only when the service has it', () => {
-  assert.deepEqual(fabActions({ hasSketch: true, visitStatus: null, recheck: false }), ['internal']);
-  assert.deepEqual(fabActions({ hasSketch: true, visitStatus: 'scheduled', recheck: false }), ['otw', 'start', 'internal']);
-  assert.deepEqual(fabActions({ hasSketch: true, visitStatus: null }), ['recheck', 'internal']);
+  assert.deepEqual(fabActions({ hasSketch: true, visitStatus: null, recheck: false }), ['photos', 'internal']);
+  assert.deepEqual(fabActions({ hasSketch: true, visitStatus: 'scheduled', recheck: false }), ['photos', 'otw', 'start', 'internal']);
+  assert.deepEqual(fabActions({ hasSketch: true, visitStatus: null }), ['photos', 'recheck', 'internal']);
 });
 
 import { ASSET_TYPES, ASSET_ORDER, OTHER_GEAR, typeLabel, cleanAssetForm, cleanEquipmentNote, openIssues } from '../lib/assets.js';

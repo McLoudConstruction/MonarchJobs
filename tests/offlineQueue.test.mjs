@@ -186,3 +186,131 @@ test('errors are sorted into the right kind', () => {
   assert.ok(backoffMs(1) < backoffMs(5));
   assert.equal(backoffMs(100), backoffMs(50));
 });
+
+// ---------------------------------------------------------------- capture details, originals, undo
+const origBlob = () => new Blob([new Uint8Array(9000).fill(3)], { type: 'image/jpeg' });
+
+test('location, hash, tags and the before-photo link travel with the picture and are not lost on retry', async () => {
+  const { q, server, clock } = await setup();
+  server.down = true;
+  await q.enqueue(shot({
+    gps: { lat: 39.1, lng: -94.5, accuracy: 8 }, contentHash: 'a'.repeat(64), tags: ['Water'], pairOf: 'before-1', sketchId: 's1', roomKey: 'r1',
+  }));
+  await q.run();
+  server.down = false;
+  clock.t += 10 * 60 * 1000;
+  await q.run();
+  const row = [...server.rows.values()][0];
+  assert.equal(row.gps_lat, 39.1);
+  assert.equal(row.gps_lng, -94.5);
+  assert.equal(row.gps_accuracy_m, 8);
+  assert.equal(row.content_hash, 'a'.repeat(64));
+  assert.deepEqual(row.tags, ['Water']);
+  assert.equal(row.pair_of, 'before-1');
+  assert.equal(row.room_key, 'r1');
+  assert.equal(row.original_path, null);
+});
+
+test('a picture with no location sends nulls, not zeros', async () => {
+  const { q, server } = await setup();
+  await q.enqueue(shot());
+  await q.run();
+  const row = [...server.rows.values()][0];
+  assert.equal(row.gps_lat, null);
+  assert.equal(row.gps_lng, null);
+  assert.equal(row.content_hash, null);
+  assert.deepEqual(row.tags, []);
+});
+
+test('the full-size original is saved on the phone, uploaded after the web copy, and named on the row', async () => {
+  const { q, server, db } = await setup();
+  const r = await q.enqueue(shot({ originalBlob: origBlob() }));
+  assert.equal((await getBlob(db, r.id, 'original')).bytes.byteLength, 9000);
+  await q.run();
+  assert.deepEqual(server.calls.filter((c) => c.startsWith('file:')).map((c) => c.replace(/^file:.{36}/, '')), ['.jpg', '_t.jpg', '_o.jpg']);
+  const row = server.rows.get(r.id);
+  assert.match(row.original_path, /_o\.jpg$/);
+  assert.equal(row.original_bytes, 9000);
+  assert.equal(await getBlob(db, r.id, 'original'), null, 'bytes are dropped once the server has everything');
+});
+
+test('if the server refuses the original, the picture still goes up without it', async () => {
+  const { q, server } = await setup();
+  server.failNext = [null, null, { error: { message: 'File too large', statusCode: '413' }, status: 413 }];
+  const r = await q.enqueue(shot({ originalBlob: origBlob() }));
+  const res = await q.run();
+  assert.equal(res.done, 1);
+  const row = server.rows.get(r.id);
+  assert.equal(row.original_path, null);
+  assert.equal(row.original_bytes, null);
+});
+
+test('a lost signal during the original upload keeps the picture and resumes at the original', async () => {
+  const { q, server, clock } = await setup();
+  server.failNext = [null, null, { error: new Error('TypeError: Failed to fetch') }];
+  const r = await q.enqueue(shot({ originalBlob: origBlob() }));
+  const first = await q.run();
+  assert.equal(first.stopped, 'network');
+  server.calls.length = 0;
+  clock.t += 10 * 60 * 1000;
+  await q.run();
+  assert.deepEqual(server.calls, ['file:' + r.id + '_o.jpg', 'row']);
+  assert.match(server.rows.get(r.id).original_path, /_o\.jpg$/);
+});
+
+test('Undo before anything is sent removes the picture and sends nothing', async () => {
+  const { q, server, db } = await setup();
+  const r = await q.enqueue(shot());
+  assert.equal(await q.cancel(r.id), true);
+  assert.equal((await allPhotos(db)).length, 0);
+  await q.run();
+  assert.equal(server.calls.length, 0);
+  assert.equal(server.rows.size, 0);
+});
+
+test('Undo after the file went up but before the row: the queue stops and no row is added', async () => {
+  const { q, server, db, remote } = await setup();
+  const r = await q.enqueue(shot());
+  // the thumbnail upload is where the person presses Undo
+  const real = remote.uploadFile;
+  remote.uploadFile = async (path, blob, type) => {
+    const out = await real(path, blob, type);
+    if (path.endsWith('.jpg') && !path.endsWith('_t.jpg')) assert.equal(await q.cancel(r.id), true);
+    return out;
+  };
+  const res = await q.run();
+  assert.equal(res.done, 0);
+  assert.equal(server.rows.size, 0, 'no photo row for an undone picture');
+  assert.equal((await allPhotos(db)).length, 0, 'and nothing is left waiting on the phone');
+});
+
+test('Undo after the server confirmed the picture cannot cancel it; the caller archives instead', async () => {
+  const { q, server } = await setup();
+  const r = await q.enqueue(shot());
+  await q.run();
+  assert.equal(server.rows.has(r.id), true);
+  assert.equal(await q.cancel(r.id), false);
+});
+
+test('Undo that lands while the row is being confirmed archives the picture instead of losing track of it', async () => {
+  const { q, server, remote } = await setup();
+  const archived = [];
+  remote.archivePhoto = async (id) => { archived.push(id); return {}; };
+  const r = await q.enqueue(shot());
+  const realInsert = remote.insertPhoto;
+  remote.insertPhoto = async (row) => { const out = await realInsert(row); await q.cancel(r.id); return out; };
+  await q.run();
+  assert.equal(server.rows.has(r.id), true);
+  assert.deepEqual(archived, [r.id]);
+});
+
+test('Undo of one picture does not disturb the others waiting', async () => {
+  const { q, server } = await setup();
+  const a = await q.enqueue(shot());
+  const b = await q.enqueue(shot());
+  const c = await q.enqueue(shot());
+  await q.cancel(b.id);
+  const res = await q.run();
+  assert.equal(res.done, 2);
+  assert.deepEqual([...server.rows.keys()].sort(), [a.id, c.id].sort());
+});

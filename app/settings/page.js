@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import AuthGate from '@/components/AuthGate';
 import BusinessSection from '@/components/settings/BusinessSection';
+import PhotoSection from '@/components/settings/PhotoSection';
 import BrandingSection from '@/components/settings/BrandingSection';
 import UsersSection from '@/components/settings/UsersSection';
 import PriceListSection from '@/components/settings/PriceListSection';
@@ -68,6 +69,7 @@ export default function SettingsPage() {
               <>
                 <BusinessSection />
                 <BrandingSection token={token} />
+                <PhotoSection />
               </>
             )}
             {tab === 'users' && <UsersSection currentUserId={staff.id} token={token} />}

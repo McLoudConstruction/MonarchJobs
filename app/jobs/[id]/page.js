@@ -22,6 +22,9 @@ import { useChatCenter } from '@/lib/useChatInbox';
 import { countForTarget } from '@/lib/chat';
 import JobFab from '@/components/job/JobFab';
 import PhotoViewer from '@/components/job/PhotoViewer';
+import CameraCapture from '@/components/job/CameraCapture';
+import { useJobRooms } from '@/lib/useJobRooms';
+import { useSignedUrls } from '@/lib/useSignedUrls';
 import { UploadStatus } from '@/components/job/PhotoUi';
 import { usePhotoUploader } from '@/lib/usePhotoUploader';
 import { eventLabel, updateRecipients, INTERNAL_CATEGORIES } from '@/lib/jobDocs';
@@ -64,6 +67,26 @@ const tabFromHash = () => {
 const missingTable = (err) => !!err && (err.code === '42P01' || /does not exist|schema cache|Could not find the table/i.test(err.message || ''));
 
 const VISIT_STATUS = { scheduled: 'Scheduled', on_the_way: 'On the way', started: 'Started', finished: 'Finished', cancelled: 'Cancelled' };
+
+// One camera for the whole job page. An "after" photo opens it with the "before" faintly over the live view.
+function JobCamera({ camera, onClose, uploader, jobId, rooms }) {
+  const urls = useSignedUrls(camera?.ghostPath ? [camera.ghostPath] : []);
+  const ghost = camera?.ghostPath ? urls[camera.ghostPath] || null : null;
+  return (
+    <CameraCapture
+      open={!!camera}
+      onClose={onClose}
+      uploader={uploader}
+      jobId={jobId}
+      rooms={rooms}
+      defaultRoom={camera?.room || ''}
+      pairOf={camera?.pairOf || null}
+      ghostUrl={ghost}
+      fixedKind={camera?.pairOf ? 'after' : null}
+      closeAfterOne={!!camera?.pairOf}
+    />
+  );
+}
 
 function JobInner({ id, staff, token }) {
   const isOffice = staff.role !== 'tech';
@@ -199,7 +222,10 @@ function JobInner({ id, staff, token }) {
     loadEvents();
   }, [id, staff.id, staff.email, loadEvents]);
 
-  const uploader = usePhotoUploader({ jobId: id, onUploaded: reloadPhotos, logEvent });
+  const uploader = usePhotoUploader({ jobId: id, onUploaded: reloadPhotos, logEvent, photos });
+  const rooms = useJobRooms(id, sketches.map((x) => x.id).join(','));
+  const [camera, setCamera] = useState(null); // null = closed, otherwise options for the camera ({ ghost, pairOf, room })
+  const openCamera = (opts = {}) => setCamera(opts);
   useEffect(() => {
     let alive = true;
     const refresh = async () => { const o = await getOps(); if (!o) return; const l = await o.list(id); if (alive) setWaitingOps(l.filter((x) => x.type === 'visit_status')); };
@@ -293,6 +319,7 @@ function JobInner({ id, staff, token }) {
   // phone action button: Start Recheck / Start Sketch / Start Job, which becomes Complete Job once the visit is under way
   const fabKeys = FAB_HIDDEN_TABS.includes(tab) ? [] : fabActions({ hasSketch: sketches.length > 0, visitStatus: dockVisit?.status || null, docsMissing, recheck: hasFeature(service, 'recheck') });
   const fabRun = {
+    photos: () => openCamera(),
     recheck: () => { openTab('moisture'); setMoistCmd({ type: 'recheck', n: Date.now() }); },
     sketch: () => openTab('sketch'),
     otw: () => setOtwOpen(true),
@@ -478,7 +505,19 @@ function JobInner({ id, staff, token }) {
       )}
 
       {tab === 'photos' && (
-        <PhotosTab photos={photos} isOffice={isOffice} uploader={uploader} onOpen={openViewer} jobId={id} />
+        <PhotosTab
+          photos={photos}
+          isOffice={isOffice}
+          uploader={uploader}
+          onOpen={openViewer}
+          jobId={id}
+          rooms={rooms}
+          authorName={authorName}
+          staffId={staff.id}
+          onTakePhoto={() => openCamera()}
+          onChanged={reloadPhotos}
+          logEvent={logEvent}
+        />
       )}
 
       {tab === 'sketch' && (
@@ -603,6 +642,8 @@ function JobInner({ id, staff, token }) {
         }}
       />
 
+      <JobCamera camera={camera} onClose={() => setCamera(null)} uploader={uploader} jobId={id} rooms={rooms} />
+
       {viewer && viewerList.length > 0 && (
         <PhotoViewer
           list={viewerList}
@@ -612,6 +653,11 @@ function JobInner({ id, staff, token }) {
           authorName={authorName}
           logEvent={logEvent}
           onChanged={reloadPhotos}
+          rooms={rooms}
+          allPhotos={photos}
+          token={token}
+          isOffice={isOffice}
+          onTakeAfter={(p) => { setViewer(null); openCamera({ pairOf: p.id, ghostPath: p.thumb_path || p.storage_path, room: p.sketch_id && p.room_key ? `${p.sketch_id}|${p.room_key}` : '' }); }}
           onAppend={(newId, afterId) => setViewer((v) => {
             if (!v) return v;
             const at = v.ids.indexOf(afterId);

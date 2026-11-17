@@ -15,7 +15,7 @@ test('uuid check is strict', () => {
 });
 
 test('photo file paths match what the database insert policy requires', () => {
-  assert.deepEqual(photoPaths(J, P), { full: `${J}/${P}.jpg`, thumb: `${J}/${P}_t.jpg` });
+  assert.deepEqual(photoPaths(J, P), { full: `${J}/${P}.jpg`, thumb: `${J}/${P}_t.jpg`, original: `${J}/${P}_o.jpg` });
 });
 
 test('fitWithin shrinks to the longest side and never enlarges', () => {

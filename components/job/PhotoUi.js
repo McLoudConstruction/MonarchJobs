@@ -3,6 +3,8 @@
 import { useRef } from 'react';
 import { PHOTO_KINDS, PHOTO_KIND_KEYS } from '@/lib/jobDocs';
 import { useSignedUrls } from '@/lib/useSignedUrls';
+import { localStatus, photoRoomValue } from '@/lib/photoMeta';
+import { CloudUpIcon } from '@/components/job/photoIcons';
 
 // A button that opens the camera or the photo library. capture asks a phone for the camera.
 export function FilePick({ label, onFiles, capture = false, multiple = true, className = 'secondary', disabled = false }) {
@@ -48,25 +50,35 @@ export function KindChips({ value, onChange, counts, includeAll = false }) {
 }
 
 // A grid of small pictures. selectable: shows a check and calls onToggle instead of onOpen.
-export function PhotoGrid({ photos, onOpen, selected, onToggle }) {
-  const urls = useSignedUrls(photos.map((p) => p.thumb_path || p.storage_path));
+// A picture still on the phone (p._local) shows dimmed with a small status; it cannot be opened until the server has it.
+// roomLabels: Map of 'sketchId|roomId' -> room name, shown on each picture that is in a room.
+export function PhotoGrid({ photos, onOpen, selected, onToggle, roomLabels = null }) {
+  const urls = useSignedUrls(photos.filter((p) => !p._local).map((p) => p.thumb_path || p.storage_path));
   return (
     <div className="ph-grid">
       {photos.map((p) => {
-        const url = urls[p.thumb_path || p.storage_path];
+        const local = !!p._local;
+        const url = local ? p.thumbUrl : urls[p.thumb_path || p.storage_path];
         const on = selected?.has(p.id);
+        const st = local ? localStatus(p) : null;
+        const roomName = roomLabels ? roomLabels.get(photoRoomValue(p)) : null;
         return (
           <button
             key={p.id}
             type="button"
-            className={`ph-thumb${on ? ' picked' : ''}`}
-            onClick={() => (onToggle ? onToggle(p) : onOpen?.(p))}
-            aria-label={`${PHOTO_KINDS[p.kind] || 'Photo'}${p.caption ? `: ${p.caption}` : ''}`}
-            aria-pressed={onToggle ? !!on : undefined}
+            className={`ph-thumb${on ? ' picked' : ''}${local ? ' is-local' : ''}`}
+            onClick={() => { if (local) return; if (onToggle) onToggle(p); else onOpen?.(p); }}
+            aria-label={`${local ? `${st.label}. ` : ''}${PHOTO_KINDS[p.kind] || 'Photo'}${roomName ? `, ${roomName}` : ''}${p.caption ? `: ${p.caption}` : ''}`}
+            aria-pressed={onToggle && !local ? !!on : undefined}
+            aria-disabled={local || undefined}
+            title={local ? (p.lastError || st.label) : undefined}
           >
             {url ? <img src={url} alt={p.caption || ''} loading="lazy" /> : <span className="ph-wait" />}
             <span className={`ph-kind k-${p.kind}`}>{PHOTO_KINDS[p.kind] || 'Other'}</span>
+            {local && <span className={`ph-state is-${st.key}`}><CloudUpIcon size={12} /> {st.label}</span>}
             {on && <span className="ph-check" aria-hidden="true">&#10003;</span>}
+            {p.pair_of && !local && <span className="ph-pair" title="Has a before photo" aria-hidden="true">B</span>}
+            {roomName && <span className="ph-room">{roomName}</span>}
             {p.caption && !onToggle && <span className="ph-cap">{p.caption}</span>}
           </button>
         );

@@ -3,27 +3,32 @@ import assert from 'node:assert/strict';
 import { fabActions, FAB_HIDDEN_TABS } from '../lib/jobFab.js';
 
 test('no sketch yet: Start Sketch, no recheck', () => {
-  assert.deepEqual(fabActions({ hasSketch: false, visitStatus: null }), ['sketch', 'internal']);
+  assert.deepEqual(fabActions({ hasSketch: false, visitStatus: null }), ['photos', 'sketch', 'internal']);
 });
 
 test('a sketch exists: Start Sketch goes away and Start Recheck shows', () => {
-  assert.deepEqual(fabActions({ hasSketch: true, visitStatus: null }), ['recheck', 'internal']);
+  assert.deepEqual(fabActions({ hasSketch: true, visitStatus: null }), ['photos', 'recheck', 'internal']);
 });
 
 test('Start Job before the visit starts, Complete Job after', () => {
-  assert.deepEqual(fabActions({ hasSketch: true, visitStatus: 'scheduled' }), ['recheck', 'otw', 'start', 'internal']);
-  assert.deepEqual(fabActions({ hasSketch: true, visitStatus: 'on_the_way' }), ['recheck', 'otw', 'start', 'internal']);
-  assert.deepEqual(fabActions({ hasSketch: true, visitStatus: 'started' }), ['recheck', 'complete', 'internal']);
-  assert.deepEqual(fabActions({ hasSketch: false, visitStatus: 'started' }), ['sketch', 'complete', 'internal']);
+  assert.deepEqual(fabActions({ hasSketch: true, visitStatus: 'scheduled' }), ['photos', 'recheck', 'otw', 'start', 'internal']);
+  assert.deepEqual(fabActions({ hasSketch: true, visitStatus: 'on_the_way' }), ['photos', 'recheck', 'otw', 'start', 'internal']);
+  assert.deepEqual(fabActions({ hasSketch: true, visitStatus: 'started' }), ['photos', 'recheck', 'complete', 'internal']);
+  assert.deepEqual(fabActions({ hasSketch: false, visitStatus: 'started' }), ['photos', 'sketch', 'complete', 'internal']);
 });
 
 test('no visit to act on: no Start / Complete Job', () => {
-  assert.deepEqual(fabActions({ hasSketch: false, visitStatus: 'finished' }), ['sketch', 'internal']);
+  assert.deepEqual(fabActions({ hasSketch: false, visitStatus: 'finished' }), ['photos', 'sketch', 'internal']);
 });
 
 test('documentation tables missing: only Start Job is offered', () => {
   assert.deepEqual(fabActions({ hasSketch: false, visitStatus: 'scheduled', docsMissing: true }), ['otw', 'start']);
   assert.deepEqual(fabActions({ hasSketch: false, visitStatus: 'started', docsMissing: true }), []);
+});
+
+test('Take Photos is always first when the tables exist', () => {
+  assert.equal(fabActions({})[0], 'photos');
+  assert.ok(!fabActions({ docsMissing: true }).includes('photos'));
 });
 
 test('hidden on the sketch and moisture tabs', () => {
