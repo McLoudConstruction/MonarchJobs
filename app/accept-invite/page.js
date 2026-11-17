@@ -6,12 +6,14 @@ import { useRouter } from 'next/navigation';
 import { getSupabase } from '@/lib/supabaseClient';
 import { parseAuthLinkError } from '@/lib/authLink';
 import NewPasswordForm from '@/components/NewPasswordForm';
+import { hasRealName } from '@/lib/userDisplay';
 
 // Landing page for the emailed invite link. Supabase reads the invite token from the address and
 // signs the person in for this one purpose; they must then choose their own password.
 export default function AcceptInvitePage() {
   const router = useRouter();
   const [user, setUser] = useState(null);
+  const [fullName, setFullName] = useState('');
   const [expired, setExpired] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -43,6 +45,19 @@ export default function AcceptInvitePage() {
     };
   }, []);
 
+  // The name the owner typed when inviting is saved on the staff record; use it for the greeting.
+  // (The invite's own metadata is only a fallback.)
+  useEffect(() => {
+    if (!user) return undefined;
+    let cancelled = false;
+    const fromMeta = String(user.user_metadata?.full_name || '').trim();
+    setFullName(hasRealName(fromMeta) ? fromMeta : '');
+    getSupabase().from('staff_users').select('full_name').eq('id', user.id).maybeSingle()
+      .then(({ data }) => { if (!cancelled && hasRealName(data?.full_name)) setFullName(data.full_name.trim()); })
+      .catch(() => { /* greeting just stays plain */ });
+    return () => { cancelled = true; };
+  }, [user]);
+
   async function save(password) {
     setBusy(true);
     setError('');
@@ -60,7 +75,7 @@ export default function AcceptInvitePage() {
     }
   }
 
-  const first = String(user?.user_metadata?.full_name || '').trim().split(/\s+/)[0];
+  const first = fullName.split(/\s+/)[0];
 
   return (
     <div className="center-wrap">
@@ -78,7 +93,7 @@ export default function AcceptInvitePage() {
               busy={busy}
               error={error}
               email={user.email}
-              name={user.user_metadata?.full_name}
+              name={fullName}
             />
           </>
         ) : expired ? (
