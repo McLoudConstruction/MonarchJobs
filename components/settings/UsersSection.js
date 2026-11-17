@@ -119,7 +119,7 @@ export default function UsersSection({ currentUserId, token }) {
   }
 
   return (
-    <div className="card">
+    <div className="card users-card">
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <h2 style={{ flex: 1, margin: 0 }}>Users</h2>
         {!adding && <button className="primary" onClick={() => { setAdding(true); setMsg(null); }}>Invite user</button>}

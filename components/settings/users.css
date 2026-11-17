@@ -1,10 +1,10 @@
 /* Settings > Users: a compact table (one tidy line per person, nothing wraps) */
 .users-scroll{ overflow-x: auto; }
-table.table.users-table{ width: 100%; }
+table.table.users-table{ width: auto; min-width: 100%; }
+.users-card{ max-width: 800px; }
 table.table.users-table th, table.table.users-table td{ padding: 5px 8px; font-size: 13px; white-space: nowrap; vertical-align: middle; }
 table.table.users-table th{ padding-top: 6px; padding-bottom: 6px; font-size: 11px; }
-.users-table .u-name{ width: 100%; }
-.users-table input[type="text"]{ width: 100%; min-width: 150px; min-height: 32px; padding: 5px 8px; font-size: 13.5px; }
+.users-table input[type="text"]{ width: 230px; min-height: 32px; padding: 5px 8px; font-size: 13.5px; }
 .users-table select{ width: auto; min-height: 32px; padding: 4px 6px; font-size: 13px; }
 .users-table .u-actions{ text-align: right; }
 .users-table .u-actions button{ min-height: 30px; padding: 4px 10px; font-size: 12px; margin-left: 6px; }
