@@ -13,6 +13,7 @@ import BottomSheet from '@/components/BottomSheet';
 import JobJumpSearch from '@/components/JobJumpSearch';
 import { logoUrl } from '@/lib/branding';
 import { NotificationsProvider, useNotificationCenter } from '@/lib/useNotifications';
+import { ChatDockProvider } from '@/components/chat/ChatDock';
 import { ChatInboxProvider, useChatCenter } from '@/lib/useChatInbox';
 import { readPushStatus, resyncPush } from '@/lib/push';
 
@@ -80,7 +81,9 @@ export default function AppShell(props) {
   return (
     <NotificationsProvider userId={props.staff.id}>
       <ChatInboxProvider userId={props.staff.id}>
-        <AppShellInner {...props} />
+        <ChatDockProvider staff={props.staff}>
+          <AppShellInner {...props} />
+        </ChatDockProvider>
       </ChatInboxProvider>
     </NotificationsProvider>
   );

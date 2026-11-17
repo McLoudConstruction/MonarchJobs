@@ -34,3 +34,9 @@ test('Take Photos is always first when the tables exist', () => {
 test('hidden on the sketch and moisture tabs', () => {
   assert.deepEqual(FAB_HIDDEN_TABS, ['sketch', 'moisture', 'thread']);
 });
+
+test('Chat is the top action when switched on, and off by default', () => {
+  assert.deepEqual(fabActions({ hasSketch: false, visitStatus: null, chat: true }), ['chat', 'photos', 'sketch', 'internal']);
+  assert.deepEqual(fabActions({ docsMissing: true, visitStatus: 'scheduled', chat: true }), ['chat', 'otw', 'start']);
+  assert.ok(!fabActions({}).includes('chat'));
+});

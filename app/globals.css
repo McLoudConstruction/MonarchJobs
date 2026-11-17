@@ -2279,3 +2279,8 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]){ margin: 0
 .pv-tags input{ flex: 1; min-width: 120px; width: auto; padding: 6px 10px; font-size: 14px; }
 .pv-sugg{ display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
 .pv-sugg button{ padding: 4px 10px; border: 1px dashed var(--line); border-radius: 16px; background: transparent; color: var(--ink-soft); font: inherit; font-size: 12.5px; cursor: pointer; }
+
+/* unread count on the job button and its Chat action */
+.job-fab-btn{ overflow: visible; }
+.job-fab-dot{ position: absolute; top: -4px; right: -4px; min-width: 22px; height: 22px; padding: 0 5px; box-sizing: border-box; border-radius: 11px; background: #d93025; color: #fff; border: 2px solid var(--card-bg); font: inherit; font-size: 11px; font-style: normal; font-weight: 700; line-height: 18px; text-align: center; }
+.job-fab-badge{ display: inline-block; margin-left: 10px; min-width: 20px; padding: 0 6px; border-radius: 10px; background: #d93025; color: #fff; font-size: 12px; line-height: 20px; text-align: center; }

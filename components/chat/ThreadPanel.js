@@ -6,6 +6,7 @@ import MentionBox from '@/components/job/MentionBox';
 import { segments } from '@/lib/sketchComments';
 import { prepareImage } from '@/lib/photoUpload';
 import { useChatPhotoUrls } from '@/lib/chatPhotos';
+import { useChatDock } from '@/components/chat/ChatDockContext';
 import {
   CHAT_PHOTO_BUCKET, MAX_BODY, PAGE_SIZE, cleanBody, personName, mentionPeople, mentionIds, groupByDay, mergeMessages, mergeAcks,
   firstUnreadId, ackState, needsMyAck, canEditMessage, canDeleteMessage, quickRepliesFor, photoPathFor, clockTime, tagIsMe,
@@ -13,7 +14,9 @@ import {
 import './chat.css';
 
 // The chat on a job or a lead: messages, pictures, @tags, and "Got it" on changes the tech has to know about.
-// Staff only. `kind` is 'job' or 'lead'; `refId` is that job's or lead's id.
+// Staff only. `kind` is 'job', 'lead' or 'thread'; `refId` is that job's, lead's or conversation's id.
+// `compact` is the small popup / sheet version (no card, no heading). `active` false (a minimized window) keeps it from
+// marking messages read.
 
 // A missing function means migration 017 has not been run yet.
 const notInstalled = (err) => !!err && (err.code === 'PGRST202' || err.code === '42883' || err.code === '42P01' || /could not find the function|does not exist|schema cache/i.test(err.message || ''));
@@ -25,7 +28,8 @@ const friendly = (e) => (typeof navigator !== 'undefined' && navigator.onLine ==
   ? 'No signal. Your message was not sent.'
   : (e?.message || 'Could not send.');
 
-export default function ThreadPanel({ kind, refId, staff }) {
+export default function ThreadPanel({ kind, refId, staff, compact = false, active = true }) {
+  const dock = useChatDock();
   const [state, setState] = useState('loading'); // loading | ready | missing | error
   const [error, setError] = useState('');
   const [threadId, setThreadId] = useState(null);
@@ -73,7 +77,8 @@ export default function ThreadPanel({ kind, refId, staff }) {
       setState('loading'); setError(''); setMessages([]); setAcks([]); setThreadId(null);
       const sb = getSupabase();
       const [t, ppl] = await Promise.all([
-        kind === 'job' ? sb.rpc('chat_thread_for_job', { p_job: refId }) : sb.rpc('chat_thread_for_lead', { p_lead: refId }),
+        kind === 'thread' ? Promise.resolve({ data: refId, error: null })
+          : kind === 'job' ? sb.rpc('chat_thread_for_job', { p_job: refId }) : sb.rpc('chat_thread_for_lead', { p_lead: refId }),
         sb.from('staff_users').select('id,full_name,email,role,active'),
       ]);
       if (!alive) return;
@@ -118,14 +123,22 @@ export default function ThreadPanel({ kind, refId, staff }) {
     };
   }, [threadId, load]);
 
-  // reading the chat clears its bell items and badge
+  // a full-size chat on a job, lead or page tells the popup, so the same conversation is not also open in a window
+  const { registerPageThread } = dock;
   useEffect(() => {
-    if (!threadId || state !== 'ready') return undefined;
+    if (compact || !threadId) return undefined;
+    registerPageThread(threadId);
+    return () => registerPageThread(null);
+  }, [compact, threadId, registerPageThread]);
+
+  // reading the chat clears its bell items and badge (only while it is actually open on screen)
+  useEffect(() => {
+    if (!threadId || state !== 'ready' || !active) return undefined;
     const t = setTimeout(() => {
       if (document.visibilityState === 'visible') getSupabase().rpc('chat_mark_read', { p_thread: threadId }).then(changed, () => {});
     }, 700);
     return () => clearTimeout(t);
-  }, [threadId, state, messages.length]);
+  }, [threadId, state, messages.length, active]);
 
   // stay at the bottom for new messages, unless the person has scrolled up to read older ones
   useEffect(() => {
@@ -294,19 +307,20 @@ export default function ThreadPanel({ kind, refId, staff }) {
   }
 
   // ---- render ----------------------------------------------------------------
-  if (state === 'loading') return <div className="card"><p className="muted">Loading chat…</p></div>;
+  const Shell = compact ? 'div' : 'div';
+  if (state === 'loading') return <Shell className={compact ? 'chat-panel compact' : 'card'}><p className="muted" style={{ padding: compact ? 12 : 0 }}>Loading chat…</p></Shell>;
   if (state === 'missing') {
     return (
-      <div className="card">
-        <h2>Chat</h2>
-        <p className="muted">Chat is not switched on yet. Run migration 017_staff_messaging.sql in Supabase, then reload this page.</p>
+      <div className={compact ? 'chat-panel compact' : 'card'} style={compact ? { padding: 12 } : undefined}>
+        {!compact && <h2>Chat</h2>}
+        <p className="muted">Chat is not switched on yet. Run migrations 017 and 020 (staff messaging and direct messages) in Supabase, then reload.</p>
       </div>
     );
   }
   if (state === 'error') {
     return (
-      <div className="card">
-        <h2>Chat</h2>
+      <div className={compact ? 'chat-panel compact' : 'card'} style={compact ? { padding: 12 } : undefined}>
+        {!compact && <h2>Chat</h2>}
         <div className="msg err" role="alert">{error || 'Could not open the chat.'}</div>
         <button type="button" className="secondary" onClick={() => window.location.reload()}>Try again</button>
       </div>
@@ -314,16 +328,20 @@ export default function ThreadPanel({ kind, refId, staff }) {
   }
 
   return (
-    <div className="card chat-panel" id="thread">
-      <div className="chat-head">
-        <h2>Chat</h2>
-        <button type="button" className="secondary small" onClick={toggleMute} aria-pressed={muted}>{muted ? 'Unmute' : 'Mute'}</button>
-      </div>
+    <div className={compact ? 'chat-panel compact' : 'card chat-panel'} id={compact ? undefined : 'thread'}>
+      {compact ? (
+        <div className="chat-minihead"><button type="button" onClick={toggleMute} aria-pressed={muted}>{muted ? 'Unmute notifications' : 'Mute notifications'}</button></div>
+      ) : (
+        <div className="chat-head">
+          <h2>Chat</h2>
+          <button type="button" className="secondary small" onClick={toggleMute} aria-pressed={muted}>{muted ? 'Unmute' : 'Mute'}</button>
+        </div>
+      )}
       <div className="chat-list" ref={listRef} onScroll={onScroll} aria-live="polite">
         {hasMore && <button type="button" className="secondary small chat-more" onClick={loadOlder}>Show earlier messages</button>}
         {messages.length === 0 && (
           <div className="chat-empty">
-            No messages yet. Write to the {kind === 'job' ? 'crew on this job' : 'office about this lead'}, or type @ to tag someone.
+            No messages yet. {kind === 'job' ? 'Write to the crew on this job' : kind === 'lead' ? 'Write to the office about this lead' : 'Say hello'}, or type @ to tag someone.
           </div>
         )}
         {groups.map((g) => (
@@ -346,7 +364,7 @@ export default function ThreadPanel({ kind, refId, staff }) {
           <MentionBox people={mentionable} value={text} onChange={setText} onSubmit={() => send(text, true)} rows={2} maxLength={MAX_BODY} placeholder="Message. Type @ to tag someone" />
           <button type="button" className="send" disabled={busy || !cleanBody(text)} onClick={() => send(text, true)}>Send</button>
         </div>
-        <div className="chat-note">Staff only. Customers and adjusters never see this chat.</div>
+        {!compact && <div className="chat-note">Staff only. Customers and adjusters never see this chat.</div>}
       </div>
     </div>
   );

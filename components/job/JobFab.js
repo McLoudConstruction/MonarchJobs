@@ -3,12 +3,13 @@
 import { useState } from 'react';
 
 // Floating action button for phones (hidden from 900px up, where the page has its own buttons).
-// items: [{ key, label, onClick }]. onClick may be async; if it throws, the message shows in the menu.
+// items: [{ key, label, onClick, badge? }]. `badge` is a count shown on that item and on the button while the menu is closed. onClick may be async; if it throws, the message shows in the menu.
 export default function JobFab({ items }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState('');
   const [err, setErr] = useState('');
   if (!items.length) return null;
+  const waiting = items.reduce((n, it) => n + (it.badge || 0), 0);
 
   async function run(item) {
     setErr('');
@@ -30,7 +31,7 @@ export default function JobFab({ items }) {
           {err && <div className="msg err" style={{ margin: 0 }}>{err}</div>}
           {items.map((it) => (
             <button key={it.key} type="button" role="menuitem" className="job-fab-item" disabled={!!busy} onClick={() => run(it)}>
-              {busy === it.key ? 'Working...' : it.label}
+              {busy === it.key ? 'Working...' : it.label}{it.badge > 0 && busy !== it.key && <span className="job-fab-badge">{it.badge > 99 ? '99+' : it.badge}</span>}
             </button>
           ))}
         </div>
@@ -38,12 +39,13 @@ export default function JobFab({ items }) {
       <button
         type="button"
         className={`job-fab-btn${open ? ' open' : ''}`}
-        aria-label={open ? 'Close job actions' : 'Job actions'}
+        aria-label={open ? 'Close job actions' : `Job actions${waiting ? `, ${waiting} new messages` : ''}`}
         aria-expanded={open}
         aria-haspopup="menu"
         onClick={() => { setOpen(!open); setErr(''); }}
       >
         <span aria-hidden="true">+</span>
+        {!open && waiting > 0 && <i className="job-fab-dot" aria-hidden="true">{waiting > 99 ? '99+' : waiting}</i>}
       </button>
     </div>
   );

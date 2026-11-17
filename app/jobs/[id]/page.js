@@ -21,6 +21,7 @@ import CustomerPageCard from '@/components/job/CustomerPageCard';
 import UpdatesTab from '@/components/job/UpdatesTab';
 import ThreadPanel from '@/components/chat/ThreadPanel';
 import { useChatCenter } from '@/lib/useChatInbox';
+import { useChatDock } from '@/components/chat/ChatDockContext';
 import { countForTarget } from '@/lib/chat';
 import JobFab from '@/components/job/JobFab';
 import PhotoViewer from '@/components/job/PhotoViewer';
@@ -95,6 +96,7 @@ function JobCamera({ camera, onClose, uploader, jobId, rooms }) {
 function JobInner({ id, staff, token }) {
   const isOffice = staff.role !== 'tech';
   const chatRows = useChatCenter().rows;
+  const chatDock = useChatDock();
   const [job, setJob] = useState(null);
   const [visits, setVisitsRaw] = useState([]);
   const [waitingOps, setWaitingOps] = useState([]);
@@ -321,8 +323,9 @@ function JobInner({ id, staff, token }) {
   // the phone's action bar follows the visit under way, otherwise the next one waiting
   const dockVisit = visitsShown.find((v) => v.status === 'started' && (isOffice || v.tech_id === staff.id)) || otwVisit;
   // phone action button: Start Recheck / Start Sketch / Start Job, which becomes Complete Job once the visit is under way
-  const fabKeys = FAB_HIDDEN_TABS.includes(tab) ? [] : fabActions({ hasSketch: sketches.length > 0, visitStatus: dockVisit?.status || null, docsMissing, recheck: hasFeature(service, 'recheck') });
+  const fabKeys = FAB_HIDDEN_TABS.includes(tab) ? [] : fabActions({ hasSketch: sketches.length > 0, visitStatus: dockVisit?.status || null, docsMissing, recheck: hasFeature(service, 'recheck'), chat: true });
   const fabRun = {
+    chat: () => chatDock.openJob(id, `Job #${job.job_number}`),
     photos: () => openCamera(),
     recheck: () => { openTab('moisture'); setMoistCmd({ type: 'recheck', n: Date.now() }); },
     sketch: () => openTab('sketch'),
@@ -334,7 +337,8 @@ function JobInner({ id, staff, token }) {
     complete: () => { openTab('updates'); setUpdCmd({ kind: 'internal', category: 'Completed Job', n: Date.now() }); },
     internal: () => { openTab('updates'); setUpdCmd({ kind: 'internal', category: INTERNAL_CATEGORIES[0], n: Date.now() }); },
   };
-  const fabItems = fabKeys.map((key) => ({ key, label: key === 'otw' && dockVisit?.status === 'on_the_way' ? 'Update ETA' : FAB_LABELS[key], onClick: fabRun[key] }));
+  const jobChatUnread = countForTarget(chatRows, { jobId: id });
+  const fabItems = fabKeys.map((key) => ({ key, badge: key === 'chat' ? jobChatUnread : 0, label: key === 'otw' && dockVisit?.status === 'on_the_way' ? 'Update ETA' : FAB_LABELS[key], onClick: fabRun[key] }));
   const contactName = [job.customer.first_name, job.customer.last_name].filter(Boolean).join(' ').trim();
   const anyFlag = visits.some((v) => flagged.has(v.id) && v.status !== 'cancelled');
 
