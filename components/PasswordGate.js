@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
 import NewPasswordForm from '@/components/NewPasswordForm';
+import CenterCard from '@/components/CenterCard';
 
 // Shown before anything else in the app when someone has not chosen their own password yet:
 // they opened their invite link but left before saving one, or are still on an old temporary password.
@@ -27,19 +28,19 @@ export default function PasswordGate({ user, onSaved, signOut }) {
   }
 
   return (
-    <div className="center-wrap">
-      <div className="card">
-        <h2>Choose your password</h2>
-        <p className="hint">Before you continue, choose your own password. You will use it with your email to sign in.</p>
-        <NewPasswordForm
-          onSubmit={save}
-          busy={busy}
-          error={error}
-          email={user?.email}
-          name={user?.user_metadata?.full_name}
-          footer={<button type="button" className="secondary" style={{ marginTop: 10, width: '100%' }} onClick={signOut}>Sign out</button>}
-        />
+    <CenterCard>
+      <div className="auth-head">
+        <h2 className="auth-welcome">Choose your password</h2>
+        {user?.email && <span className="auth-email">{user.email}</span>}
       </div>
-    </div>
+      <NewPasswordForm
+        onSubmit={save}
+        busy={busy}
+        error={error}
+        email={user?.email}
+        name={user?.user_metadata?.full_name}
+        footer={<button type="button" className="secondary" style={{ marginTop: 10, width: '100%' }} onClick={signOut}>Sign out</button>}
+      />
+    </CenterCard>
   );
 }

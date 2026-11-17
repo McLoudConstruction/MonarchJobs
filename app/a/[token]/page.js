@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { addressLine, JOB_TYPES } from '@/lib/format';
 import { displayPhone } from '@/lib/phone';
 import { logoUrl } from '@/lib/branding';
+import CenterCard from '@/components/CenterCard';
 
 // The adjuster's read-only view of the drying. No sign-in; the secret link is the access. Shows readings,
 // equipment and dehumidifier performance, never staff names, notes or photos.
@@ -26,7 +27,7 @@ function View() {
       .catch((e) => setError(e.message));
   }, [token, preview]);
 
-  if (error) return <div className="center-wrap"><div className="card"><h2>Link unavailable</h2><p className="hint">{error} It may have expired or been turned off. Please ask the contractor for a new one.</p></div></div>;
+  if (error) return <CenterCard><h2 className="auth-welcome">Link unavailable</h2><p className="hint auth-sub">{error} It may have expired or been turned off. Please ask the contractor for a new one.</p></CenterCard>;
   if (!data) return <div className="center-wrap"><p>Loading...</p></div>;
 
   const b = data.business || {};

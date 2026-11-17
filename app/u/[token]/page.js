@@ -6,6 +6,7 @@ import { Suspense } from 'react';
 import { addressLine, fmtDateTime, JOB_TYPES } from '@/lib/format';
 import { displayPhone } from '@/lib/phone';
 import { logoUrl } from '@/lib/branding';
+import CenterCard from '@/components/CenterCard';
 
 // Customer-facing progress update. No sign-in; the secret link is the access. Stands alone, without
 // the app shell.
@@ -33,7 +34,7 @@ function UpdateView() {
     return () => window.removeEventListener('keydown', onKey);
   }, [big]);
 
-  if (error) return <div className="center-wrap"><div className="card"><h2>Update unavailable</h2><p className="hint">{error} If you think this is a mistake, please contact us.</p></div></div>;
+  if (error) return <CenterCard><h2 className="auth-welcome">Update unavailable</h2><p className="hint auth-sub">{error} If you think this is a mistake, please contact us.</p></CenterCard>;
   if (!data) return <div className="center-wrap"><p>Loading...</p></div>;
 
   const b = data.business;

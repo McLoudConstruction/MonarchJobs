@@ -8,6 +8,7 @@ import { effectiveLines, tiersPresent, tierTotals, optionalLines, choiceFromEsti
 import { money, addressLine, fmtDateTime, JOB_TYPES, UNIT_LABELS } from '@/lib/format';
 import { displayPhone } from '@/lib/phone';
 import { logoUrl } from '@/lib/branding';
+import CenterCard from '@/components/CenterCard';
 
 // Customer-facing estimate page. No sign-in; the secret link is the access. Stands alone, without the
 // app shell. The customer can review the estimate, approve it and sign. Approving tells the office
@@ -80,7 +81,7 @@ function EstimateView() {
 
   useEffect(() => { load(preview); }, [load, preview]);
 
-  if (error) return <div className="center-wrap"><div className="card"><h2>Estimate unavailable</h2><p className="hint">{error} If you think this is a mistake, please contact us.</p></div></div>;
+  if (error) return <CenterCard><h2 className="auth-welcome">Estimate unavailable</h2><p className="hint auth-sub">{error} If you think this is a mistake, please contact us.</p></CenterCard>;
   if (!data) return <div className="center-wrap"><p>Loading...</p></div>;
 
   const tiers = tiersPresent(data.lines);

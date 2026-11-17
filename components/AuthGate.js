@@ -5,6 +5,7 @@ import AppShell from '@/components/AppShell';
 import SetupNotice from '@/components/SetupNotice';
 import NameGate from '@/components/NameGate';
 import PasswordGate from '@/components/PasswordGate';
+import CenterCard from '@/components/CenterCard';
 import { needsPasswordChange } from '@/lib/newUser';
 import { hasRealName } from '@/lib/userDisplay';
 
@@ -23,13 +24,11 @@ export default function AuthGate({ ownerOnly = false, officeOnly = false, childr
 
   if (auth.error === 'pending') {
     return (
-      <div className="center-wrap">
-        <div className="card">
-          <h2>Waiting for approval</h2>
-          <p className="hint">Your account exists but has not been activated. Ask the owner to activate it in Settings.</p>
-          <button className="secondary" onClick={auth.signOut}>Sign out</button>
-        </div>
-      </div>
+      <CenterCard>
+        <h2 className="auth-welcome">Waiting for approval</h2>
+        <p className="hint auth-sub">Your account exists but has not been activated. Ask the owner to activate it in Settings.</p>
+        <button className="secondary" style={{ width: '100%', marginTop: 8 }} onClick={auth.signOut}>Sign out</button>
+      </CenterCard>
     );
   }
 

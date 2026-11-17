@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { fmtDateTime } from '@/lib/format';
 import { displayPhone } from '@/lib/phone';
 import { logoUrl } from '@/lib/branding';
+import CenterCard from '@/components/CenterCard';
 import { PROBLEM_KINDS, PLAN_INTERVALS } from '@/lib/customerPage';
 
 // Customer-facing page after a cleaning: care instructions, the signed service record, report a problem,
@@ -118,7 +119,7 @@ export default function CustomerPage() {
   }, [token]);
   useEffect(() => { load(); }, [load]);
 
-  if (error) return <div className="center-wrap"><div className="card"><h2>Page unavailable</h2><p className="hint">{error} If you think this is a mistake, please contact us.</p></div></div>;
+  if (error) return <CenterCard><h2 className="auth-welcome">Page unavailable</h2><p className="hint auth-sub">{error} If you think this is a mistake, please contact us.</p></CenterCard>;
   if (!data) return <div className="center-wrap"><p>Loading...</p></div>;
 
   const b = data.business;
