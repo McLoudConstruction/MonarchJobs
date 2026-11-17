@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { EyeIcon, EyeOffIcon } from '@/components/icons';
 
 // A password input with an eye button that shows or hides what is typed.
-export default function PasswordField({ id, label, value, onChange, autoFocus = false, describedBy, invalid = false }) {
+export default function PasswordField({ id, label, value, onChange, autoFocus = false, describedBy, invalid = false, autoComplete = 'new-password' }) {
   const [shown, setShown] = useState(false);
   return (
     <div className="field">
@@ -13,7 +13,7 @@ export default function PasswordField({ id, label, value, onChange, autoFocus = 
         <input
           id={id}
           type={shown ? 'text' : 'password'}
-          autoComplete="new-password"
+          autoComplete={autoComplete}
           autoCapitalize="off"
           autoCorrect="off"
           spellCheck={false}

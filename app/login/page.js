@@ -4,6 +4,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getSupabase } from '@/lib/supabaseClient';
+import BrandLogo from '@/components/BrandLogo';
+import PasswordField from '@/components/PasswordField';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -34,23 +36,20 @@ export default function LoginPage() {
 
   return (
     <div className="center-wrap">
-      <form className="card" onSubmit={onSubmit}>
-        <span className="brand">Monarch <span>Jobs</span></span>
-        <p className="hint">Sign in with your staff account.</p>
-        <div className="field">
-          <label htmlFor="email">Email</label>
-          <input id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </div>
-        <div className="field">
-          <label htmlFor="password">Password</label>
-          <input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-        </div>
-        {error && <div className="msg err">{error}</div>}
-        <button className="primary" type="submit" disabled={busy}>{busy ? 'Signing in...' : 'Sign in'}</button>
-        <p className="hint" style={{ marginTop: 14, marginBottom: 0, textAlign: 'center' }}>
-          <Link href="/forgot-password">Forgot password?</Link>
-        </p>
-      </form>
+      <div className="card compact">
+        <BrandLogo />
+        <h2 className="auth-welcome">Sign in</h2>
+        <form className="pw-form auth-form" onSubmit={onSubmit}>
+          <div className="field">
+            <label htmlFor="email">Email</label>
+            <input id="email" type="email" autoComplete="email" autoCapitalize="off" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          </div>
+          <PasswordField id="password" label="Password" value={password} onChange={setPassword} autoComplete="current-password" />
+          {error && <div className="msg err">{error}</div>}
+          <button className="primary big" type="submit" disabled={busy} style={{ width: '100%', marginTop: 12 }}>{busy ? 'Signing in...' : 'Sign in'}</button>
+        </form>
+        <p className="auth-links"><Link href="/forgot-password">Forgot password?</Link></p>
+      </div>
     </div>
   );
 }

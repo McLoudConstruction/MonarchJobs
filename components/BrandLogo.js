@@ -1,38 +1,42 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getSupabase } from '@/lib/supabaseClient';
 import { logoUrl } from '@/lib/branding';
 import './password.css';
 
-// The business logo uploaded in Settings (same one the app header shows), or the "Monarch Jobs" text
-// when none is set. The logo path is only readable once someone is signed in, so pass enabled={false}
-// until then; the space stays reserved so the page does not jump.
-const LOGO_CACHE = 'mj_logo_path'; // shared with the app header
+// The business logo uploaded in Settings (the same one the app header shows), or the "Monarch Jobs"
+// text when none is set. Used on the sign-in, invite and reset pages, so it reads the logo name from a
+// public endpoint (no sign-in needed). The last name is remembered on this device so repeat visits
+// show the logo immediately; until we know, the space stays reserved so the page does not jump.
+const LOGO_CACHE = 'mj_logo_path'; // same key the app header uses
 
-export default function BrandLogo({ enabled = true }) {
+function readCached() {
+  try {
+    const v = sessionStorage.getItem(LOGO_CACHE) ?? localStorage.getItem(LOGO_CACHE);
+    return v === null ? null : { loaded: true, path: v || null };
+  } catch { return null; }
+}
+
+export default function BrandLogo() {
   const [brand, setBrand] = useState({ loaded: false, path: null });
 
   useEffect(() => {
-    try {
-      const cached = sessionStorage.getItem(LOGO_CACHE);
-      if (cached !== null) setBrand({ loaded: true, path: cached || null });
-    } catch { /* storage unavailable */ }
-    if (!enabled) return undefined;
+    const cached = readCached();
+    if (cached) setBrand(cached);
     let alive = true;
-    getSupabase().from('settings').select('logo_path').eq('id', 1).maybeSingle()
-      .then(({ data }) => {
+    fetch('/api/branding/public', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => {
         if (!alive) return;
-        const path = data?.logo_path || null;
+        const path = d?.logo_path || null;
         setBrand({ loaded: true, path });
-        try { sessionStorage.setItem(LOGO_CACHE, path || ''); } catch { /* ignore */ }
+        try { sessionStorage.setItem(LOGO_CACHE, path || ''); localStorage.setItem(LOGO_CACHE, path || ''); } catch { /* ignore */ }
       })
       .catch(() => { if (alive) setBrand((b) => ({ ...b, loaded: true })); });
     return () => { alive = false; };
-  }, [enabled]);
+  }, []);
 
   const url = logoUrl(brand.path);
   if (url) return <img className="auth-logo" src={url} alt="Monarch Cleaning & Restoration" />;
-  // hidden until we know, so the text does not flash before the logo appears
   return <span className="brand" style={brand.loaded ? undefined : { visibility: 'hidden' }}>Monarch <span>Jobs</span></span>;
 }

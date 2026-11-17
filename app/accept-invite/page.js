@@ -81,9 +81,7 @@ export default function AcceptInvitePage() {
   return (
     <div className="center-wrap">
       <div className="card compact">
-        {expired && !user
-          ? <span className="brand">Monarch <span>Jobs</span></span>
-          : <BrandLogo enabled={!!user} />}
+        <BrandLogo />
         {done ? (
           <div className="msg ok">Password saved. Taking you to the app...</div>
         ) : user ? (
