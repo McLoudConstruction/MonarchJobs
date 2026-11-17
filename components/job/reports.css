@@ -9,3 +9,4 @@
 .rep-opts .field:last-child{ margin-bottom: 0; }
 .rep-opts label.check{ display: flex; gap: 8px; align-items: center; margin-top: 8px; font-size: 14px; }
 @media (max-width: 520px){ .rep-head button{ width: 100%; } }
+.rep-head button[aria-busy="true"]{ cursor: progress; }

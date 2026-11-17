@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
 import { PHOTO_KINDS } from '@/lib/jobDocs';
 import { normalizePlan } from '@/lib/sketch';
@@ -21,7 +21,11 @@ import { logoUrl } from '@/lib/branding';
 import AdjusterLink from '@/components/job/AdjusterLink';
 import './reports.css';
 
-function Row({ title, text, ready = true, hint, children, button }) {
+// One report. `note` is the result of the last tap on THIS row ({ ok, text }): shown right under the row, where the person is
+// looking, instead of at the top of the card (out of sight after scrolling, and shifting every button down when it appeared).
+function Row({ title, text, ready = true, hint, children, button, note = null }) {
+  const noteRef = useRef(null);
+  useEffect(() => { if (note) noteRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); }, [note]);
   return (
     <div className="rep-item">
       <div className="rep-head">
@@ -32,6 +36,7 @@ function Row({ title, text, ready = true, hint, children, button }) {
         {children}
         {button}
       </div>
+      {note && <div ref={noteRef} className={`msg ${note.ok ? 'ok' : 'err'}`} role="status" style={{ margin: '10px 0 0' }}>{note.text}</div>}
     </div>
   );
 }
@@ -46,6 +51,8 @@ export default function ReportsTab({ jobId, service, photos, rooms, sketches: pa
   const [sketchId, setSketchId] = useState(null);
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState(null); // { ok, text }
+  const [msgKey, setMsgKey] = useState(''); // the report row the message belongs to
+  const noteFor = (k) => (msgKey === k ? msg : null);
   const [linkOpen, setLinkOpen] = useState(false);
   // the one photo report option that is left: how the pictures are grouped
   const [groupBy, setGroupBy] = useState('kind');
@@ -77,7 +84,7 @@ export default function ReportsTab({ jobId, service, photos, rooms, sketches: pa
 
   async function run(key, fn) {
     if (busy) return;
-    setBusy(key); setMsg(null);
+    setBusy(key); setMsg(null); setMsgKey(key);
     try { await fn(); } catch (e) { setMsg({ ok: false, text: e?.message || 'That report could not be made.' }); }
     setBusy('');
   }
@@ -145,18 +152,17 @@ export default function ReportsTab({ jobId, service, photos, rooms, sketches: pa
   const photoItem = groups.find((g) => g.key === 'photos')?.items || [];
   const drying = groups.find((g) => g.key === 'drying');
   const pdfBtn = (key, onClick, ready = true, label = 'Download PDF', cls = 'primary') => (
-    <button type="button" className={cls} disabled={!ready || !!busy} onClick={onClick}>{busy.startsWith(key) ? `Making…${progress(key)}` : label}</button>
+    <button type="button" className={cls} disabled={!ready} aria-busy={busy.startsWith(key)} onClick={onClick}>{busy.startsWith(key) ? `Making…${progress(key)}` : label}</button>
   );
 
   return (
     <div className="card">
       <h2>Reports</h2>
-      {msg && <div className={`msg ${msg.ok ? 'ok' : 'err'}`} role="status">{msg.text}</div>}
 
-      {isOffice && <Row title="Full job packet" text="Invoices with payments, the signed estimate and the signed inspections, in one PDF." button={pdfBtn('packet', makePacket)} />}
+      {isOffice && <Row title="Full job packet" note={noteFor('packet')} text="Invoices with payments, the signed estimate and the signed inspections, in one PDF." button={pdfBtn('packet', makePacket)} />}
 
       {photoItem[0] && (
-        <Row title="Photo report" text={photoItem[0].text} ready={photoItem[0].ready} hint={photoItem[0].hint}
+        <Row title="Photo report" note={noteFor('photos')} text={photoItem[0].text} ready={photoItem[0].ready} hint={photoItem[0].hint}
           button={pdfBtn('photos', () => makePhotoPdf('photos'), photoItem[0].ready)}>
           {photoItem[0].ready && (
             <div className="field" style={{ margin: 0 }}>
@@ -169,7 +175,7 @@ export default function ReportsTab({ jobId, service, photos, rooms, sketches: pa
           )}
         </Row>
       )}
-      {photoItem[1] && <Row title="Before & after" text={photoItem[1].text} ready={photoItem[1].ready} hint={photoItem[1].hint} button={pdfBtn('beforeafter', () => makePhotoPdf('beforeafter'), photoItem[1].ready)} />}
+      {photoItem[1] && <Row title="Before & after" note={noteFor('beforeafter')} text={photoItem[1].text} ready={photoItem[1].ready} hint={photoItem[1].hint} button={pdfBtn('beforeafter', () => makePhotoPdf('beforeafter'), photoItem[1].ready)} />}
 
       {drying && (
         <>
@@ -185,11 +191,11 @@ export default function ReportsTab({ jobId, service, photos, rooms, sketches: pa
             const def = DRYING_REPORTS.find((d) => d.key === it.key);
             const ready = dryingReady(def, chosenContents);
             return (
-              <Row key={it.key} title={it.title} text={it.text} ready={ready} hint={it.hint}
-                button={<button type="button" className={it.format === 'pdf' ? 'primary' : 'secondary'} disabled={!ready || !!busy} onClick={() => makeDrying(def)}>{busy === it.key ? 'Making…' : it.format === 'pdf' ? 'Download PDF' : 'Download CSV'}</button>} />
+              <Row key={it.key} note={noteFor(it.key)} title={it.title} text={it.text} ready={ready} hint={it.hint}
+                button={<button type="button" className={it.format === 'pdf' ? 'primary' : 'secondary'} disabled={!ready} aria-busy={busy === it.key} onClick={() => makeDrying(def)}>{busy === it.key ? 'Making…' : it.format === 'pdf' ? 'Download PDF' : 'Download CSV'}</button>} />
             );
           })}
-          {isOwner && <Row title="Daily burn" text="What the job costs per calendar day (equipment on site and logged hours) with a running total. Owner only: it shows your own costs." button={pdfBtn('burn', makeBurn)} />}
+          {isOwner && <Row title="Daily burn" note={noteFor('burn')} text="What the job costs per calendar day (equipment on site and logged hours) with a running total. Owner only: it shows your own costs." button={pdfBtn('burn', makeBurn)} />}
           {isOffice && <Row title="Adjuster link" text="A read-only web page of the drying report for the insurance adjuster. It expires in 90 days and you can turn it off." button={<button type="button" className="secondary" onClick={() => setLinkOpen(true)}>Manage links</button>} />}
         </>
       )}
