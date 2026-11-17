@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { getSupabase } from '@/lib/supabaseClient';
 import { agingTotals, AGING, invoiceChip, isPastDue, centsToText, daysPastDue } from '@/lib/invoice';
 import '@/components/job/invoice.css';
+import '@/components/owner/owner.css';
 
 const FILTERS = [
   ['open', 'Owed'],
@@ -53,10 +54,15 @@ export default function InvoicesPanel() {
       {!rows && !err && <p className="muted">Loading...</p>}
       {rows && (
         <>
-          <div className="inv-age">
-            <div><div className="hint">Total owed</div><div className="n">{centsToText(aging.total)}</div></div>
-            {AGING.map((a) => <div key={a.key}><div className="hint">{a.label}</div><div className="n" style={{ color: a.key !== 'current' && aging[a.key] > 0 ? '#8a1f14' : undefined }}>{centsToText(aging[a.key])}</div></div>)}
-            <div><div className="hint">Drafts to send</div><div className="n">{drafts}</div></div>
+          <div className="own-tiles">
+            <div className="own-tile"><div className="num">{centsToText(aging.total)}</div><div className="lab">Total owed</div></div>
+            {AGING.map((a) => (
+              <div className="own-tile" key={a.key}>
+                <div className="num" style={{ color: a.key !== 'current' && aging[a.key] > 0 ? '#8a1f14' : undefined }}>{centsToText(aging[a.key])}</div>
+                <div className="lab">{a.label}</div>
+              </div>
+            ))}
+            <div className="own-tile"><div className="num">{drafts}</div><div className="lab">Drafts to send</div></div>
           </div>
           <div className="card">
             <div className="inv-pick">

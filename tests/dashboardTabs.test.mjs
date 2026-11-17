@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { tabsFor, parseTab, tabHref, invoiceFlagCounts, invoiceBadge, dashboardBadge } from '../lib/dashboardTabs.js';
+import { tabsFor, parseTab, tabHref, invoiceFlagCounts, invoiceBadge, dashboardBadge, legacyOwnerTab } from '../lib/dashboardTabs.js';
 
 test('tabs follow the role', () => {
-  assert.deepEqual(tabsFor('owner').map((t) => t.key), ['today', 'activity', 'invoices', 'owner']);
-  assert.deepEqual(tabsFor('office').map((t) => t.key), ['today', 'activity', 'invoices']);
+  assert.deepEqual(tabsFor('owner').map((t) => t.key), ['today', 'overview', 'invoices', 'activity', 'financials', 'work', 'customers']);
+  assert.deepEqual(tabsFor('office').map((t) => t.key), ['today', 'invoices', 'activity']);
   assert.deepEqual(tabsFor('tech').map((t) => t.key), ['today', 'activity']);
   assert.equal(tabsFor('tech')[0].label, 'My day');
   assert.equal(tabsFor('office')[0].label, 'Today');
@@ -12,8 +12,13 @@ test('tabs follow the role', () => {
 
 test('the tab comes from the address and falls back to Today', () => {
   assert.equal(parseTab('?tab=invoices', 'office'), 'invoices');
-  assert.equal(parseTab('?tab=owner', 'owner'), 'owner');
-  assert.equal(parseTab('?tab=owner', 'office'), 'today'); // not allowed for this role
+  assert.equal(parseTab('?tab=financials', 'owner'), 'financials');
+  assert.equal(parseTab('?tab=owner', 'owner'), 'overview'); // the old single Owner tab
+  assert.equal(parseTab('?tab=financials', 'office'), 'today'); // not allowed for this role
+  assert.equal(parseTab('?tab=owner', 'office'), 'today');
+  assert.equal(legacyOwnerTab('owner', '#customers'), 'customers');
+  assert.equal(legacyOwnerTab('owner', '#junk'), 'overview');
+  assert.equal(legacyOwnerTab('invoices', '#customers'), 'invoices');
   assert.equal(parseTab('?tab=invoices', 'tech'), 'today');
   assert.equal(parseTab('?tab=nonsense', 'owner'), 'today');
   assert.equal(parseTab('', 'owner'), 'today');
@@ -23,7 +28,7 @@ test('tab links keep a #section', () => {
   assert.equal(tabHref('today'), '/dashboard');
   assert.equal(tabHref('activity'), '/dashboard?tab=activity');
   assert.equal(tabHref('activity', '#messages'), '/dashboard?tab=activity#messages');
-  assert.equal(tabHref('owner', 'customers'), '/dashboard?tab=owner#customers');
+  assert.equal(tabHref('customers'), '/dashboard?tab=customers');
 });
 
 test('invoice flags count past due and drafts', () => {

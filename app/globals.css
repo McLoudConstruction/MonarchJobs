@@ -1009,6 +1009,11 @@ table.table td{ text-align: left; padding: 8px 10px; border-bottom: 1px solid va
 .stat-row{ display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 22px; }
 .stat-tile{ flex: 1 1 150px; background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; color: inherit; }
 a.stat-tile:hover{ border-color: var(--accent); }
+.stat-tile.flag{ background: var(--bad-bg); border-color: var(--bad-line); color: var(--danger); }
+.stat-tile.flag .stat-num, .stat-tile.flag .stat-label{ color: var(--danger); }
+.stat-tile.warn{ background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn-ink); }
+.stat-tile.warn .stat-num, .stat-tile.warn .stat-label{ color: var(--warn-ink); }
+a.stat-tile.flag:hover, a.stat-tile.warn:hover{ border-color: currentColor; }
 .stat-num{ font-size: 24px; font-weight: 700; color: var(--heading); line-height: 1.1; }
 .stat-label{ font-size: 12px; color: var(--ink-soft); margin-top: 4px; }
 .list-stack{ margin-bottom: 20px; }

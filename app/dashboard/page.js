@@ -10,7 +10,7 @@ import OwnerDashboard from '@/components/owner/OwnerDashboard';
 import { useNotificationCenter } from '@/lib/useNotifications';
 import { useChatCenter } from '@/lib/useChatInbox';
 import { useInvoiceFlags } from '@/lib/useInvoiceFlags';
-import { tabsFor, parseTab, tabHref, invoiceBadge } from '@/lib/dashboardTabs';
+import { tabsFor, parseTab, tabHref, invoiceBadge, legacyOwnerTab, OWNER_TABS } from '@/lib/dashboardTabs';
 import { centsToText } from '@/lib/invoice';
 import { getSupabase } from '@/lib/supabaseClient';
 import { startOfDay, addDays, fmtTime, fmtDateTime, fmtDuration, JOB_TYPES, leadDisplayName } from '@/lib/format';
@@ -55,35 +55,32 @@ function TodayPanel({ staff, activityCount, invoiceFlags }) {
         <div className="stat-tile"><div className="stat-num">{today.length}</div><div className="stat-label">Visits today</div></div>
         {isOffice && <Link href="/leads" className="stat-tile"><div className="stat-num">{ready.length}</div><div className="stat-label">Ready to schedule</div></Link>}
         {isOffice && <Link href="/leads" className="stat-tile"><div className="stat-num">{newLeads.length}</div><div className="stat-label">New leads</div></Link>}
+        {/* things that need someone: same tiles, in color */}
+        {isOffice && unassigned.count > 0 && (
+          <Link href={unassigned.jobIds.length === 1 ? `/jobs/${unassigned.jobIds[0]}` : '/jobs?unassigned=1'} className="stat-tile flag" title="Upcoming visits with no tech assigned">
+            <div className="stat-num">{unassigned.count}</div>
+            <div className="stat-label">{unassigned.count === 1 ? 'Visit has' : 'Visits have'} no tech{unassigned.jobIds.length === 1 ? ' (open job)' : ''} &rsaquo;</div>
+          </Link>
+        )}
+        {isOffice && flagged > 0 && (
+          <div className="stat-tile flag" title="Visits today that overlap for the same tech">
+            <div className="stat-num">{flagged}</div>
+            <div className="stat-label">{flagged === 1 ? 'Visit overlaps' : 'Visits overlap'} for a tech</div>
+          </div>
+        )}
+        {isOffice && invoiceFlags.pastDue > 0 && (
+          <Link href={tabHref('invoices')} className="stat-tile flag">
+            <div className="stat-num">{invoiceFlags.pastDue}</div>
+            <div className="stat-label">Past due, {centsToText(invoiceFlags.pastDueCents)} owed &rsaquo;</div>
+          </Link>
+        )}
+        {activityCount > 0 && (
+          <Link href={tabHref('activity')} className="stat-tile warn">
+            <div className="stat-num">{activityCount}</div>
+            <div className="stat-label">Unread in Activity &rsaquo;</div>
+          </Link>
+        )}
       </div>
-
-      {isOffice && invoiceFlags.pastDue > 0 && (
-        <div className="banner flag">
-          <Link href={tabHref('invoices')} style={{ color: 'inherit', textDecoration: 'underline' }}>
-            {invoiceFlags.pastDue} invoice{invoiceFlags.pastDue === 1 ? ' is' : 's are'} past due ({centsToText(invoiceFlags.pastDueCents)} owed) &rsaquo;
-          </Link>
-        </div>
-      )}
-      {activityCount > 0 && (
-        <div className="banner">
-          <Link href={tabHref('activity')} style={{ color: 'inherit', textDecoration: 'underline' }}>
-            {activityCount} unread in Activity (alerts and chats) &rsaquo;
-          </Link>
-        </div>
-      )}
-
-      {isOffice && (flagged > 0 || unassigned.count > 0) && (
-        <div className="banner flag">
-          {flagged > 0 && <div>{flagged} visits today overlap for the same tech.</div>}
-          {unassigned.count > 0 && (
-            <div>
-              <Link href={unassigned.jobIds.length === 1 ? `/jobs/${unassigned.jobIds[0]}` : '/jobs?unassigned=1'} style={{ color: 'inherit', textDecoration: 'underline' }}>
-                {unassigned.count} upcoming visit{unassigned.count === 1 ? ' has' : 's have'} no tech assigned{unassigned.jobIds.length === 1 ? ' (open job)' : ' (see jobs)'} &rsaquo;
-              </Link>
-            </div>
-          )}
-        </div>
-      )}
 
       <div className="dash-section">
         <h3>Today</h3>
@@ -134,6 +131,10 @@ function DashboardInner({ staff, token }) {
   const isOffice = staff.role !== 'tech';
   const params = useSearchParams();
   const tab = parseTab(params.toString(), staff.role);
+  // an old ?tab=owner#financials address moves to its own tab
+  useEffect(() => {
+    if (params.get('tab') === 'owner') window.history.replaceState(null, '', tabHref(legacyOwnerTab('owner', window.location.hash)));
+  }, [params]);
   const { unread } = useNotificationCenter();
   const { unread: chatUnread } = useChatCenter();
   const activityCount = (unread || 0) + (chatUnread || 0);
@@ -179,7 +180,7 @@ function DashboardInner({ staff, token }) {
       {tab === 'today' && <TodayPanel staff={staff} activityCount={activityCount} invoiceFlags={invoiceFlags} />}
       {tab === 'activity' && <ActivityPanel staff={staff} token={token} />}
       {tab === 'invoices' && <InvoicesPanel />}
-      {tab === 'owner' && <OwnerDashboard />}
+      {OWNER_TABS.includes(tab) && <OwnerDashboard section={tab} />}
     </>
   );
 }

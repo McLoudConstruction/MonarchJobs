@@ -214,7 +214,7 @@ function DesktopDock({ staff, rows, unread, loaded, panel, setPanel, windows, se
     <div className="chatdock desktop-only" data-testid="chat-dock">
       {open.map((w, i) => (
         <section key={w.threadId} className="cd-window" style={{ right: base + (open.length - 1 - i) * (340 + 12) }} aria-label={`Chat with ${w.title}`}>
-          <header className="cd-head">
+          <header className="cd-head cd-head-click" title="Click to minimize" onClick={(e) => { if (!e.target.closest('button')) setWindows((x) => minimizeWindow(x, w.threadId)); }}>
             <span className="cd-head-title">{w.title}</span>
             <button type="button" aria-label="Open full page" title="Open full page" onClick={() => go(w)}>⤢</button>
             <button type="button" aria-label="Minimize" title="Minimize" onClick={() => setWindows((x) => minimizeWindow(x, w.threadId))}>–</button>

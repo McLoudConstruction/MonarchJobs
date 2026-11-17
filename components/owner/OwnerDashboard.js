@@ -9,7 +9,7 @@ import { PAYMENT_METHODS } from '@/lib/invoice';
 import { PlansDue, MailingList } from '@/components/customer/OutreachPanels';
 import './owner.css';
 
-const TABS = [['overview', 'Overview'], ['financials', 'Financials'], ['customers', 'Customers'], ['work', 'Jobs & leads']];
+const TITLES = { overview: 'Overview', financials: 'Financials', customers: 'Customers', work: 'Jobs & leads' };
 const JOB_STATUS_LABEL = { booked: 'Booked', on_the_way: 'On the way', in_progress: 'In progress' };
 
 const dollars = (cents) => money(cents / 100);
@@ -320,18 +320,17 @@ function Work({ work, rangeLabel }) {
   );
 }
 
-export default function OwnerDashboard() {
+// One of the four owner reports, picked by the Dashboard tab. The page keeps this mounted while you move between them, so the
+// numbers are read once, not once per tab.
+export default function OwnerDashboard({ section = 'overview' }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [range, setRange] = useState('30d');
-  const [tab, setTab] = useState('overview');
+  const tab = section;
 
   useEffect(() => {
-    const h = window.location.hash.replace('#', '');
-    if (TABS.some(([k]) => k === h)) setTab(h);
     try { const r = sessionStorage.getItem('mj_owner_range'); if (RANGES.some(([k]) => k === r)) setRange(r); } catch { /* storage unavailable */ }
   }, []);
-  const openTab = (k) => { setTab(k); window.history.replaceState(null, '', `#${k}`); };
   const pickRange = (k) => { setRange(k); try { sessionStorage.setItem('mj_owner_range', k); } catch { /* ignore */ } };
 
   const load = useCallback(async () => {
@@ -357,16 +356,12 @@ export default function OwnerDashboard() {
   return (
     <>
       <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-        <h2 style={{ margin: 0 }}>Owner reports</h2>
+        <h2 style={{ margin: 0 }}>{TITLES[tab] || 'Owner reports'}</h2>
         <div className="own-range" role="group" aria-label="Time period">
           {RANGES.map(([k, label]) => <button key={k} type="button" className={range === k ? 'on' : ''} aria-pressed={range === k} onClick={() => pickRange(k)}>{label}</button>)}
         </div>
       </div>
       <p className="sub">Customers, jobs and money in one place. Owner only.</p>
-
-      <div className="tabs" role="tablist">
-        {TABS.map(([k, label]) => <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => openTab(k)}>{label}</button>)}
-      </div>
 
       {error && <div className="msg err">Could not load the numbers: {error} <button type="button" className="secondary small" onClick={load}>Try again</button></div>}
       {!error && !calc && <p className="muted">Loading…</p>}

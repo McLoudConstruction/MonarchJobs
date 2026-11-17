@@ -17,6 +17,7 @@
 .cd-panel{ right: 20px; }
 .cd-window{ height: min(440px, calc(100dvh - 24px)); }
 .cd-head{ display: flex; align-items: center; gap: 2px; padding: 8px 6px 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); flex: none; }
+.cd-head-click{ cursor: pointer; }
 .cd-head-title{ flex: 1; min-width: 0; font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cd-head button{ min-height: 0; width: 30px; height: 30px; padding: 0; border: 0; background: none; color: var(--ink-soft); font-size: 18px; line-height: 1; border-radius: 6px; cursor: pointer; }
 .cd-head button:hover{ background: var(--line); color: var(--ink); }
