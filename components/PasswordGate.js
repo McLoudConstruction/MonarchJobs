@@ -2,19 +2,15 @@
 
 import { useState } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
-import { checkNewPassword, MIN_PASSWORD_LENGTH } from '@/lib/passwordRules';
+import NewPasswordForm from '@/components/NewPasswordForm';
 
-// Shown after the first sign-in with a temporary password, before anything else in the app.
-export default function PasswordGate({ onSaved, signOut }) {
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
+// Shown before anything else in the app when someone has not chosen their own password yet:
+// they opened their invite link but left before saving one, or are still on an old temporary password.
+export default function PasswordGate({ user, onSaved, signOut }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  async function submit(e) {
-    e.preventDefault();
-    const problem = checkNewPassword(password, confirm);
-    if (problem) { setError(problem); return; }
+  async function save(password) {
     setBusy(true);
     setError('');
     try {
@@ -32,21 +28,18 @@ export default function PasswordGate({ onSaved, signOut }) {
 
   return (
     <div className="center-wrap">
-      <form className="card" onSubmit={submit}>
+      <div className="card">
         <h2>Choose your password</h2>
-        <p className="hint">You signed in with a temporary password. Choose your own to continue (at least {MIN_PASSWORD_LENGTH} characters).</p>
-        <div className="field">
-          <label htmlFor="new-pw">New password</label>
-          <input id="new-pw" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus required />
-        </div>
-        <div className="field">
-          <label htmlFor="confirm-pw">Confirm new password</label>
-          <input id="confirm-pw" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
-        </div>
-        {error && <div className="msg err">{error}</div>}
-        <button className="primary" type="submit" disabled={busy}>{busy ? 'Saving...' : 'Save password'}</button>
-        <button type="button" className="secondary" style={{ marginTop: 10 }} onClick={signOut}>Sign out</button>
-      </form>
+        <p className="hint">Before you continue, choose your own password. You will use it with your email to sign in.</p>
+        <NewPasswordForm
+          onSubmit={save}
+          busy={busy}
+          error={error}
+          email={user?.email}
+          name={user?.user_metadata?.full_name}
+          footer={<button type="button" className="secondary" style={{ marginTop: 10, width: '100%' }} onClick={signOut}>Sign out</button>}
+        />
+      </div>
     </div>
   );
 }

@@ -4,10 +4,15 @@ import { useEffect, useState, useCallback } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
 import { apiFetch } from '@/lib/useAuth';
 import { validateNewUser, validateName } from '@/lib/newUser';
-import { MIN_PASSWORD_LENGTH } from '@/lib/passwordRules';
 import { hasRealName, staffName } from '@/lib/userDisplay';
 
-const EMPTY = { full_name: '', email: '', role: 'tech', password: '' };
+const EMPTY = { full_name: '', email: '', role: 'tech' };
+
+// Sign-in setup status shown under a person's name until they have chosen their own password.
+const PENDING_TEXT = {
+  invited: 'Invite sent. Waiting for them to open the link.',
+  no_password: 'Has not chosen their own password yet.',
+};
 
 export default function UsersSection({ currentUserId, token }) {
   const [users, setUsers] = useState([]);
@@ -16,6 +21,8 @@ export default function UsersSection({ currentUserId, token }) {
   const [form, setForm] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState('');
+  const [pending, setPending] = useState({}); // userId -> 'invited' | 'no_password'
+  const [resending, setResending] = useState(null);
 
   const load = useCallback(async () => {
     const { data } = await getSupabase()
@@ -23,7 +30,11 @@ export default function UsersSection({ currentUserId, token }) {
       .select('id,email,full_name,role,active,created_at')
       .order('created_at');
     setUsers(data || []);
-  }, []);
+    try {
+      const r = await apiFetch('/api/users', token);
+      setPending(r.statuses || {});
+    } catch { /* the list still works without the setup status */ }
+  }, [token]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -41,6 +52,19 @@ export default function UsersSection({ currentUserId, token }) {
     await update(u.id, { full_name: checked.value });
   }
 
+  async function resend(u) {
+    setMsg(null);
+    setResending(u.id);
+    try {
+      const r = await apiFetch(`/api/users/${u.id}/resend`, token, { method: 'POST' });
+      setMsg({ ok: `A new email was sent to ${r.email || u.email}.` });
+    } catch (err) {
+      setMsg(err.message);
+    } finally {
+      setResending(null);
+    }
+  }
+
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   async function addUser(e) {
@@ -52,7 +76,7 @@ export default function UsersSection({ currentUserId, token }) {
     setBusy(true);
     try {
       await apiFetch('/api/users', token, { method: 'POST', body: JSON.stringify(checked.value) });
-      setMsg({ ok: `${checked.value.full_name} was added. They can sign in now with their email and the password you set.` });
+      setMsg({ ok: `${checked.value.full_name} was invited. An email with a link to choose their password is on its way to ${checked.value.email}.` });
       setForm(EMPTY);
       setAdding(false);
       load();
@@ -67,10 +91,10 @@ export default function UsersSection({ currentUserId, token }) {
     <div className="card">
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <h2 style={{ flex: 1, margin: 0 }}>Users</h2>
-        {!adding && <button className="primary" onClick={() => { setAdding(true); setMsg(null); }}>Add user</button>}
+        {!adding && <button className="primary" onClick={() => { setAdding(true); setMsg(null); }}>Invite user</button>}
       </div>
       <p className="hint" style={{ marginTop: 8 }}>
-        Everyone signs in with their email and a password, and appears in the app by name.
+        Everyone signs in with their email and their own password, and appears in the app by name.
       </p>
       {msg && (typeof msg === 'string'
         ? <div className="msg err">{msg}</div>
@@ -78,7 +102,7 @@ export default function UsersSection({ currentUserId, token }) {
 
       {adding && (
         <form className="card" onSubmit={addUser} style={{ marginBottom: 16 }}>
-          <h3 style={{ marginTop: 0 }}>Add user</h3>
+          <h3 style={{ marginTop: 0 }}>Invite user</h3>
           <div className="field">
             <label htmlFor="nu-name">Full name</label>
             <input id="nu-name" type="text" autoComplete="off" value={form.full_name} onChange={set('full_name')} required />
@@ -95,14 +119,10 @@ export default function UsersSection({ currentUserId, token }) {
               <option value="tech">Tech</option>
             </select>
           </div>
-          <div className="field">
-            <label htmlFor="nu-pw">Temporary password</label>
-            <input id="nu-pw" type="text" autoComplete="off" value={form.password} onChange={set('password')} required />
-            <div className="note">At least {MIN_PASSWORD_LENGTH} characters. Give it to them directly. They will be asked to choose their own password the first time they sign in.</div>
-          </div>
+          <p className="hint" style={{ marginBottom: 12 }}>We email them a link to choose their own password. Nothing for you to give them.</p>
           {formError && <div className="msg err">{formError}</div>}
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="primary" type="submit" disabled={busy}>{busy ? 'Adding...' : 'Add user'}</button>
+            <button className="primary" type="submit" disabled={busy}>{busy ? 'Sending...' : 'Send invite'}</button>
             <button className="secondary" type="button" disabled={busy} onClick={() => { setAdding(false); setForm(EMPTY); setFormError(''); }}>Cancel</button>
           </div>
         </form>
@@ -125,6 +145,12 @@ export default function UsersSection({ currentUserId, token }) {
                     onBlur={(e) => rename(u, e.target.value)}
                   />
                   {self ? ' (you)' : ''}
+                  {pending[u.id] && (
+                    <div className="note" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+                      <span>{PENDING_TEXT[pending[u.id]]}</span>
+                      {!self && <button type="button" className="secondary small" disabled={resending === u.id} onClick={() => resend(u)}>{resending === u.id ? 'Sending...' : 'Resend email'}</button>}
+                    </div>
+                  )}
                 </td>
                 <td>
                   <select value={u.role} disabled={self} onChange={(e) => update(u.id, { role: e.target.value })}>

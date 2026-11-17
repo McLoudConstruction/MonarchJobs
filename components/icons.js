@@ -161,3 +161,23 @@ export function ChatIcon(props) {
     </svg>
   );
 }
+
+// Show / hide password toggle.
+export function EyeIcon(props) {
+  return (
+    <svg {...common} width={20} height={20} {...props}>
+      <path d="M1.5 10S4.6 4.5 10 4.5 18.5 10 18.5 10 15.4 15.5 10 15.5 1.5 10 1.5 10Z" />
+      <circle cx="10" cy="10" r="2.6" />
+    </svg>
+  );
+}
+
+export function EyeOffIcon(props) {
+  return (
+    <svg {...common} width={20} height={20} {...props}>
+      <path d="M8.2 4.7A8.6 8.6 0 0 1 10 4.5c5.4 0 8.5 5.5 8.5 5.5a14.6 14.6 0 0 1-2.5 3.1M5.6 6.1A14.6 14.6 0 0 0 1.5 10S4.6 15.5 10 15.5c1.2 0 2.3-.3 3.3-.7" />
+      <path d="M8.3 8.3a2.6 2.6 0 0 0 3.4 3.4" />
+      <path d="M2.5 2.5l15 15" />
+    </svg>
+  );
+}

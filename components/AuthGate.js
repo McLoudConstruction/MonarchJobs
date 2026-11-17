@@ -33,9 +33,9 @@ export default function AuthGate({ ownerOnly = false, officeOnly = false, childr
     );
   }
 
-  // Temporary password from Add user: choose a real one first.
+  // Invited (or given a temporary password) but has not chosen their own password yet.
   if (needsPasswordChange(auth.user)) {
-    return <PasswordGate onSaved={auth.reload} signOut={auth.signOut} />;
+    return <PasswordGate user={auth.user} onSaved={auth.reload} signOut={auth.signOut} />;
   }
 
   // Everyone must have a name saved before using the app.
