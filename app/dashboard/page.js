@@ -42,7 +42,15 @@ function DashboardInner({ staff }) {
 
   return (
     <>
-      <h1>{isOffice ? 'Dashboard' : 'My day'}</h1>
+      <div className="row dash-head" style={{ justifyContent: 'space-between' }}>
+        <h1>{isOffice ? 'Dashboard' : 'My day'}</h1>
+        {isOffice && (
+          <div className="row" style={{ gap: 8 }}>
+            <Link href="/leads/new"><button type="button" className="primary">Create Lead</button></Link>
+            <Link href="/jobs/new"><button type="button" className="secondary">Book Job</button></Link>
+          </div>
+        )}
+      </div>
       <p className="sub">Welcome, {displayNameFor(staff.full_name, staff.email)}.</p>
 
       <div className="stat-row">

@@ -46,7 +46,8 @@ function ScheduleInner({ staff }) {
 
   const rows = useMemo(() => {
     const ids = new Set(visits.map((v) => v.tech_id));
-    const list = techs.filter((t) => t.role === 'tech' || ids.has(t.id));
+    // owners always get a row (they take jobs too); anyone else only when they have visits this week
+    const list = techs.filter((t) => t.role === 'tech' || t.role === 'owner' || ids.has(t.id));
     const visible = isOffice ? list : list.filter((t) => t.id === staff.id);
     return [...visible.map((t) => ({ id: t.id, label: staffName(t) })), ...(isOffice ? [{ id: null, label: 'Unassigned' }] : [])];
   }, [techs, visits, isOffice, staff.id]);
@@ -79,7 +80,7 @@ function ScheduleInner({ staff }) {
         <WeekGrid
           weekStart={start}
           onWeekChange={(d) => setStart(weekStartMonday(d))}
-          techs={isOffice ? techs.filter((t) => t.role === 'tech') : techs.filter((t) => t.id === staff.id)}
+          techs={isOffice ? techs.filter((t) => t.role === 'tech' || t.role === 'owner') : techs.filter((t) => t.id === staff.id)}
           focusTechId={isOffice ? '' : staff.id}
           linkVisits
         />
@@ -89,7 +90,7 @@ function ScheduleInner({ staff }) {
         <table className="sched min">
           <thead>
             <tr>
-              <th style={{ width: 120 }}>Tech</th>
+              <th style={{ width: 120 }}>Team</th>
               {days.map((d) => <th key={d.getTime()}>{fmtDay(d)}</th>)}
             </tr>
           </thead>

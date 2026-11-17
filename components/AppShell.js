@@ -6,8 +6,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { getSupabase } from '@/lib/supabaseClient';
 import { useTheme } from '@/lib/useTheme';
+import ThemeSwitch from '@/components/ThemeSwitch';
 import { initialsFor, displayNameFor } from '@/lib/userDisplay';
-import { DashboardIcon, SalesIcon, ScheduleIcon, JobDashboardIcon, SettingsIcon, SunIcon, MoonIcon, UserIcon, SignOutIcon, MoreIcon, BellIcon, EquipmentIcon } from '@/components/icons';
+import { DashboardIcon, SalesIcon, ScheduleIcon, JobDashboardIcon, SettingsIcon, UserIcon, SignOutIcon, MoreIcon, BellIcon, EquipmentIcon } from '@/components/icons';
 import BottomSheet from '@/components/BottomSheet';
 import JobJumpSearch from '@/components/JobJumpSearch';
 import { logoUrl } from '@/lib/branding';
@@ -30,6 +31,8 @@ const NAV = [
   { href: '/equipment', label: 'Equipment', icon: EquipmentIcon, roles: ALL },
   // sideOnly: phones reach it from the bell in the top bar
   { href: '/activity', label: 'Activity', icon: BellIcon, roles: ALL, sideOnly: true },
+  // owner only; on phones it sits under More with the other secondary pages
+  { href: '/settings', label: 'Settings', icon: SettingsIcon, roles: ['owner'] },
 ];
 
 const NUDGE_KEY = 'mj_push_nudge';
@@ -97,7 +100,6 @@ function AppShellInner({ staff, signOut, children }) {
   const brand = useBrandLogo();
 
   const nav = NAV.filter((n) => n.roles.includes(staff.role));
-  const canSettings = staff.role === 'owner';
   const initials = initialsFor(staff.full_name, staff.email);
   const name = displayNameFor(staff.full_name, staff.email);
   const roleLabel = ROLE_LABELS[staff.role] || staff.role;
@@ -146,10 +148,7 @@ function AppShellInner({ staff, signOut, children }) {
     try { localStorage.setItem(NUDGE_KEY, String(Date.now())); } catch { /* ignore */ }
   }
 
-  const moreItems = [
-    ...nav.filter((n) => !n.primary && !n.sideOnly),
-    ...(canSettings ? [{ href: '/settings', label: 'Settings', icon: SettingsIcon }] : []),
-  ];
+  const moreItems = nav.filter((n) => !n.primary && !n.sideOnly);
   const moreActive = moreItems.some((n) => isActive(n, pathname));
 
   return (
@@ -180,16 +179,7 @@ function AppShellInner({ staff, signOut, children }) {
                 <div className="shell-account-sub">{roleLabel}</div>
               </div>
               <div className="shell-account-divider" />
-              <button type="button" role="menuitem" className="shell-account-item" onClick={() => { setTheme(theme === 'dark' ? 'light' : 'dark'); setAccountOpen(false); }}>
-                {theme === 'dark' ? <MoonIcon className="shell-account-icon" /> : <SunIcon className="shell-account-icon" />}
-                {theme === 'dark' ? 'Dark mode' : 'Light mode'}
-              </button>
-              {canSettings && (
-                <Link href="/settings" role="menuitem" className="shell-account-item" onClick={() => setAccountOpen(false)}>
-                  <SettingsIcon className="shell-account-icon" />
-                  Settings
-                </Link>
-              )}
+              <ThemeSwitch theme={theme} setTheme={setTheme} />
               <div className="shell-account-divider" />
               <button type="button" role="menuitem" className="shell-account-item" onClick={signOut}>
                 <SignOutIcon className="shell-account-icon" />
@@ -242,10 +232,7 @@ function AppShellInner({ staff, signOut, children }) {
             </Link>
           ))}
           <div className="more-sheet-divider" />
-          <button type="button" className="more-sheet-link" onClick={() => { setTheme(theme === 'dark' ? 'light' : 'dark'); setMoreOpen(false); }}>
-            {theme === 'dark' ? <MoonIcon className="more-sheet-icon" /> : <SunIcon className="more-sheet-icon" />}
-            {theme === 'dark' ? 'Dark mode' : 'Light mode'}
-          </button>
+          <ThemeSwitch theme={theme} setTheme={setTheme} variant="sheet" />
           <button type="button" className="more-sheet-link" onClick={signOut}>
             <SignOutIcon className="more-sheet-icon" />
             Sign out
