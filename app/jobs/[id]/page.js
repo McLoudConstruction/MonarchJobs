@@ -16,6 +16,7 @@ import SketchTab from '@/components/job/SketchTab';
 import MoistureTab from '@/components/job/MoistureTab';
 import InspectionTab from '@/components/job/InspectionTab';
 import ReportsTab from '@/components/job/ReportsTab';
+import InvoiceTab from '@/components/job/InvoiceTab';
 import CustomerPageCard from '@/components/job/CustomerPageCard';
 import UpdatesTab from '@/components/job/UpdatesTab';
 import ThreadPanel from '@/components/chat/ThreadPanel';
@@ -54,6 +55,7 @@ const JOB_TABS = [
   ['updates', 'Updates'],
   ['thread', 'Chat'],
   ['estimate', 'Estimate'],
+  ['invoice', 'Invoice'],
   ['reports', 'Reports'],
   ['history', 'History'],
 ];
@@ -619,12 +621,11 @@ function JobInner({ id, staff, token }) {
         contact={{ name: job.customer.display_name, phone: job.customer.phone, email: job.customer.email }}
         onChanged={loadEvents}
       />
-
-      <div className="card">
-        <h2>Invoice</h2>
-        <p className="muted">Invoicing and payments arrive in the next update.</p>
-      </div>
         </>
+      )}
+
+      {tab === 'invoice' && (
+        <InvoiceTab jobId={id} job={job} photos={photos} staff={staff} token={token} isOffice={isOffice} onChanged={loadEvents} />
       )}
 
       {tab === 'history' && (

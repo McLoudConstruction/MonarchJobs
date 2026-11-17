@@ -8,7 +8,7 @@ import { getSupabase } from '@/lib/supabaseClient';
 import { useTheme } from '@/lib/useTheme';
 import ThemeSwitch from '@/components/ThemeSwitch';
 import { initialsFor, displayNameFor } from '@/lib/userDisplay';
-import { DashboardIcon, SalesIcon, ScheduleIcon, JobDashboardIcon, SettingsIcon, UserIcon, SignOutIcon, MoreIcon, BellIcon, EquipmentIcon, OwnerIcon } from '@/components/icons';
+import { DashboardIcon, SalesIcon, ScheduleIcon, JobDashboardIcon, SettingsIcon, UserIcon, SignOutIcon, MoreIcon, BellIcon, EquipmentIcon, OwnerIcon, InvoiceIcon } from '@/components/icons';
 import BottomSheet from '@/components/BottomSheet';
 import JobJumpSearch from '@/components/JobJumpSearch';
 import { logoUrl } from '@/lib/branding';
@@ -28,6 +28,7 @@ const NAV = [
   { href: '/schedule', label: 'Schedule', icon: ScheduleIcon, roles: ALL, primary: true },
   { href: '/jobs', label: 'Jobs', icon: JobDashboardIcon, roles: ALL, primary: true },
   { href: '/customers', label: 'Customers', icon: UserIcon, roles: OFFICE },
+  { href: '/invoices', label: 'Invoices', icon: InvoiceIcon, roles: OFFICE },
   { href: '/equipment', label: 'Equipment', icon: EquipmentIcon, roles: ALL },
   // sideOnly: phones reach it from the bell in the top bar
   { href: '/activity', label: 'Activity', icon: BellIcon, roles: ALL, sideOnly: true },

@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { getSupabase } from '@/lib/supabaseClient';
 import { money, CUSTOMER_TYPES } from '@/lib/format';
-import { RANGES, rangeBounds, financials, customerStats, workStats, attentionItems, changeText } from '@/lib/ownerStats';
+import { RANGES, rangeBounds, financials, invoiceStats, customerStats, workStats, attentionItems, changeText, AGING } from '@/lib/ownerStats';
+import { PAYMENT_METHODS } from '@/lib/invoice';
 import { PlansDue, MailingList } from '@/components/customer/OutreachPanels';
 import './owner.css';
 
@@ -35,7 +36,7 @@ async function readAll(build) {
 async function loadAll() {
   const sb = getSupabase();
   const now = new Date().toISOString();
-  const [est, cust, jobs, leads, plans, prob, unassigned, repair] = await Promise.all([
+  const [est, cust, jobs, leads, plans, prob, unassigned, repair, invs, pays] = await Promise.all([
     readAll(() => sb.from('estimates')
       .select('id,status,minimum_charge,chosen_tier,sent_at,approved_at,declined_at,created_at,job:jobs(service,job_type,customer_id),lead:leads(restoration_type,job_type,customer_id),lines:estimate_lines(id,quantity,unit_price,tier,optional,accepted)')
       .order('id')),
@@ -46,6 +47,8 @@ async function loadAll() {
     sb.from('job_problem_reports').select('id', { count: 'exact', head: true }).eq('status', 'new'),
     sb.from('job_visits').select('id', { count: 'exact', head: true }).is('tech_id', null).eq('status', 'scheduled').gte('starts_at', now),
     sb.from('equipment_assets').select('id', { count: 'exact', head: true }).eq('status', 'in_repair'),
+    readAll(() => sb.from('invoices').select('id,status,total_cents,credit_cents,interest_cents,balance_cents,due_date,issued_at,paid_at').order('id')),
+    readAll(() => sb.from('payments').select('id,amount_cents,tip_cents,method,received_at').order('id')),
   ]);
   const failed = [est, cust, jobs, leads].find((r) => r.error);
   if (failed) return { error: failed.error.message };
@@ -55,6 +58,9 @@ async function loadAll() {
     problemsOpen: prob.error ? 0 : prob.count || 0,
     unassigned: unassigned.error ? 0 : unassigned.count || 0,
     equipmentRepair: repair.error ? 0 : repair.count || 0,
+    invoices: invs.error ? [] : invs.data, // a missing table just means migration 019 is not run
+    payments: pays.error ? [] : pays.data,
+    invoicesMissing: !!(invs.error || pays.error),
   };
 }
 
@@ -105,13 +111,13 @@ function Columns({ months, valueOf, format, label }) {
   );
 }
 
-function Overview({ fin, cust, work, attn, rangeLabel }) {
+function Overview({ fin, inv, cust, work, attn, rangeLabel }) {
   return (
     <>
       <div className="own-tiles">
         <Tile num={dollars(fin.bookedCents)} label={`Booked, ${rangeLabel.toLowerCase()}`} change={changeText(fin.bookedCents, fin.prevBookedCents)} />
-        <Tile num={fin.approvedCount} label="Estimates approved" />
-        <Tile num={fin.avgCents ? dollars(fin.avgCents) : '—'} label="Average job" />
+        <Tile num={dollars(inv.collectedCents)} label="Collected" change={changeText(inv.collectedCents, inv.prevCollectedCents)} />
+        <Tile num={dollars(inv.owedCents)} label="Owed by customers" href="/invoices" good={false} />
         <Tile num={fin.winRate === null ? '—' : `${fin.winRate}%`} label="Estimates won" />
         <Tile num={cust.newInRange} label="New customers" change={changeText(cust.newInRange, cust.newPrev)} href="/customers" />
         <Tile num={work.openCount} label="Jobs open now" href="/jobs" />
@@ -155,13 +161,40 @@ function Overview({ fin, cust, work, attn, rangeLabel }) {
   );
 }
 
-function Financials({ fin, rangeLabel }) {
+function Financials({ fin, inv, invoicesMissing, rangeLabel }) {
   return (
     <>
       <div className="own-note">
         <strong>Booked</strong> means an estimate the customer approved, counted on the day they approved it, at the tier and add-ons they picked.
-        Money collected, unpaid balances and job costs are not tracked yet. They arrive with invoicing and job costing.
+        <strong> Collected</strong> is money actually received (card, Square, cash, check), minus refunds. Tips are counted apart. Profit needs job costs, which are not tracked yet.
+        {invoicesMissing && <> <strong>Invoices are not set up yet:</strong> run the latest database update (migration 019).</>}
       </div>
+      <div className="own-tiles">
+        <Tile num={dollars(inv.collectedCents)} label={`Collected, ${rangeLabel.toLowerCase()}`} change={changeText(inv.collectedCents, inv.prevCollectedCents)} />
+        <Tile num={dollars(inv.owedCents)} label={`Owed by customers (${inv.openCount})`} href="/invoices" good={false} />
+        <Tile num={dollars(inv.pastDueCents)} label={`Past due (${inv.pastDueCount})`} href="/invoices" good={false} />
+        <Tile num={dollars(inv.invoicedCents)} label={`Invoiced, ${rangeLabel.toLowerCase()} (${inv.invoicedCount})`} />
+      </div>
+      <div className="own-grid">
+        <div className="card">
+          <h3>Who owes, and how late</h3>
+          <HBars items={AGING.map((a) => ({ label: a.label, value: inv.aging[a.key], text: dollars(inv.aging[a.key]) })).filter((i) => i.value > 0)} empty="Nothing is owed." />
+          <p className="hint" style={{ marginTop: 10 }}>
+            {inv.draftCount > 0 ? `${inv.draftCount} invoice${inv.draftCount === 1 ? '' : 's'} drafted, not sent (${dollars(inv.draftCents)}). ` : ''}
+            {inv.avgDaysToPay !== null ? `Paid invoices took ${inv.avgDaysToPay} days on average.` : ''}
+          </p>
+        </div>
+        <div className="card">
+          <h3>How customers paid, {rangeLabel.toLowerCase()}</h3>
+          <HBars items={Object.entries(inv.byMethod).filter(([, c]) => c !== 0).map(([m, c]) => ({ label: PAYMENT_METHODS[m] || m, value: Math.max(c, 0), text: dollars(c) }))} empty="No payments in this period." />
+          {inv.tipCents > 0 && <p className="hint" style={{ marginTop: 10 }}>Plus {dollars(inv.tipCents)} in tips.</p>}
+        </div>
+      </div>
+      <div className="card">
+        <h3>Collected by month, last 12 months</h3>
+        <Columns months={inv.months} valueOf={(m) => m.cents} format={short} label="Money collected for each of the last twelve months" />
+      </div>
+      <h3 style={{ marginTop: 24 }}>Booked work</h3>
       <div className="own-tiles">
         <Tile num={dollars(fin.bookedCents)} label={`Booked, ${rangeLabel.toLowerCase()}`} change={changeText(fin.bookedCents, fin.prevBookedCents)} />
         <Tile num={fin.approvedCount} label="Estimates approved" />
@@ -316,8 +349,9 @@ export default function OwnerDashboard() {
     const fin = financials(data.estimates, bounds, now);
     const cust = customerStats(data.customers, data.jobs, data.estimates, data.plans, bounds, now);
     const work = workStats(data.jobs, data.leads, bounds);
-    const attn = attentionItems({ fin, work, cust, problemsOpen: data.problemsOpen, unassigned: data.unassigned, equipmentRepair: data.equipmentRepair });
-    return { fin, cust, work, attn };
+    const inv = invoiceStats(data.invoices, data.payments, bounds, now);
+    const attn = attentionItems({ fin, work, cust, inv, problemsOpen: data.problemsOpen, unassigned: data.unassigned, equipmentRepair: data.equipmentRepair });
+    return { fin, inv, cust, work, attn, invoicesMissing: data.invoicesMissing };
   }, [data, bounds, now]);
 
   return (
@@ -337,7 +371,7 @@ export default function OwnerDashboard() {
       {error && <div className="msg err">Could not load the numbers: {error} <button type="button" className="secondary small" onClick={load}>Try again</button></div>}
       {!error && !calc && <p className="muted">Loading…</p>}
       {calc && tab === 'overview' && <Overview {...calc} rangeLabel={rangeLabel} />}
-      {calc && tab === 'financials' && <Financials fin={calc.fin} rangeLabel={rangeLabel} />}
+      {calc && tab === 'financials' && <Financials fin={calc.fin} inv={calc.inv} invoicesMissing={calc.invoicesMissing} rangeLabel={rangeLabel} />}
       {calc && tab === 'customers' && <Customers cust={calc.cust} rangeLabel={rangeLabel} />}
       {calc && tab === 'work' && <Work work={calc.work} rangeLabel={rangeLabel} />}
     </>

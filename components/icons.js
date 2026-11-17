@@ -192,3 +192,14 @@ export function OwnerIcon(props) {
     </svg>
   );
 }
+
+export function InvoiceIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <path d="M5 2.5h10v15l-2-1.2-1.5 1.2-1.5-1.2-1.5 1.2-1.5-1.2-2 1.2z" />
+      <path d="M7.5 7h5" />
+      <path d="M7.5 10h5" />
+      <path d="M7.5 13h3" />
+    </svg>
+  );
+}

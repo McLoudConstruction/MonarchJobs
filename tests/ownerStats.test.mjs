@@ -172,3 +172,49 @@ test('attentionItems lists only what needs attention, most important first, with
   assert.match(items[1].text, /^2 approved estimates are ready/);
   assert.match(items[3].text, /^1 estimate has been out/);
 });
+
+// ---------------------------------------------------------------------------------------------- invoices and payments
+import { invoiceStats, attentionItems as attention2, rangeBounds as bounds2 } from '../lib/ownerStats.js';
+
+test('invoice stats: collected is net of refunds with tips apart, owed follows the aging', () => {
+  const now = new Date(2026, 10, 16, 12);
+  const range = bounds2('month', now);
+  const invoices = [
+    { status: 'paid', total_cents: 25000, credit_cents: 0, interest_cents: 0, balance_cents: 0, issued_at: '2026-11-02T15:00:00Z', paid_at: '2026-11-06T15:00:00Z', due_date: '2026-11-16' },
+    { status: 'sent', total_cents: 31000, credit_cents: 25000, interest_cents: 0, balance_cents: 6000, issued_at: '2026-11-10T15:00:00Z', due_date: '2026-11-01' },
+    { status: 'sent', total_cents: 10000, credit_cents: 0, interest_cents: 0, balance_cents: 10000, issued_at: '2026-11-12T15:00:00Z', due_date: '2026-12-01' },
+    { status: 'draft', total_cents: 5000, credit_cents: 0, interest_cents: 0, balance_cents: 5000 },
+    { status: 'void', total_cents: 99999, credit_cents: 0, interest_cents: 0, balance_cents: 99999, issued_at: '2026-11-03T15:00:00Z', due_date: '2026-10-01' },
+  ];
+  const payments = [
+    { amount_cents: 25000, tip_cents: 500, method: 'square', received_at: '2026-11-06T15:00:00Z' },
+    { amount_cents: -1000, tip_cents: 0, method: 'stripe', received_at: '2026-11-08T15:00:00Z' },
+    { amount_cents: 4000, tip_cents: 0, method: 'cash', received_at: '2026-10-20T15:00:00Z' },
+  ];
+  const s = invoiceStats(invoices, payments, range, now, '2026-11-16');
+  assert.equal(s.collectedCents, 24000);
+  assert.equal(s.prevCollectedCents, 4000);
+  assert.equal(s.tipCents, 500);
+  assert.equal(s.invoicedCents, 25000 + 6000 + 10000); // the void one and the draft are not invoiced
+  assert.equal(s.owedCents, 16000);
+  assert.equal(s.pastDueCount, 1);
+  assert.equal(s.pastDueCents, 6000);
+  assert.equal(s.aging.d1_30, 6000);
+  assert.equal(s.aging.current, 10000);
+  assert.equal(s.draftCount, 1);
+  assert.equal(s.draftCents, 5000);
+  assert.equal(s.avgDaysToPay, 4);
+  assert.deepEqual(s.byMethod, { square: 25000, stripe: -1000 });
+  assert.equal(s.months.length, 12);
+  assert.equal(s.months[11].cents, 24000);
+  assert.equal(s.months[10].cents, 4000);
+});
+
+test('past-due and drafted invoices show up in what needs the owner', () => {
+  const inv = { pastDueCount: 2, pastDueCents: 123400, draftCount: 1 };
+  const items = attention2({ inv });
+  assert.equal(items[0].key, 'pastdue');
+  assert.match(items[0].text, /2 invoices are past due \(\$1,234 owed\)/);
+  assert.equal(items[1].key, 'drafts');
+  assert.deepEqual(attention2({ inv: { pastDueCount: 0, draftCount: 0 } }), []);
+});

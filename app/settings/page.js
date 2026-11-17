@@ -10,6 +10,7 @@ import PriceListSection from '@/components/settings/PriceListSection';
 import IntegrationsSection from '@/components/settings/IntegrationsSection';
 import RemindersSection from '@/components/settings/RemindersSection';
 import EquipmentSection from '@/components/settings/EquipmentSection';
+import InvoicingSection from '@/components/settings/InvoicingSection';
 import { PlansDue, MailingList } from '@/components/customer/OutreachPanels';
 
 const TABS = [
@@ -18,6 +19,7 @@ const TABS = [
   { id: 'prices', label: 'Price list' },
   { id: 'reminders', label: 'Outreach' },
   { id: 'equipment', label: 'Equipment' },
+  { id: 'invoicing', label: 'Invoicing' },
   { id: 'integrations', label: 'Integrations' },
 ];
 
@@ -86,6 +88,7 @@ export default function SettingsPage() {
               </>
             )}
             {tab === 'equipment' && <EquipmentSection />}
+            {tab === 'invoicing' && <InvoicingSection />}
             {tab === 'integrations' && <IntegrationsSection token={token} />}
           </div>
         </>

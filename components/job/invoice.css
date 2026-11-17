@@ -1,0 +1,48 @@
+/* Job > Invoice tab, the Invoices page and the customer's invoice page */
+.inv-chip{ display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: .02em; background: var(--panel); color: var(--ink); border: 1px solid var(--panel-line); white-space: nowrap; }
+.inv-chip.good{ background: #e3f1e6; color: #1f5a2c; border-color: #b9dcc1; }
+.inv-chip.bad{ background: #fbe4e1; color: #8a1f14; border-color: #f0b8b1; }
+.inv-chip.warn{ background: #fdf1d6; color: #7a5300; border-color: #efd592; }
+.inv-chip.info{ background: #e4edf8; color: #1f3a5f; border-color: #bcd0ea; }
+.inv-chip.muted{ background: var(--panel); color: var(--muted); }
+.inv-head{ display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.inv-pick{ display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 12px; }
+.inv-pick button{ display: inline-flex; gap: 8px; align-items: center; min-height: 40px; }
+.inv-pick button.on{ border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+.inv-table{ width: 100%; border-collapse: collapse; }
+.inv-table th, .inv-table td{ padding: 8px 6px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+.inv-table td.num, .inv-table th.num{ text-align: right; white-space: nowrap; }
+.inv-table input{ width: 100%; min-width: 0; }
+.inv-table input.q{ width: 74px; }
+.inv-table input.p{ width: 96px; }
+.inv-sums{ margin: 12px 0 0 auto; max-width: 340px; }
+.inv-sums div{ display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; }
+.inv-sums .big{ font-size: 20px; font-weight: 800; border-top: 2px solid var(--ink); margin-top: 6px; padding-top: 8px; }
+.inv-sums .neg{ color: #1f5a2c; }
+.inv-banner{ padding: 10px 14px; border-radius: 8px; margin: 10px 0; font-weight: 600; }
+.inv-banner.bad{ background: #fbe4e1; color: #8a1f14; }
+.inv-banner.warn{ background: #fdf1d6; color: #7a5300; }
+.inv-banner.info{ background: #e4edf8; color: #1f3a5f; }
+.inv-actions{ display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.inv-actions button, .inv-actions a.button{ min-height: 44px; }
+.inv-box{ margin-top: 12px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--panel-line); border-radius: 8px; }
+.inv-box .field:last-child{ margin-bottom: 0; }
+.inv-row{ display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+.inv-row .field{ margin-bottom: 0; flex: 1 1 130px; }
+.inv-photos{ display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.inv-photos .ph{ position: relative; width: 84px; height: 84px; border-radius: 8px; overflow: hidden; background: var(--panel); border: 1px solid var(--line); }
+.inv-photos .ph img{ width: 100%; height: 100%; object-fit: cover; display: block; }
+.inv-photos .ph button{ position: absolute; top: 2px; right: 2px; min-height: 0; padding: 0 6px; line-height: 22px; border-radius: 11px; }
+.inv-photos .ph .tag{ position: absolute; left: 0; bottom: 0; right: 0; font-size: 10px; text-align: center; background: rgba(0,0,0,.55); color: #fff; }
+.inv-pay{ display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.inv-pay:last-child{ border-bottom: 0; }
+.inv-linkbox{ word-break: break-all; font-size: 13px; padding: 8px 10px; background: #fff; border: 1px solid var(--line); border-radius: 6px; margin: 8px 0; }
+.inv-age{ display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 10px 0 16px; }
+.inv-age > div{ padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.inv-age .n{ font-size: 18px; font-weight: 800; }
+.inv-pay-photos{ display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 10px 0; }
+.inv-pay-photos img{ width: 100%; height: 130px; object-fit: cover; border-radius: 8px; display: block; }
+@media (max-width: 520px){
+  .inv-actions button, .inv-actions a.button{ flex: 1 1 100%; }
+  .inv-scroll{ overflow-x: auto; }
+}

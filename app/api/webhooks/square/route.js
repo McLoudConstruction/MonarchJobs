@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getCredentials, siteUrl, PROVIDERS } from '@/lib/integrations';
 import { verifySquareSignature } from '@/lib/webhookSignatures';
 import { storeWebhookEvent } from '@/lib/storeWebhook';
+import { processWebhook } from '@/lib/invoiceServer';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,9 +30,12 @@ export async function POST(request) {
       eventType: event.type,
       payload: event,
     });
-    return NextResponse.json({ received: true, duplicate: res.duplicate });
+    // Record the payment, refund or problem on the invoice. A duplicate that was already handled is skipped; one
+    // that failed last time is tried again. A failure answers 500 so Square sends the event again.
+    const done = await processWebhook('square', event, event.event_id);
+    return NextResponse.json({ received: true, duplicate: res.duplicate, result: done.note });
   } catch (e) {
-    console.error('square webhook store failed', e);
-    return NextResponse.json({ error: 'Could not store event.' }, { status: 500 });
+    console.error('square webhook failed', e);
+    return NextResponse.json({ error: 'Could not process event.' }, { status: 500 });
   }
 }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getCredentials } from '@/lib/integrations';
 import { verifyStripeSignature } from '@/lib/webhookSignatures';
 import { storeWebhookEvent } from '@/lib/storeWebhook';
+import { processWebhook } from '@/lib/invoiceServer';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,10 +30,12 @@ export async function POST(request) {
       eventType: event.type,
       payload: event,
     });
-    // Processing (marking invoices paid, etc.) is added in Phase 1.
-    return NextResponse.json({ received: true, duplicate: res.duplicate });
+    // Record the payment, refund or problem on the invoice. A duplicate that was already handled is skipped; one
+    // that failed last time is tried again. A failure answers 500 so Stripe sends the event again.
+    const done = await processWebhook('stripe', event, event.id);
+    return NextResponse.json({ received: true, duplicate: res.duplicate, result: done.note });
   } catch (e) {
-    console.error('stripe webhook store failed', e);
-    return NextResponse.json({ error: 'Could not store event.' }, { status: 500 });
+    console.error('stripe webhook failed', e);
+    return NextResponse.json({ error: 'Could not process event.' }, { status: 500 });
   }
 }
