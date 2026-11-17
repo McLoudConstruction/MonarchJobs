@@ -51,7 +51,10 @@ function LeadsInner() {
     <>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <h1>Leads</h1>
-        <Link href="/leads/new"><button className="primary">New lead</button></Link>
+        <div className="row">
+          <Link href="/book"><button className="secondary">Book a job</button></Link>
+          <Link href="/leads/new"><button className="primary">New lead</button></Link>
+        </div>
       </div>
       <p className="sub">Every job starts as a lead. Add the estimate, get it approved, pick a time, then create the work order.</p>
 

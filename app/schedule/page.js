@@ -67,7 +67,10 @@ function ScheduleInner({ staff }) {
     <>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <h1>Schedule</h1>
-        {isOffice && <Link href="/leads/new"><button className="primary">New lead</button></Link>}
+        <div className="row">
+          <Link href="/book"><button className="secondary">Book a job</button></Link>
+          {isOffice && <Link href="/leads/new"><button className="primary">New lead</button></Link>}
+        </div>
       </div>
       <div className="tabs">
         <button className={view === 'board' ? 'on' : ''} onClick={() => setView('board')}>By tech</button>

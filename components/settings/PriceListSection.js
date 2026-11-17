@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
 import { money, UNIT_LABELS } from '@/lib/format';
 
-const BLANK = { name: '', description: '', unit: 'sqft', price: '', is_addon: false, aftercare: '', dry_hours: '' };
+const BLANK = { name: '', description: '', unit: 'sqft', price: '', is_addon: false, bookable_online: false, aftercare: '', dry_hours: '' };
 
 export default function PriceListSection() {
   const [items, setItems] = useState([]);
@@ -37,7 +37,7 @@ export default function PriceListSection() {
     e.preventDefault();
     const dry = form.dry_hours === '' ? null : Math.round(Number(form.dry_hours));
     if (dry !== null && !(dry >= 1 && dry <= 72)) { setMsg({ err: true, text: 'Drying time is 1 to 72 hours, or leave it blank.' }); return; }
-    const row = { name: form.name.trim(), description: form.description, unit: form.unit, price: Number(form.price), is_addon: !!form.is_addon, aftercare: form.aftercare.trim(), dry_hours: dry };
+    const row = { name: form.name.trim(), description: form.description, unit: form.unit, price: Number(form.price), is_addon: !!form.is_addon, bookable_online: !!form.bookable_online, aftercare: form.aftercare.trim(), dry_hours: dry };
     if (!row.name || Number.isNaN(row.price) || row.price < 0) { setMsg({ err: true, text: 'Enter a name and a price of zero or more.' }); return; }
     const sb = getSupabase();
     const { error } = editId ? await sb.from('price_items').update(row).eq('id', editId) : await sb.from('price_items').insert(row);
@@ -56,7 +56,7 @@ export default function PriceListSection() {
   function edit(it) {
     setEditId(it.id);
     if (typeof window !== 'undefined' && window.innerWidth < 900) window.scrollTo({ top: 0, behavior: 'smooth' });
-    setForm({ name: it.name, description: it.description, unit: it.unit, price: String(it.price), is_addon: !!it.is_addon, aftercare: it.aftercare || '', dry_hours: it.dry_hours ? String(it.dry_hours) : '' });
+    setForm({ name: it.name, description: it.description, unit: it.unit, price: String(it.price), is_addon: !!it.is_addon, bookable_online: !!it.bookable_online, aftercare: it.aftercare || '', dry_hours: it.dry_hours ? String(it.dry_hours) : '' });
   }
 
   return (
@@ -80,6 +80,10 @@ export default function PriceListSection() {
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
             <input type="checkbox" checked={form.is_addon} onChange={(e) => setForm({ ...form, is_addon: e.target.checked })} />
             Offer as a one-tap add-on on estimates (for example, protectant or deodorizer)
+          </label>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+            <input type="checkbox" checked={form.bookable_online} onChange={(e) => setForm({ ...form, bookable_online: e.target.checked })} />
+            Show on the online booking page (customers with the booking link can choose it)
           </label>
           <div className="field"><label>Aftercare for the customer (optional)</label>
             <textarea className="sig-notes" rows={3} maxLength={1500} value={form.aftercare} onChange={set('aftercare')} placeholder="Stay off the carpet for 2 hours. Wait 24 hours before moving furniture back..." />
@@ -106,7 +110,7 @@ export default function PriceListSection() {
           {items.map((it) => (
             <div key={it.id} className={`price-row${editId === it.id ? ' editing' : ''}`} style={{ opacity: it.active ? 1 : 0.5 }}>
               <div className="price-row-main">
-                <div className="price-row-name">{it.name}{it.is_addon && <span className="badge s-quoted" style={{ marginLeft: 6 }}>add-on</span>}</div>
+                <div className="price-row-name">{it.name}{it.is_addon && <span className="badge s-quoted" style={{ marginLeft: 6 }}>add-on</span>}{it.bookable_online && <span className="badge s-booked" style={{ marginLeft: 6 }}>online</span>}</div>
                 {it.description && <div className="muted">{it.description}</div>}
                 {(it.aftercare || it.dry_hours) && <div className="muted">Aftercare{it.dry_hours ? `, dries in about ${it.dry_hours} h` : ''}</div>}
               </div>

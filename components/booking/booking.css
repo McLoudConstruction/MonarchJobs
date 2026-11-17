@@ -1,0 +1,58 @@
+/* Booking page and the "pick a time" card. Big tap targets: this is used on an iPad in front of a customer. */
+.bk-wrap{ max-width: 760px; margin: 0 auto; padding: 18px 16px 40px; }
+.bk-wrap h1{ margin: 0 0 2px; }
+.bk-staffbar{ display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; background: var(--panel); border: 1px solid var(--panel-line); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 13.5px; }
+.bk-staffbar .row{ gap: 8px; }
+.bk-steps{ display: flex; gap: 6px; margin: 10px 0 16px; }
+.bk-steps span{ flex: 1; height: 6px; border-radius: 3px; background: var(--line); }
+.bk-steps span.on{ background: var(--accent); }
+.bk-step-name{ font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+
+.bk-kinds{ display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 0 0 16px; }
+.bk-kind{ min-height: 52px; font-size: 15px; font-weight: 600; border: 1.5px solid var(--line); border-radius: 10px; background: var(--card-bg); color: var(--ink); cursor: pointer; }
+.bk-kind.on{ background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+.bk-services{ display: grid; gap: 10px; }
+.bk-service{ border: 1.5px solid var(--line); border-radius: 10px; background: var(--card-bg); color: var(--ink); }
+.bk-service.on{ border-color: var(--accent-text); box-shadow: inset 0 0 0 1px var(--accent-text); }
+.bk-service-head{ display: flex; width: 100%; gap: 12px; align-items: center; justify-content: space-between; min-height: 64px; padding: 12px 14px; background: none; border: 0; text-align: left; color: inherit; cursor: pointer; font: inherit; }
+.bk-service-name{ font-weight: 700; font-size: 16px; }
+.bk-service-desc{ color: var(--ink-soft); font-size: 13px; margin-top: 2px; }
+.bk-service-price{ white-space: nowrap; font-weight: 700; }
+.bk-service-price small{ display: block; color: var(--ink-soft); font-weight: 400; font-size: 12px; text-align: right; }
+.bk-service-qty{ display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 0 14px 14px; }
+.bk-service-qty label{ font-size: 13px; color: var(--ink-soft); }
+.bk-service-qty input{ width: 150px; min-height: 48px; font-size: 20px; font-weight: 700; }
+.bk-service-qty .bk-line-total{ margin-left: auto; font-size: 18px; font-weight: 700; }
+
+.bk-bar{ position: sticky; bottom: 0; z-index: 5; margin: 18px -16px 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: var(--card-bg); border-top: 1px solid var(--line); display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.bk-bar-total{ font-size: 26px; font-weight: 800; line-height: 1.1; }
+.bk-bar-note{ font-size: 12.5px; color: var(--ink-soft); }
+.bk-bar button.primary{ min-height: 54px; min-width: 160px; font-size: 17px; }
+
+.bk-total-row th, .bk-total-row td{ font-size: 20px; }
+.bk-price-big{ font-size: 34px; font-weight: 800; margin: 4px 0 2px; }
+
+.bk-slot-day{ margin-bottom: 16px; }
+.bk-slot-day h3{ margin: 0 0 8px; font-size: 15px; }
+.bk-slots{ display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.bk-slot{ min-height: 60px; font-size: 16px; font-weight: 600; border: 1.5px solid var(--line); border-radius: 10px; background: var(--card-bg); color: var(--ink); cursor: pointer; padding: 8px 10px; }
+.bk-slot:hover{ border-color: var(--accent-text); }
+.bk-slot.on{ background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.bk-picked{ font-size: 16px; font-weight: 700; margin: 12px 0; }
+
+.bk-actions{ display: grid; gap: 10px; margin-top: 14px; }
+.bk-actions button.big{ min-height: 56px; font-size: 17px; }
+.bk-done{ text-align: center; padding: 8px 0 4px; }
+.bk-done .bk-big{ font-size: 24px; font-weight: 800; margin: 6px 0; }
+.bk-hp{ position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
+.bk-link-box{ display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.bk-link-box input{ flex: 1; min-width: 220px; }
+.bk-days{ display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.bk-days label{ display: flex; gap: 6px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; cursor: pointer; background: var(--card-bg); }
+.bk-preview{ margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
+
+@media (min-width: 700px){
+  .bk-wrap{ padding-top: 28px; }
+}

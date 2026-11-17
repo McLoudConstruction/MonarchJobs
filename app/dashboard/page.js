@@ -51,6 +51,9 @@ function TodayPanel({ staff, activityCount, invoiceFlags }) {
 
   return (
     <>
+      <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 10 }}>
+        <Link href="/book"><button type="button" className="primary">Book a job</button></Link>
+      </div>
       <div className="stat-row">
         <div className="stat-tile"><div className="stat-num">{today.length}</div><div className="stat-label">Visits today</div></div>
         {isOffice && <Link href="/leads" className="stat-tile"><div className="stat-num">{ready.length}</div><div className="stat-label">Ready to schedule</div></Link>}

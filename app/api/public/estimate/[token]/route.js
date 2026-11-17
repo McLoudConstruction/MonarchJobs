@@ -31,11 +31,11 @@ export async function GET(request, { params }) {
   // Before a work order exists the estimate belongs to the lead; afterwards to the job.
   const subject = est.job_id
     ? admin.from('jobs').select('job_number,job_type,customer_notes,customer:customers(display_name),address:addresses(street,unit,city,state,zip)').eq('id', est.job_id).maybeSingle()
-    : admin.from('leads').select('name,job_type,street,unit,city,state,zip').eq('id', est.lead_id).maybeSingle();
+    : admin.from('leads').select('name,job_type,street,unit,city,state,zip,status,intake').eq('id', est.lead_id).maybeSingle();
   const [{ data: lines }, { data: found }, { data: settings }] = await Promise.all([
     admin.from('estimate_lines').select('id,description,unit,quantity,unit_price,tier,optional,accepted,sort_order,created_at').eq('estimate_id', est.id).order('sort_order').order('created_at'),
     subject,
-    admin.from('settings').select('business_name,phone,email,logo_path').eq('id', 1).maybeSingle(),
+    admin.from('settings').select('business_name,phone,email,logo_path,timezone,booking_after_sign').eq('id', 1).maybeSingle(),
   ]);
   const job = !found ? null : est.job_id
     ? found
@@ -50,9 +50,23 @@ export async function GET(request, { params }) {
     signed = sig?.[0] || null;
   }
 
+  // Picking a time online: offered while the estimate is still a lead with an address. An estimate that already has a
+  // work order shows its appointment instead.
+  const onLead = !est.job_id && !!found;
+  const selfSchedule = onLead && !!String(found.street || '').trim() && (settings?.booking_after_sign !== false || !!found.intake?.booking);
+  let appointment = null;
+  if (est.job_id) {
+    const { data: visit } = await admin.from('job_visits').select('starts_at,ends_at').eq('job_id', est.job_id).in('status', ['scheduled', 'on_the_way', 'started']).order('starts_at').limit(1);
+    appointment = visit?.[0] || null;
+  }
+
   return NextResponse.json({
     status: est.status,
     can_accept: est.status === 'sent',
+    self_schedule: selfSchedule,
+    can_schedule: selfSchedule && est.status === 'approved' && found.status === 'accepted',
+    appointment,
+    timezone: settings?.timezone || 'America/Chicago',
     signed,
     minimum_charge: est.minimum_charge,
     chosen_tier: est.chosen_tier,

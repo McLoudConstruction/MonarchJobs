@@ -9,11 +9,13 @@ import { money, addressLine, fmtDateTime, JOB_TYPES, UNIT_LABELS } from '@/lib/f
 import { displayPhone } from '@/lib/phone';
 import { logoUrl } from '@/lib/branding';
 import CenterCard from '@/components/CenterCard';
+import AfterSignScheduler from '@/components/booking/AfterSignScheduler';
+import { fmtSlotFull } from '@/lib/booking';
 
 // Customer-facing estimate page. No sign-in; the secret link is the access. Stands alone, without the
 // app shell. The customer can review the estimate, approve it and sign. Approving tells the office
 // they are ready to be scheduled.
-function Approve({ token, total, business, choice, onDone }) {
+function Approve({ token, total, business, choice, selfSchedule, onDone }) {
   const [name, setName] = useState('');
   const [sig, setSig] = useState(null);
   const [times, setTimes] = useState('');
@@ -46,14 +48,16 @@ function Approve({ token, total, business, choice, onDone }) {
       <h2>Approve this estimate</h2>
       <p className="hint">
         By signing, you approve the work and prices above for a total of <strong>{total}</strong> and ask {business || 'us'} to schedule it.
-        We will contact you to confirm a time.
+        {selfSchedule ? ' After you sign, you can pick a time that works for you.' : ' We will contact you to confirm a time.'}
       </p>
       <div className="field"><label htmlFor="signer">Your full name</label><input id="signer" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" /></div>
       <div className="field"><label>Your signature</label><SignaturePad onChange={setSig} /></div>
-      <div className="field">
-        <label htmlFor="times">Best days or times for us to come (optional)</label>
-        <textarea id="times" className="sig-notes" value={times} onChange={(e) => setTimes(e.target.value)} placeholder="Weekday mornings, anytime after Thursday..." maxLength={500} />
-      </div>
+      {!selfSchedule && (
+        <div className="field">
+          <label htmlFor="times">Best days or times for us to come (optional)</label>
+          <textarea id="times" className="sig-notes" value={times} onChange={(e) => setTimes(e.target.value)} placeholder="Weekday mornings, anytime after Thursday..." maxLength={500} />
+        </div>
+      )}
       {err && <div className="msg err">{err}</div>}
       <button className="primary big" style={{ width: '100%' }} disabled={busy}>{busy ? 'Submitting...' : `Approve and sign (${total})`}</button>
     </form>
@@ -160,14 +164,24 @@ function EstimateView() {
             {justApproved ? 'Thank you! Your estimate is approved.' : 'This estimate has been approved.'}
             {data.signed && ` Signed by ${data.signed.signer_name} on ${fmtDateTime(data.signed.signed_at)}.`}
           </div>
-          <p className="hint" style={{ marginTop: 12 }}>We will contact you shortly to confirm a time. Questions? {contact || 'Reply to the message we sent you.'}</p>
+          {data.appointment ? (
+            <p style={{ marginTop: 12, marginBottom: 0 }}>
+              <strong>Your appointment:</strong> {fmtSlotFull(data.appointment.starts_at, data.appointment.ends_at, data.timezone)}
+              <span className="hint" style={{ display: 'block', margin: '6px 0 0' }}>Need to change it? {contact || 'Reply to the message we sent you.'}</span>
+            </p>
+          ) : !data.can_schedule && (
+            <p className="hint" style={{ marginTop: 12 }}>We will contact you shortly to confirm a time. Questions? {contact || 'Reply to the message we sent you.'}</p>
+          )}
         </div>
+      )}
+      {data.can_schedule && !preview && (
+        <AfterSignScheduler token={token} phone={displayPhone(data.business.phone)} onBooked={() => load(true)} />
       )}
 
       {data.can_accept && !preview && (
         needsTier
           ? <div className="card"><p className="hint" style={{ margin: 0 }}>Choose an option above to approve this estimate.</p></div>
-          : <Approve token={token} total={total} business={data.business.business_name} choice={choice} onDone={() => { setJustApproved(true); load(true); }} />
+          : <Approve token={token} total={total} business={data.business.business_name} choice={choice} selfSchedule={!!data.self_schedule} onDone={() => { setJustApproved(true); load(true); }} />
       )}
       {data.can_accept && preview && (
         <div className="card"><p className="hint" style={{ margin: 0 }}>Preview: customers see an approve-and-sign form here.</p></div>
