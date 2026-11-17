@@ -15,6 +15,7 @@ import PhotosTab from '@/components/job/PhotosTab';
 import SketchTab from '@/components/job/SketchTab';
 import MoistureTab from '@/components/job/MoistureTab';
 import InspectionTab from '@/components/job/InspectionTab';
+import ReportsTab from '@/components/job/ReportsTab';
 import CustomerPageCard from '@/components/job/CustomerPageCard';
 import UpdatesTab from '@/components/job/UpdatesTab';
 import ThreadPanel from '@/components/chat/ThreadPanel';
@@ -53,6 +54,7 @@ const JOB_TABS = [
   ['updates', 'Updates'],
   ['thread', 'Chat'],
   ['estimate', 'Estimate'],
+  ['reports', 'Reports'],
   ['history', 'History'],
 ];
 // links and bookmarks made before the tabs were reworked (#customer was the first tab)
@@ -593,6 +595,18 @@ function JobInner({ id, staff, token }) {
       )}
 
       {tab === 'thread' && <ThreadPanel kind="job" refId={id} staff={staff} />}
+
+      {tab === 'reports' && (
+        <ReportsTab
+          jobId={id}
+          service={service}
+          photos={photos}
+          rooms={rooms}
+          sketches={sketches}
+          isOffice={isOffice}
+          info={{ jobId: id, customer: job.customer.display_name, address: addressLine(job.address), jobNumber: job.job_number, jobType: serviceTitle(service) || JOB_TYPES[job.job_type] }}
+        />
+      )}
 
       {tab === 'estimate' && (
         <>

@@ -1,0 +1,11 @@
+/* Job > Reports tab */
+.rep-item{ padding: 14px 0; border-top: 1px solid var(--line); }
+.rep-item:first-of-type{ border-top: 0; padding-top: 4px; }
+.rep-head{ display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.rep-head > div:first-child{ flex: 1 1 260px; min-width: 0; }
+.rep-head button{ min-height: 44px; min-width: 150px; }
+.rep-title{ font-weight: 700; color: var(--ink); margin-bottom: 2px; }
+.rep-opts{ margin-top: 12px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--panel-line); border-radius: 8px; }
+.rep-opts .field:last-child{ margin-bottom: 0; }
+.rep-opts label.check{ display: flex; gap: 8px; align-items: center; margin-top: 8px; font-size: 14px; }
+@media (max-width: 520px){ .rep-head button{ width: 100%; } }

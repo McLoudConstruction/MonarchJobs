@@ -27,7 +27,7 @@ import { OBJECT_TYPES, OBJECT_GROUPS, MAX_OBJECTS, makeObject, objectCounts, isI
 import { placeObject, hitObject, nearestWall, wallSpan } from '@/lib/sketchObjects';
 import { jpegToPdf } from '@/lib/pdfImage';
 import { moistureLogCsv, moistureSummaryCsv } from '@/lib/moistureLog';
-import { renderMoistureReport } from '@/lib/moistureReport';
+import { buildMoistureReportPdf } from '@/lib/reportExport';
 import { addDay, atForDay, countOnDay, dateText, dayName, dayView, pointTimeline, removeDay, todayKey } from '@/lib/moistureDays';
 import { areaLayers } from '@/lib/moistureLayers';
 import {
@@ -1533,38 +1533,10 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
       : { W, H, counts: {}, affected: totalsFor(plan).rooms, surface: 'all', grid: true, comments: false, moisture: false });
     return out;
   }
-  // The customer report: the plan as of the latest day (every layer, numbered pins), the equipment as placed on its busiest day, then the tables and curves.
+  // The customer report: built by lib/reportExport.js (the job's Reports tab makes the same PDFs).
   async function exportReport(variant = 'full') {
-    const full = planRef.current;
-    const ds = full.days || [];
-    const plan = dayView(full, ds.length ? ds[ds.length - 1].id : null);
     const title = exportName.replace(/\s+moisture$/i, '');
-    const W = 900; // a smaller canvas keeps the pins and room names readable on the page
-    const snapshot = async (pl, extra) => {
-      const b = planBounds(pl);
-      if (!b) return null;
-      const H = Math.round(clampN(900 * ((b.maxY - b.minY + 4) / Math.max(b.maxX - b.minX + 4, 4)), 300, 800));
-      const out = document.createElement('canvas');
-      out.width = W; out.height = H;
-      const ctx = out.getContext('2d');
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(0, 0, W, H);
-      drawPlan(ctx, pl, fitView(b, W, H, 60), { W, H, surface: 'all', plain: true, grid: false, comments: false, hiddenAreas: null, moistLabels: false, ...extra });
-      const blob = await new Promise((res) => out.toBlob(res, 'image/jpeg', 0.9));
-      return blob ? { bytes: new Uint8Array(await blob.arrayBuffer()), w: W, h: H } : null;
-    };
-    const planImage = await snapshot(plan, { moisture: true });
-    const peak = buildEquipment(full).peak;
-    const equipImage = peak ? await snapshot(full, { moisture: false, equipment: true, equipDay: peak.day.id }) : null;
-    let roomImages = [];
-    if (variant === 'carrier') { // one map per room that has readings or equipment, the room itself in focus
-      const withStuff = full.rooms.filter((r) => full.moisture.some((m) => hitRoom(full, m.x, m.y)?.id === r.id) || (full.equipment || []).some((u) => { const s = unitAt(full, u, ds.length ? ds[ds.length - 1].id : null); return s.state !== 'none' && hitRoom(full, s.x, s.y)?.id === r.id; }));
-      for (const r of withStuff.slice(0, 40)) {
-        const image = await snapshot(plan, { moisture: true, equipment: true, equipDay: ds.length ? ds[ds.length - 1].id : null, focusRoom: r.id, moistLabels: true });
-        if (image) roomImages.push({ id: r.id, name: roomTitle(r), image });
-      }
-    }
-    const pdf = renderMoistureReport(full, { title, planImage, equipImage, roomImages, variant, info: reportInfo || {}, preparedAt: new Date() });
+    const pdf = await buildMoistureReportPdf(planRef.current, { variant, title, info: reportInfo || {} });
     download(new Blob([pdf], { type: 'application/pdf' }), 'pdf', variant === 'full' ? '-report' : `-report-${variant}`);
   }
   function download(blob, ext, suffix = '') {

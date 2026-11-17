@@ -8,7 +8,7 @@ import { getSupabase } from '@/lib/supabaseClient';
 import { useTheme } from '@/lib/useTheme';
 import ThemeSwitch from '@/components/ThemeSwitch';
 import { initialsFor, displayNameFor } from '@/lib/userDisplay';
-import { DashboardIcon, SalesIcon, ScheduleIcon, JobDashboardIcon, SettingsIcon, UserIcon, SignOutIcon, MoreIcon, BellIcon, EquipmentIcon } from '@/components/icons';
+import { DashboardIcon, SalesIcon, ScheduleIcon, JobDashboardIcon, SettingsIcon, UserIcon, SignOutIcon, MoreIcon, BellIcon, EquipmentIcon, OwnerIcon } from '@/components/icons';
 import BottomSheet from '@/components/BottomSheet';
 import JobJumpSearch from '@/components/JobJumpSearch';
 import { logoUrl } from '@/lib/branding';
@@ -31,7 +31,8 @@ const NAV = [
   { href: '/equipment', label: 'Equipment', icon: EquipmentIcon, roles: ALL },
   // sideOnly: phones reach it from the bell in the top bar
   { href: '/activity', label: 'Activity', icon: BellIcon, roles: ALL, sideOnly: true },
-  // owner only; on phones it sits under More with the other secondary pages
+  // owner only; on phones these sit under More with the other secondary pages
+  { href: '/owner', label: 'Owner', icon: OwnerIcon, roles: ['owner'] },
   { href: '/settings', label: 'Settings', icon: SettingsIcon, roles: ['owner'] },
 ];
 

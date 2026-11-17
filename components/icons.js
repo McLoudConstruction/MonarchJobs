@@ -181,3 +181,14 @@ export function EyeOffIcon(props) {
     </svg>
   );
 }
+
+export function OwnerIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <path d="M3 17h14" />
+      <rect x="4" y="10" width="3" height="7" rx="0.5" />
+      <rect x="8.5" y="6" width="3" height="11" rx="0.5" />
+      <rect x="13" y="3" width="3" height="14" rx="0.5" />
+    </svg>
+  );
+}
