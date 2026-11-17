@@ -49,6 +49,8 @@ import { overlayVisits } from '@/lib/offlineOps';
 import { cacheRead } from '@/lib/offlineClient';
 import { savePackLocally } from '@/lib/warmJobs';
 
+// The Updates tab is shelved for now (job chat takes its place). Its code and data stay; flip this to bring the tab back.
+const UPDATES_SHELVED = true;
 const JOB_TABS = [
   ['overview', 'Overview'],
   ['details', 'Details'],
@@ -260,7 +262,7 @@ function JobInner({ id, staff, token }) {
 
   // What this kind of job shows. A tab the service does not have falls back to Overview (its data stays saved).
   const service = serviceOf(job);
-  const shownTabs = tabsFor(JOB_TABS, service).filter(([k]) => k !== 'costs' || staff.role === 'owner'); // job costs are for the owner alone
+  const shownTabs = tabsFor(JOB_TABS, service).filter(([k]) => k !== 'costs' || staff.role === 'owner').filter(([k]) => !(UPDATES_SHELVED && k === 'updates')); // job costs are for the owner alone
   const tab = shownTabs.some(([k]) => k === tabState) ? tabState : 'overview';
   // a finished job should have all its equipment picked up
   const shortCount = ['completed', 'closed'].includes(job.status) ? sketches.flatMap((sk) => unitsStillOnSite(normalizePlan(sk.plan))) : [];
@@ -329,7 +331,7 @@ function JobInner({ id, staff, token }) {
   // the phone's action bar follows the visit under way, otherwise the next one waiting
   const dockVisit = visitsShown.find((v) => v.status === 'started' && (isOffice || v.tech_id === staff.id)) || otwVisit;
   // phone action button: Start Recheck / Start Sketch / Start Job, which becomes Complete Job once the visit is under way
-  const fabKeys = FAB_HIDDEN_TABS.includes(tab) ? [] : fabActions({ hasSketch: sketches.length > 0, visitStatus: dockVisit?.status || null, docsMissing, recheck: hasFeature(service, 'recheck'), chat: true });
+  const fabKeys = FAB_HIDDEN_TABS.includes(tab) ? [] : fabActions({ hasSketch: sketches.length > 0, visitStatus: dockVisit?.status || null, docsMissing, recheck: hasFeature(service, 'recheck'), chat: true }).filter((k) => !(UPDATES_SHELVED && (k === 'complete' || k === 'internal'))); // those two write an Updates note
   const fabRun = {
     chat: () => chatDock.openJob(id, `Job #${job.job_number}`),
     photos: () => openCamera(),
@@ -587,7 +589,7 @@ function JobInner({ id, staff, token }) {
       )}
 
       {tab === 'inspection' && (
-        <InspectionTab jobId={id} staff={staff} sketches={sketches} canEdit={!['closed', 'cancelled'].includes(job.status)} />
+        <InspectionTab jobId={id} staff={staff} sketches={sketches} photos={photos} uploader={uploader} onOpenPhotos={openViewer} canEdit={!['closed', 'cancelled'].includes(job.status)} />
       )}
 
       {tab === 'updates' && (

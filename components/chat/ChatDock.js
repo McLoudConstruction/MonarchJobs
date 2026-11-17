@@ -241,7 +241,7 @@ function DesktopDock({ staff, rows, unread, loaded, panel, setPanel, windows, se
 
       {panel ? (
         <section className="cd-panel" aria-label="Chats">
-          <header className="cd-head">
+          <header className="cd-head cd-head-click" title="Click to close" onClick={(e) => { if (!e.target.closest('button')) { setPanel(false); setView('list'); } }}>
             <span className="cd-head-title">Chats</span>
             <button type="button" aria-label="New message" title="New message" onClick={() => setView('new')}>＋</button>
             <button type="button" aria-label="Close chats" title="Close" onClick={() => { setPanel(false); setView('list'); }}>×</button>

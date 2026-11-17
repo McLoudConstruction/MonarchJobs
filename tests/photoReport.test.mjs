@@ -74,19 +74,20 @@ test('photo report PDF: valid, header facts, section headings and counts, no sta
   assert.match(t, /#1042/);
   assert.match(t, /\(Before\) Tj/);
   assert.match(t, /3 photos/);
-  assert.match(t, /Stain by the door/);
+  assert.doesNotMatch(t, /Stain by the door/, 'captions are written for staff and never printed by default');
+  assert.match(t, /Nov 3, 2026/, 'every photo shows its date by default');
   assert.equal((t.match(/\/Subtype \/Image/g) || []).length, 4);
   const start = Number(/startxref\n(\d+)/.exec(t)[1]);
   assert.ok(t.slice(start).startsWith('xref'));
   assert.doesNotMatch(t, /gps|latitude|created_by/i);
 });
 
-test('photo report PDF: captions and dates can be left off', () => {
+test('photo report PDF: captions are opt-in, dates can be left off', () => {
   const sections = [{ heading: 'Before', photos: [img(1, { caption: 'Internal remark' })] }];
   const t = text(renderPhotoReport({ mode: 'photos', title: 'x', info, sections, showCaptions: false, showDates: false }));
   assert.doesNotMatch(t, /Internal remark/);
   assert.doesNotMatch(t, /Nov 3, 2026/);
-  const on = text(renderPhotoReport({ mode: 'photos', title: 'x', info, sections }));
+  const on = text(renderPhotoReport({ mode: 'photos', title: 'x', info, sections, showCaptions: true }));
   assert.match(on, /Internal remark/);
   assert.match(on, /Nov 3, 2026/);
 });

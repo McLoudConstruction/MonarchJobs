@@ -60,3 +60,13 @@ test('the latest signed record is found', () => {
   assert.equal(latestSigned(list, 'post').id, 'b');
   assert.equal(latestSigned(list, 'pre'), null);
 });
+
+test('rooms keep the pictures taken during the walkthrough, clean and capped; a new after-record starts without them', async () => {
+  const { cleanInspection, seedPostFromPre, blankRoom } = await import('../lib/inspection.js');
+  const d = cleanInspection('pre', { rooms: [{ id: 'r1', name: 'Den', photo_ids: ['a', 'a', '', 'b', 5] }] });
+  assert.deepEqual(d.rooms[0].photo_ids, ['a', 'b', '5']);
+  assert.deepEqual(cleanInspection('pre', { rooms: [{ name: 'X' }] }).rooms[0].photo_ids, []);
+  assert.equal(cleanInspection('pre', { rooms: [{ name: 'X', photo_ids: Array.from({ length: 50 }, (_, i) => `p${i}`) }] }).rooms[0].photo_ids.length, 30);
+  assert.deepEqual(seedPostFromPre(d).rooms[0].photo_ids, []);
+  assert.deepEqual(blankRoom().photo_ids, []);
+});

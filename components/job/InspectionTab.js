@@ -1,12 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { getSupabase } from '@/lib/supabaseClient';
 import SignaturePad from '@/components/SignaturePad';
+import PhotoAttach from '@/components/job/PhotoAttach';
+import './inspection.css';
 import { fmtDateTime } from '@/lib/format';
 import {
   KINDS, FIBERS, ISSUE_TYPES, PRETEST, RESULTS, NOT_REMOVED, blankRoom, blankIssue, cleanInspection, seedPostFromPre,
-  roomsFromPlan, missingBeforeSigning, summarize, latestSigned,
+  missingBeforeSigning, summarize, latestSigned,
 } from '@/lib/inspection';
 
 const SAVE_DELAY_MS = 900;
@@ -14,7 +17,7 @@ const SAVE_DELAY_MS = 900;
 // Before and after cleaning record, room by room, signed by the customer on this phone. Pre: fiber, traffic,
 // spot test and spots noted. Post: the same rooms with a result for every spot, drying time and a walk-through.
 // A signed record can never change; a new one starts from the old.
-function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff }) {
+function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, photos, uploader, onOpenPhotos }) {
   const signed = latestSigned(rows, kind);
   const draft = rows.filter((r) => r.kind === kind && !r.signed_at).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0] || null;
   const [data, setData] = useState(null);
@@ -23,6 +26,8 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff }) {
   const [sig, setSig] = useState(null);
   const [comments, setComments] = useState('');
   const [msg, setMsg] = useState(null);
+  const [open, setOpen] = useState(false); // the record fills the screen while it is being filled in
+  const [step, setStep] = useState('edit'); // 'edit' | 'sign': the signature is its own step, behind the Signature button
   const timer = useRef(null);
   const draftId = draft?.id;
 
@@ -54,18 +59,18 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff }) {
     } else {
       base = cleanInspection('pre', {});
     }
-    if (!base.rooms.length) {
-      const sk = sketches.find((s) => s.plan?.rooms?.length);
-      if (sk) base.rooms = roomsFromPlan(sk.plan).map((r) => (kind === 'post' ? { ...r } : r));
-    }
+    if (!base.rooms.length) base.rooms = [blankRoom()]; // start with one room; add more as you walk
     const { error } = await getSupabase().from('job_inspections').insert({ job_id: jobId, kind, data: base, created_by: staff.id });
     if (error) { setMsg({ err: true, text: error.message.includes('row-level') ? 'Not allowed. The job may be closed.' : error.message }); return; }
+    setStep('edit');
+    setOpen(true);
     onReload();
   }
 
   async function discard() {
     if (!window.confirm('Discard this unsigned record?')) return;
     await getSupabase().from('job_inspections').delete().eq('id', draftId);
+    setOpen(false);
     onReload();
   }
 
@@ -81,8 +86,16 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff }) {
     const { error } = await sb.from('job_inspections').update({ data: cleanInspection(kind, full), signer_name: name.trim(), signature_png: sig }).eq('id', draftId);
     if (error) { setMsg({ err: true, text: error.message.includes('INSPECTION_SIGNED') ? 'This record was already signed.' : error.message }); return; }
     await sb.from('job_events').insert({ job_id: jobId, actor_id: staff.id, actor_email: staff.email, kind: 'inspection_signed', details: { kind, signer_name: name.trim() } });
-    setName(''); setSig(null);
+    setName(''); setSig(null); setOpen(false); setStep('edit');
     onReload();
+  }
+
+  function goSign() {
+    setMsg(null);
+    const full = { ...data, ...(kind === 'post' ? { comments } : {}) };
+    const missing = missingBeforeSigning(kind, full);
+    if (missing.length) { setMsg({ err: true, text: missing[0] }); return; }
+    setStep('sign');
   }
 
   const room = (i) => data.rooms[i];
@@ -114,8 +127,27 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff }) {
           : <p className="muted">Nothing recorded.</p>
       )}
 
-      {draft && data && (
+      {draft && data && !open && (
         <div>
+          <p className="hint">{summarize(kind, data).text}. Not signed yet.</p>
+          <div className="row">
+            <button type="button" className="primary" onClick={() => { setStep('edit'); setOpen(true); }}>Continue</button>
+            <button type="button" className="secondary small" onClick={discard}>Discard</button>
+          </div>
+        </div>
+      )}
+
+      {draft && data && open && typeof document !== 'undefined' && createPortal(
+        <div className="insp-full" role="dialog" aria-modal="true" aria-label={KINDS[kind]}>
+          <header className="insp-bar">
+            <strong>{KINDS[kind]}</strong>
+            <span className="muted">{saveText}</span>
+            <button type="button" className="secondary small" style={{ marginLeft: 'auto' }} onClick={() => (step === 'sign' ? setStep('edit') : setOpen(false))}>{step === 'sign' ? 'Back' : 'Close'}</button>
+          </header>
+          <div className="insp-body">
+            {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
+            {step === 'edit' ? (
+              <>
           {data.rooms.map((r, i) => (
             <div key={r.id} className="card" style={{ margin: '10px 0', padding: 12 }}>
               <div className="row" style={{ alignItems: 'flex-end' }}>
@@ -168,14 +200,15 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff }) {
                 </div>
               ))}
               {kind === 'pre' && <button type="button" className="secondary small" style={{ marginTop: 8 }} onClick={() => update((d) => { d.rooms[i].issues.push(blankIssue()); return d; })}>+ Add a spot or issue</button>}
+              <PhotoAttach photos={photos || []} ids={r.photo_ids || []} uploader={uploader} onOpen={onOpenPhotos} kind={kind === 'pre' ? 'before' : 'after'} label={`Photos of ${r.name || 'this room'}`}
+                onChange={(ids) => update((d) => { d.rooms[i].photo_ids = ids; return d; })} />
               <div className="field" style={{ marginTop: 8, marginBottom: 0 }}><label>Notes (optional)</label><input value={room(i).notes} maxLength={400} onChange={(e) => update((d) => { d.rooms[i].notes = e.target.value; return d; })} /></div>
             </div>
           ))}
-          <div className="row">
-            <button type="button" className="secondary small" onClick={() => update((d) => { d.rooms.push(blankRoom()); return d; })}>+ Add a room</button>
-            <button type="button" className="secondary small" onClick={discard}>Discard</button>
-          </div>
-
+                <div className="row">
+                  <button type="button" className="secondary small" onClick={() => update((d) => { d.rooms.push(blankRoom()); return d; })}>+ Add a room</button>
+                  <button type="button" className="secondary small" onClick={discard}>Discard</button>
+                </div>
           {kind === 'post' && (
             <div style={{ marginTop: 12 }}>
               <div className="field" style={{ maxWidth: 240 }}><label>Dries in about (hours)</label>
@@ -188,19 +221,29 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff }) {
             </div>
           )}
 
-          <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-            <p className="hint">Hand the phone to the customer. Signing locks this record.</p>
-            <div className="field"><label>Customer’s full name</label><input value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" /></div>
-            <div className="field"><label>Customer’s signature</label><SignaturePad onChange={setSig} /></div>
-            <button className="primary big" style={{ width: '100%' }} onClick={sign}>Sign and lock</button>
+              </>
+            ) : (
+              <div style={{ maxWidth: 520, margin: '0 auto' }}>
+                <p className="hint">Hand the phone to the customer. Signing locks this record.</p>
+                <div className="field"><label>Customer’s full name</label><input value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" /></div>
+                <div className="field"><label>Customer’s signature</label><SignaturePad onChange={setSig} /></div>
+                <button className="primary big" style={{ width: '100%' }} onClick={sign}>Sign and lock</button>
+              </div>
+            )}
           </div>
-        </div>
+          {step === 'edit' && (
+            <footer className="insp-foot">
+              <button type="button" className="primary big" onClick={goSign}>Signature</button>
+            </footer>
+          )}
+        </div>,
+        document.body,
       )}
     </div>
   );
 }
 
-export default function InspectionTab({ jobId, staff, sketches = [], canEdit = true }) {
+export default function InspectionTab({ jobId, staff, sketches = [], canEdit = true, photos = [], uploader = null, onOpenPhotos = null }) {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
   const [plans, setPlans] = useState([]);
@@ -223,8 +266,8 @@ export default function InspectionTab({ jobId, staff, sketches = [], canEdit = t
   return (
     <>
       <p className="hint">Walk the rooms with the customer before you start, and again when you finish. The customer signs on this phone. They can see the signed records on their care page.</p>
-      <Panel kind="pre" jobId={jobId} rows={rows} sketches={plans.length ? plans : sketches} pre={pre} canEdit={canEdit} onReload={load} staff={staff} />
-      <Panel kind="post" jobId={jobId} rows={rows} sketches={plans.length ? plans : sketches} pre={pre} canEdit={canEdit} onReload={load} staff={staff} />
+      <Panel kind="pre" jobId={jobId} rows={rows} sketches={plans.length ? plans : sketches} pre={pre} canEdit={canEdit} onReload={load} staff={staff} photos={photos} uploader={uploader} onOpenPhotos={onOpenPhotos} />
+      <Panel kind="post" jobId={jobId} rows={rows} sketches={plans.length ? plans : sketches} pre={pre} canEdit={canEdit} onReload={load} staff={staff} photos={photos} uploader={uploader} onOpenPhotos={onOpenPhotos} />
     </>
   );
 }
