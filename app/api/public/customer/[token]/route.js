@@ -19,7 +19,7 @@ export async function GET(request, { params }) {
     loadAftercare(admin, job.id),
     admin.from('settings').select('business_name,phone,email,logo_path').eq('id', 1).maybeSingle(),
     admin.from('job_problem_reports').select('kind,status,created_at').eq('job_id', job.id).order('created_at', { ascending: false }).limit(10),
-    admin.from('job_inspections').select('kind,data,signer_name,signed_at').eq('job_id', job.id).not('signed_at', 'is', null),
+    admin.from('job_inspections').select('kind,data,signer_name,signed_at,customer_absent').eq('job_id', job.id).not('signed_at', 'is', null),
     admin.from('jobs').select('customer:customers(first_name,marketing_opt_out)').eq('id', job.id).maybeSingle(),
   ]);
 
@@ -27,7 +27,7 @@ export async function GET(request, { params }) {
     const i = latestSigned(inspections || [], kind);
     if (!i) return null;
     const d = cleanInspection(kind, i.data);
-    return { signed_by: i.signer_name, signed_at: i.signed_at, rooms: d.rooms, notes: d.notes, drying_hours: d.drying_hours ?? null, comments: d.comments ?? '' };
+    return { signed_by: i.signer_name, absent: !!i.customer_absent, signed_at: i.signed_at, rooms: d.rooms, notes: d.notes, drying_hours: d.drying_hours ?? null, comments: d.comments ?? '' };
   };
 
   return NextResponse.json({

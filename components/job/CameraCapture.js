@@ -273,8 +273,12 @@ export default function CameraCapture({
       const min = caps.zoom.min || 1;
       const max = Math.min(caps.zoom.max, 10);
       setZoomRange({ min, max, hardware: true });
-      zoomRef.current = min;
-      setZoom(min);
+      // Always open at 1x. Phones with an ultra-wide lens report a minimum of 0.5, and the bar used to start
+      // there (highlighting .5) while the picture was really at 1x. Set the real zoom to match.
+      const start = Math.min(max, Math.max(min, 1));
+      zoomRef.current = start;
+      setZoom(start);
+      track.applyConstraints({ advanced: [{ zoom: start }] }).catch(() => {});
     } else {
       setZoomRange({ min: 1, max: MAX_DIGITAL_ZOOM, hardware: false });
       zoomRef.current = 1;

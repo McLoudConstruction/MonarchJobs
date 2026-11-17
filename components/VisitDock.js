@@ -7,7 +7,7 @@ import { fmtTime } from '@/lib/format';
 // The phone's action bar: one big button for the next step of the visit, pinned above the bottom
 // navigation where a thumb reaches it (inline: sits in the page, under the tab bar). On the way opens the minutes popup (onOtw); Start and Finish
 // go straight to the server. Shown on phones only; desktops use the buttons in the page.
-export default function VisitDock({ visit, token, onOtw, onDone, inline = false }) {
+export default function VisitDock({ visit, token, onOtw, onDone, onAction, inline = false }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
 
@@ -15,8 +15,9 @@ export default function VisitDock({ visit, token, onOtw, onDone, inline = false 
     setBusy(true);
     setMsg(null);
     try {
-      await sendVisitAction({ visit, action });
+      const r = await sendVisitAction({ visit, action });
       onDone();
+      if (!r?.queued) onAction?.(action); // lets the job page open the before / after documentation
     } catch (e) {
       setMsg(e.message);
     }

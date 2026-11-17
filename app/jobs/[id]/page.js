@@ -112,6 +112,7 @@ function JobInner({ id, staff, token }) {
   const [flagged, setFlagged] = useState(new Set());
   const [contacts, setContacts] = useState([]);
   const [jobContactIds, setJobContactIds] = useState([]);
+  const [inspLaunch, setInspLaunch] = useState(null); // { kind: 'pre' | 'post', n }: opens that inspection record by itself
   const [newContact, setNewContact] = useState(null); // inline 'add a contact' form on the Also notify card
   const [events, setEvents] = useState([]);
   const [staffList, setStaffList] = useState([]);
@@ -354,6 +355,15 @@ function JobInner({ id, staff, token }) {
   const dockVisit = visitsShown.find((v) => v.status === 'started' && (isOffice || v.tech_id === staff.id)) || otwVisit;
   // phone action button: Start Recheck / Start Sketch / Start Job, which becomes Complete Job once the visit is under way
   const fabKeys = FAB_HIDDEN_TABS.includes(tab) ? [] : fabActions({ hasSketch: sketches.length > 0, visitStatus: dockVisit?.status || null, docsMissing, recheck: hasFeature(service, 'recheck'), chat: true }).filter((k) => !(UPDATES_SHELVED && (k === 'complete' || k === 'internal'))); // those two write an Updates note
+  // Carpet jobs: Start opens the before-cleaning record, Finish opens the after-cleaning record.
+  const canDoc = hasFeature(service, 'inspectionTab') && !['closed', 'cancelled'].includes(job.status);
+  const onVisitAction = (action) => {
+    if (!canDoc) return;
+    if (action === 'started' || action === 'finished') {
+      openTab('inspection');
+      setInspLaunch({ kind: action === 'started' ? 'pre' : 'post', n: Date.now() });
+    }
+  };
   const fabRun = {
     chat: () => chatDock.openJob(id, `Job #${job.job_number}`),
     photos: () => openCamera(),
@@ -361,8 +371,9 @@ function JobInner({ id, staff, token }) {
     sketch: () => openTab('sketch'),
     otw: () => setOtwOpen(true),
     start: async () => {
-      await sendVisitAction({ visit: dockVisit, action: 'started', jobId: id });
+      const r = await sendVisitAction({ visit: dockVisit, action: 'started', jobId: id });
       await load();
+      if (!r?.queued) onVisitAction('started');
     },
     complete: () => { openTab('updates'); setUpdCmd({ kind: 'internal', category: 'Completed Job', n: Date.now() }); },
     internal: () => { openTab('updates'); setUpdCmd({ kind: 'internal', category: INTERNAL_CATEGORIES[0], n: Date.now() }); },
@@ -418,7 +429,7 @@ function JobInner({ id, staff, token }) {
         })}
       </div>
 
-      {tab === 'overview' && dockVisit && <VisitDock inline visit={dockVisit} token={token} onOtw={() => setOtwOpen(true)} onDone={load} />}
+      {tab === 'overview' && dockVisit && <VisitDock inline visit={dockVisit} token={token} onOtw={() => setOtwOpen(true)} onDone={load} onAction={onVisitAction} />}
 
       {tab === 'overview' && (
         <div className="job-overview">
@@ -464,7 +475,7 @@ function JobInner({ id, staff, token }) {
                   <div className="meta">{name(v.tech_id)}{v.minutes_out ? ` · ${v.minutes_out} min out` : ''}</div>
                 </div>
                 <div className="visit-buttons">
-                  {(isOffice || v.tech_id === staff.id) && <VisitActions visit={v} token={token} onDone={load} />}
+                  {(isOffice || v.tech_id === staff.id) && <VisitActions visit={v} token={token} onDone={load} onAction={onVisitAction} />}
                   {isOffice && v.status === 'scheduled' && (
                     <>
                       <button className="secondary small" onClick={() => setVisitEdit(v)}>Reschedule</button>
@@ -629,7 +640,7 @@ function JobInner({ id, staff, token }) {
       )}
 
       {tab === 'inspection' && (
-        <InspectionTab jobId={id} staff={staff} sketches={sketches} photos={photos} uploader={uploader} onOpenPhotos={openViewer} canEdit={!['closed', 'cancelled'].includes(job.status)} />
+        <InspectionTab jobId={id} staff={staff} sketches={sketches} photos={photos} uploader={uploader} onOpenPhotos={openViewer} canEdit={!['closed', 'cancelled'].includes(job.status)} launch={inspLaunch} />
       )}
 
       {tab === 'updates' && (

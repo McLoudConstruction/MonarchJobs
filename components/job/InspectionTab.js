@@ -17,7 +17,7 @@ const SAVE_DELAY_MS = 900;
 // Before and after cleaning record, room by room, signed by the customer on this phone. Pre: fiber, traffic,
 // spot test and spots noted. Post: the same rooms with a result for every spot, drying time and a walk-through.
 // A signed record can never change; a new one starts from the old.
-function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, photos, uploader, onOpenPhotos }) {
+function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, photos, uploader, onOpenPhotos, launch }) {
   const signed = latestSigned(rows, kind);
   const draft = rows.filter((r) => r.kind === kind && !r.signed_at).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0] || null;
   const [data, setData] = useState(null);
@@ -30,6 +30,7 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, pho
   const [step, setStep] = useState('edit'); // 'edit' | 'sign': the signature is its own step, behind the Signature button
   const timer = useRef(null);
   const draftId = draft?.id;
+  const lastLaunch = useRef(null);
 
   useEffect(() => {
     setData(draft ? cleanInspection(kind, draft.data) : null);
@@ -67,6 +68,15 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, pho
     onReload();
   }
 
+  // The tech view opens this record by itself: the before record on Start, the after record on Finish.
+  useEffect(() => {
+    if (!launch || lastLaunch.current === launch) return;
+    lastLaunch.current = launch;
+    if (!canEdit) return;
+    if (draft) { setStep('edit'); setOpen(true); } else if (!signed && (kind === 'pre' || pre)) start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [launch]);
+
   async function discard() {
     if (!window.confirm('Discard this unsigned record?')) return;
     await getSupabase().from('job_inspections').delete().eq('id', draftId);
@@ -90,6 +100,22 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, pho
     onReload();
   }
 
+  // The customer is not there: lock the record with no signature. The walk-through is not recorded as done.
+  async function markAbsent() {
+    setMsg(null);
+    const full = { ...data, ...(kind === 'post' ? { comments, walkthrough: false } : {}) };
+    const missing = missingBeforeSigning(kind, full, { absent: true });
+    if (missing.length) { setMsg({ err: true, text: missing[0] }); return; }
+    if (!window.confirm('Customer not present? This locks the record without a signature.')) return;
+    clearTimeout(timer.current);
+    const sb = getSupabase();
+    const { error } = await sb.from('job_inspections').update({ data: cleanInspection(kind, full), customer_absent: true }).eq('id', draftId);
+    if (error) { setMsg({ err: true, text: error.message.includes('INSPECTION_SIGNED') ? 'This record was already locked.' : error.message.includes('customer_absent') ? 'This needs database update 022. Ask the owner to run it.' : error.message }); return; }
+    await sb.from('job_events').insert({ job_id: jobId, actor_id: staff.id, actor_email: staff.email, kind: 'inspection_signed', details: { kind, absent: true } });
+    setName(''); setSig(null); setOpen(false); setStep('edit');
+    onReload();
+  }
+
   function goSign() {
     setMsg(null);
     const full = { ...data, ...(kind === 'post' ? { comments } : {}) };
@@ -109,7 +135,7 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, pho
 
       {signed && !draft && (
         <div>
-          <p><strong>Signed by {signed.signer_name}</strong> on {fmtDateTime(signed.signed_at)}. {summarize(kind, signed.data).text}.</p>
+          <p>{signed.customer_absent ? <strong>Customer not present, no signature</strong> : <strong>Signed by {signed.signer_name}</strong>} on {fmtDateTime(signed.signed_at)}. {summarize(kind, signed.data).text}.</p>
           {signed.signature_png && <img src={signed.signature_png} alt={`Signature of ${signed.signer_name}`} style={{ maxWidth: 240, maxHeight: 80, border: '1px solid var(--border)', borderRadius: 6, background: '#fff' }} />}
           {cleanInspection(kind, signed.data).rooms.map((r) => (
             <div key={r.id} style={{ marginTop: 8 }}>
@@ -228,12 +254,16 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, pho
                 <div className="field"><label>Customer’s full name</label><input value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" /></div>
                 <div className="field"><label>Customer’s signature</label><SignaturePad onChange={setSig} /></div>
                 <button className="primary big" style={{ width: '100%' }} onClick={sign}>Sign and lock</button>
+                <button type="button" className="secondary big" style={{ width: '100%', marginTop: 10 }} onClick={markAbsent}>Customer not present</button>
               </div>
             )}
           </div>
           {step === 'edit' && (
             <footer className="insp-foot">
-              <button type="button" className="primary big" onClick={goSign}>Signature</button>
+              <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+                <button type="button" className="secondary big" style={{ flex: 1 }} onClick={markAbsent}>Customer not present</button>
+                <button type="button" className="primary big" style={{ flex: 1 }} onClick={goSign}>Signature</button>
+              </div>
             </footer>
           )}
         </div>,
@@ -243,7 +273,7 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, pho
   );
 }
 
-export default function InspectionTab({ jobId, staff, sketches = [], canEdit = true, photos = [], uploader = null, onOpenPhotos = null }) {
+export default function InspectionTab({ jobId, staff, sketches = [], canEdit = true, photos = [], uploader = null, onOpenPhotos = null, launch = null }) {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
   const [plans, setPlans] = useState([]);
@@ -266,8 +296,8 @@ export default function InspectionTab({ jobId, staff, sketches = [], canEdit = t
   return (
     <>
       <p className="hint">Walk the rooms with the customer before you start, and again when you finish. The customer signs on this phone. They can see the signed records on their care page.</p>
-      <Panel kind="pre" jobId={jobId} rows={rows} sketches={plans.length ? plans : sketches} pre={pre} canEdit={canEdit} onReload={load} staff={staff} photos={photos} uploader={uploader} onOpenPhotos={onOpenPhotos} />
-      <Panel kind="post" jobId={jobId} rows={rows} sketches={plans.length ? plans : sketches} pre={pre} canEdit={canEdit} onReload={load} staff={staff} photos={photos} uploader={uploader} onOpenPhotos={onOpenPhotos} />
+      <Panel kind="pre" jobId={jobId} rows={rows} sketches={plans.length ? plans : sketches} pre={pre} canEdit={canEdit} onReload={load} staff={staff} photos={photos} uploader={uploader} onOpenPhotos={onOpenPhotos} launch={launch?.kind === 'pre' ? launch.n : null} />
+      <Panel kind="post" jobId={jobId} rows={rows} sketches={plans.length ? plans : sketches} pre={pre} canEdit={canEdit} onReload={load} staff={staff} photos={photos} uploader={uploader} onOpenPhotos={onOpenPhotos} launch={launch?.kind === 'post' ? launch.n : null} />
     </>
   );
 }

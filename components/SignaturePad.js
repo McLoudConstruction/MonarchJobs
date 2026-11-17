@@ -1,38 +1,93 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
-// A box to sign in with a finger or mouse. Calls onChange with a PNG data URL once something is
-// drawn, and with null when cleared.
-export default function SignaturePad({ onChange, height = 170 }) {
+// Signing happens on a full-screen landscape pad. Tapping the box opens it and asks the device to turn
+// landscape (Android and iPad can be told to; an iPhone cannot). Where the phone stays upright, the pad is
+// drawn turned on its side so it is already landscape: the person just turns the phone to match.
+// Calls onChange with a PNG data URL once Done is tapped, and with null when cleared.
+
+function SignOverlay({ onDone, onCancel }) {
   const canvasRef = useRef(null);
+  const wrapRef = useRef(null);
   const drawing = useRef(false);
   const last = useRef(null);
   const [has, setHas] = useState(false);
+  const hasRef = useRef(false);
+  const [view, setView] = useState({ w: window.innerWidth, h: window.innerHeight });
+  const portrait = view.h > view.w;
 
-  function setup() {
+  // follow the screen turning
+  useEffect(() => {
+    const onSize = () => setView({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener('resize', onSize);
+    window.addEventListener('orientationchange', onSize);
+    return () => { window.removeEventListener('resize', onSize); window.removeEventListener('orientationchange', onSize); };
+  }, []);
+
+  // ask for full screen + landscape, keep the page behind from scrolling
+  useEffect(() => {
+    let fs = false;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    (async () => {
+      try {
+        if (document.documentElement.requestFullscreen && !document.fullscreenElement) { await document.documentElement.requestFullscreen(); fs = true; }
+      } catch { /* not allowed here: fine */ }
+      try { await window.screen?.orientation?.lock?.('landscape'); } catch { /* not supported: the pad is turned instead */ }
+    })();
+    const onKey = (e) => { if (e.key === 'Escape') onCancel(); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+      try { window.screen?.orientation?.unlock?.(); } catch { /* ignore */ }
+      if (fs && document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    };
+  }, [onCancel]);
+
+  // size the canvas to its box; keep what is already drawn if the box changes (the phone was turned)
+  const fit = useCallback(() => {
     const c = canvasRef.current;
-    if (!c) return;
+    const box = wrapRef.current;
+    if (!c || !box) return;
+    const w = box.clientWidth;
+    const h = box.clientHeight;
+    if (!w || !h) return;
     const ratio = window.devicePixelRatio || 1;
-    const w = c.parentElement.clientWidth;
+    let snapshot = null;
+    if (hasRef.current && c.width > 0) {
+      snapshot = document.createElement('canvas');
+      snapshot.width = c.width;
+      snapshot.height = c.height;
+      snapshot.getContext('2d').drawImage(c, 0, 0);
+    }
     c.width = Math.round(w * ratio);
-    c.height = Math.round(height * ratio);
-    c.style.height = `${height}px`;
+    c.height = Math.round(h * ratio);
+    c.style.width = `${w}px`;
+    c.style.height = `${h}px`;
     const ctx = c.getContext('2d');
-    ctx.scale(ratio, ratio);
     ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, w, height);
-    ctx.lineWidth = 2.4;
+    ctx.fillRect(0, 0, c.width, c.height);
+    if (snapshot) ctx.drawImage(snapshot, 0, 0, c.width, c.height);
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.lineWidth = 2.8;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.strokeStyle = '#111';
-  }
+  }, []);
 
-  useEffect(() => { setup(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fit(); }, [fit, portrait, view.w, view.h]);
 
+  // pointer position in the canvas's own pixels, allowing for the pad being turned 90 degrees
   const point = (e) => {
-    const r = canvasRef.current.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top };
+    const c = canvasRef.current;
+    const r = c.getBoundingClientRect();
+    if (!portrait) return { x: e.clientX - r.left, y: e.clientY - r.top };
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    return { x: c.offsetWidth / 2 + (e.clientY - cy), y: c.offsetHeight / 2 - (e.clientX - cx) };
   };
 
   function down(e) {
@@ -42,11 +97,10 @@ export default function SignaturePad({ onChange, height = 170 }) {
     last.current = point(e);
     const ctx = canvasRef.current.getContext('2d');
     ctx.beginPath();
-    ctx.arc(last.current.x, last.current.y, 1.2, 0, Math.PI * 2);
+    ctx.arc(last.current.x, last.current.y, 1.4, 0, Math.PI * 2);
     ctx.fillStyle = '#111';
     ctx.fill();
   }
-
   function move(e) {
     if (!drawing.current) return;
     e.preventDefault();
@@ -58,27 +112,61 @@ export default function SignaturePad({ onChange, height = 170 }) {
     ctx.stroke();
     last.current = p;
   }
-
   function up() {
     if (!drawing.current) return;
     drawing.current = false;
+    hasRef.current = true;
     setHas(true);
-    onChange(canvasRef.current.toDataURL('image/png'));
+  }
+  function clear() {
+    hasRef.current = false;
+    setHas(false);
+    fit();
   }
 
-  function clear() {
-    setup();
-    setHas(false);
-    onChange(null);
-  }
+  const stage = portrait
+    ? { position: 'absolute', top: 0, left: view.w, width: view.h, height: view.w, transformOrigin: 'top left', transform: 'rotate(90deg)' }
+    : { position: 'absolute', inset: 0 };
+
+  return createPortal(
+    <div className="sig-full" role="dialog" aria-modal="true" aria-label="Signature">
+      <div className="sig-stage" style={stage}>
+        <div className="sig-bar">
+          <strong>Sign below</strong>
+          {portrait && <span className="sig-turn">Turn your phone sideways to sign</span>}
+          <span style={{ flex: 1 }} />
+          <button type="button" className="secondary" onClick={clear} disabled={!has}>Clear</button>
+          <button type="button" className="secondary" onClick={onCancel}>Cancel</button>
+          <button type="button" className="primary" disabled={!has} onClick={() => onDone(canvasRef.current.toDataURL('image/png'))}>Done</button>
+        </div>
+        <div className="sig-area" ref={wrapRef}>
+          <canvas ref={canvasRef} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} />
+          <div className="sig-line" />
+          {!has && <span className="sig-x">X</span>}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+export default function SignaturePad({ onChange }) {
+  const [url, setUrl] = useState(null);
+  const [open, setOpen] = useState(false);
+
+  const done = useCallback((u) => { setUrl(u); onChange(u); setOpen(false); }, [onChange]);
+  const cancel = useCallback(() => setOpen(false), []);
 
   return (
     <div>
-      <div className="sig-pad">
-        {!has && <span className="sig-hint">Sign here</span>}
-        <canvas ref={canvasRef} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onPointerLeave={up} />
+      <button type="button" className="sig-pad sig-preview" onClick={() => setOpen(true)} aria-label={url ? 'Sign again' : 'Tap to sign'}>
+        {url ? <img src={url} alt="Signature" /> : <span className="sig-hint-center">Tap to sign</span>}
+      </button>
+      <div className="row" style={{ marginTop: 6 }}>
+        <button type="button" className="secondary small" onClick={() => setOpen(true)}>{url ? 'Sign again' : 'Open signature pad'}</button>
+        {url && <button type="button" className="secondary small" onClick={() => { setUrl(null); onChange(null); }}>Clear signature</button>}
       </div>
-      <button type="button" className="secondary small" style={{ marginTop: 6 }} onClick={clear}>Clear signature</button>
+      {open && <SignOverlay onDone={done} onCancel={cancel} />}
     </div>
   );
 }

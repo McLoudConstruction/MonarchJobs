@@ -5,7 +5,7 @@ import { sendVisitAction } from '@/lib/offlineActions';
 
 // Compact Start / Finish buttons on a visit row, for desktop. Phones use the action bar at the bottom of
 // the screen instead (VisitDock). "On the way" is the popup on the job header. The server checks the tech owns the visit.
-export default function VisitActions({ visit, token, onDone }) {
+export default function VisitActions({ visit, token, onDone, onAction }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
 
@@ -13,8 +13,9 @@ export default function VisitActions({ visit, token, onDone }) {
     setBusy(true);
     setMsg(null);
     try {
-      await sendVisitAction({ visit, action, minutes });
+      const r = await sendVisitAction({ visit, action, minutes });
       onDone();
+      if (!r?.queued) onAction?.(action);
     } catch (e) {
       setMsg(e.message);
     }

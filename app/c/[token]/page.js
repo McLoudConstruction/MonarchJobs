@@ -79,7 +79,7 @@ function Record({ title, rec, labels, notRemoved, post: isPost }) {
   return (
     <div className="card">
       <h2>{title}</h2>
-      <p className="hint">Signed by {rec.signed_by} on {fmtDateTime(rec.signed_at)}.</p>
+      <p className="hint">{rec.absent ? 'Recorded' : `Signed by ${rec.signed_by}`} on {fmtDateTime(rec.signed_at)}{rec.absent ? ' (you were not home, so there is no signature)' : ''}.</p>
       {rec.rooms.map((r) => (
         <div key={r.id} style={{ margin: '10px 0' }}>
           <strong>{r.name}</strong>

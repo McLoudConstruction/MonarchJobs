@@ -23,7 +23,7 @@ const ROLLING_MAX_DAYS = 140;
 // the following days and weeks (more days load as you near the end) instead of paging a Monday-to-Sunday week.
 export default function WeekGrid({
   weekStart, onWeekChange, techs, focusTechId = '', proposed = null, onPick = null,
-  excludeVisitId = null, linkVisits = false, hint = null, rolling = false,
+  excludeVisitId = null, linkVisits = false, hint = null, rolling = false, proposedLabel = 'New',
 }) {
   const [visits, setVisits] = useState([]);
   const [view, setView] = useState(focusTechId || 'all');
@@ -235,7 +235,7 @@ export default function WeekGrid({
                       onPointerDown={(e) => beginDrag(e, d)} onClick={(e) => e.stopPropagation()}
                       title={onPick ? 'Drag to move the appointment' : undefined}
                       style={{ top: `${Math.max(pTop, 0) * 100}%`, height: `${Math.min(pHeight, 1 - Math.max(pTop, 0)) * 100}%` }}>
-                      New: {fmtTime(propStart)} · {fmtDuration(proposed.duration)}
+                      {proposedLabel}: {fmtTime(propStart)} · {fmtDuration(proposed.duration)}
                     </div>
                   )}
                 </div>
