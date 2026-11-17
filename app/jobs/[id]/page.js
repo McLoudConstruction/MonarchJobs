@@ -38,6 +38,7 @@ import { fabActions, FAB_LABELS, FAB_HIDDEN_TABS } from '@/lib/jobFab';
 import { getSupabase } from '@/lib/supabaseClient';
 import { doubleBookedIds } from '@/lib/schedule';
 import { fmtDateTime, fmtDuration, JOB_STATUS, JOB_TYPES, addressLine } from '@/lib/format';
+import MapLink from '@/components/MapLink';
 import { hasFeature, serviceOf, serviceTitle, tabsFor, SERVICES, SERVICE_HINTS } from '@/lib/services';
 import { displayPhone, telHref } from '@/lib/phone';
 import { staffName, displayNameFor } from '@/lib/userDisplay';
@@ -413,8 +414,8 @@ function JobInner({ id, staff, token }) {
 
           <div className="card">
             <h2>Site</h2>
-            <div className="title">{addressLine(job.address)}</div>
-            {job.address.gate_code && <div>Gate code: <strong>{job.address.gate_code}</strong></div>}
+            <div className="title"><MapLink address={job.address} /></div>
+            {job.address.gate_code &&<div>Gate code: <strong>{job.address.gate_code}</strong></div>}
             {job.address.warnings && <div>Pets: <strong>{job.address.warnings}</strong></div>}
             {job.address.access_notes && <div className="meta">{job.address.access_notes}</div>}
           </div>
