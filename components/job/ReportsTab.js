@@ -14,6 +14,8 @@ import { fetchReportPhotos, downloadBytes, safeName } from '@/lib/photoReportCli
 import { reportGroups, sketchContents, defaultSketch, dryingReady, DRYING_REPORTS, reportFileName } from '@/lib/reports';
 import { buildJobPacket } from '@/lib/jobPacketClient';
 import { packetFileName } from '@/lib/jobPacket';
+import { dailyBurn } from '@/lib/dailyBurn';
+import { renderDailyBurn, dailyBurnFileName } from '@/lib/dailyBurnReport';
 import { logoAsJpeg } from '@/lib/logoJpeg';
 import { logoUrl } from '@/lib/branding';
 import AdjusterLink from '@/components/job/AdjusterLink';
@@ -38,7 +40,7 @@ function Row({ title, text, ready = true, hint, children, button }) {
 // so a report is never out of date). Photos (every kind of job): the photo report and before & after. Drying (jobs that
 // have the Moisture tab): the customer report, summary, equipment report, carrier packet and spreadsheets.
 // None of them names staff. info = { business, phone, email, customer, address, jobNumber, jobType }.
-export default function ReportsTab({ jobId, service, photos, rooms, sketches: pageSketches, info, isOffice, jobStandards = null }) {
+export default function ReportsTab({ jobId, service, photos, rooms, sketches: pageSketches, info, isOffice, isOwner = false, jobStandards = null }) {
   const [biz, setBiz] = useState(null);
   const [fresh, setFresh] = useState(null); // sketches read just now (the Moisture tab saves on its own, so the page's copy can be old)
   const [sketchId, setSketchId] = useState(null);
@@ -122,6 +124,22 @@ export default function ReportsTab({ jobId, service, photos, rooms, sketches: pa
     setMsg({ ok: true, text: 'Packet made.' });
   });
 
+  // Daily burn: the owner's own cost per calendar day (equipment on site x its daily cost, plus logged hours). Read fresh each time.
+  const makeBurn = () => run('burn', async () => {
+    const sb = getSupabase();
+    const [sk, rt, tm] = await Promise.all([
+      sb.from('job_sketches').select('id,name,plan').eq('job_id', jobId),
+      sb.from('equipment_daily_rates').select('type,daily_cents'),
+      sb.from('job_time_entries').select('worked_on,hours,rate_cents,voided_at').eq('job_id', jobId),
+    ]);
+    if (sk.error || rt.error || tm.error) throw new Error('Run the latest database update first (migration 021).');
+    const rates = Object.fromEntries((rt.data || []).map((r) => [r.type, r.daily_cents]));
+    const burn = dailyBurn(sk.data || [], rates, tm.data || []);
+    if (burn.empty) throw new Error('Place equipment on the Moisture tab or log hours on the Costs tab first.');
+    downloadBytes(renderDailyBurn({ info: header, burn, preparedAt: new Date() }), dailyBurnFileName(info.jobNumber));
+    setMsg({ ok: true, text: 'Daily burn made.' });
+  });
+
   const progress = (mode) => (busy.startsWith(`${mode}:`) ? ` (${busy.split(':')[1]})` : '');
 
   const photoItem = groups.find((g) => g.key === 'photos')?.items || [];
@@ -171,6 +189,7 @@ export default function ReportsTab({ jobId, service, photos, rooms, sketches: pa
                 button={<button type="button" className={it.format === 'pdf' ? 'primary' : 'secondary'} disabled={!ready || !!busy} onClick={() => makeDrying(def)}>{busy === it.key ? 'Making…' : it.format === 'pdf' ? 'Download PDF' : 'Download CSV'}</button>} />
             );
           })}
+          {isOwner && <Row title="Daily burn" text="What the job costs per calendar day (equipment on site and logged hours) with a running total. Owner only: it shows your own costs." button={pdfBtn('burn', makeBurn)} />}
           {isOffice && <Row title="Adjuster link" text="A read-only web page of the drying report for the insurance adjuster. It expires in 90 days and you can turn it off." button={<button type="button" className="secondary" onClick={() => setLinkOpen(true)}>Manage links</button>} />}
         </>
       )}

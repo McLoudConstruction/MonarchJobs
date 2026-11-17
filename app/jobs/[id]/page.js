@@ -626,6 +626,7 @@ function JobInner({ id, staff, token }) {
           rooms={rooms}
           sketches={sketches}
           isOffice={isOffice}
+          isOwner={staff.role === 'owner'}
           jobStandards={job.dry_standards}
           info={{ jobId: id, customer: job.customer.display_name, address: addressLine(job.address), jobNumber: job.job_number, jobType: serviceTitle(service) || JOB_TYPES[job.job_type] }}
         />
