@@ -386,3 +386,17 @@ test('exports never name the person who took a reading or moved equipment', () =
   assert.ok(!moistureLogCsv(plan).includes('Jordan'));
   assert.ok(!LOG_COLUMNS.some((c) => /by/i.test(c)));
 });
+
+test('dry standards live on the job: the job wins, a job with none leaves the sketch alone, and the compare ignores junk', async () => {
+  const { withJobStandards, sameStandards } = await import('../lib/moisture.js');
+  const plan = { rooms: [], standards: { drywall: { val: 9, type: 'mc' } } };
+  const out = withJobStandards(plan, { drywall: { val: 12, type: 'mc' }, hardwood: { val: 11.5, type: 'mc' }, bogus: { val: 5 } });
+  assert.deepEqual(out.standards, { drywall: { val: 12, type: 'mc' }, hardwood: { val: 11.5, type: 'mc' } }, 'unknown materials are dropped');
+  assert.equal(plan.standards.drywall.val, 9, 'the original plan is not changed');
+  assert.equal(withJobStandards(plan, {}), plan, 'a job with no standards leaves the sketch its own');
+  assert.equal(withJobStandards(plan, null), plan);
+  assert.equal(sameStandards({ drywall: { val: 12, type: 'mc' } }, { drywall: { val: 12, type: 'mc' }, junk: 1 }), true);
+  assert.equal(sameStandards({ drywall: { val: 12, type: 'mc' } }, { drywall: { val: 13, type: 'mc' } }), false);
+  assert.equal(sameStandards({}, null), true);
+  assert.equal(sameStandards({ drywall: { val: 12, type: 'mc' } }, {}), false);
+});

@@ -32,7 +32,7 @@ import { addDay, atForDay, countOnDay, dateText, dayName, dayView, pointTimeline
 import { areaLayers } from '@/lib/moistureLayers';
 import {
   EQUIPMENT_GROUPS, EQUIPMENT_ORDER, EQUIPMENT_TYPES, MAX_EQUIPMENT, countText, daysOnSite, equipmentActionsOnDay, equipmentCounts, equipmentOnPlan, equipmentOnSite,
-  hitEquipment, makeEquipment, moveUnit, nextEquipNumber, pickUpUnit, putBackUnit, unitAt, unitCode,
+  hitEquipment, makeEquipment, moveUnit, nextEquipNumber, pickUpUnit, placementSpots, putBackUnit, unitAt, unitCode, MAX_PLACE_AT_ONCE,
 } from '@/lib/equipment';
 import { buildEquipment, equipmentLogCsv, unitHistory } from '@/lib/equipmentLog';
 import { equipmentLabelsPdf } from '@/lib/equipmentLabels';
@@ -228,6 +228,9 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   const [eqType, setEqType] = useState('airmover'); // what the next unit of equipment placed is
   const eqTypeRef = useRef('airmover');
   eqTypeRef.current = eqType;
+  const [eqQty, setEqQty] = useState(1); // quantity box: how many units one tap places
+  const eqQtyRef = useRef(1);
+  eqQtyRef.current = eqQty;
   const [moveEqId, setMoveEqId] = useState(null); // a unit of equipment waiting to be put somewhere else
   const moveEqRef = useRef(null);
   moveEqRef.current = moveEqId;
@@ -1436,10 +1439,16 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     let dId = dayRef.current;
     if (!dId) { const r = addDay(pl); pl = r.plan; dId = r.id; dayRef.current = r.id; setDayId(r.id); } // the first thing logged starts the initial loss, today
     const t = eqTypeRef.current;
-    const u = makeEquipment(t, nextEquipNumber(pl.equipment, t), snap(x, 0.25), snap(y, 0.25), eqStamp(pl));
-    commit({ ...pl, equipment: [...pl.equipment, u] });
-    setSel({ kind: 'equipment', id: u.id });
-    setEqNote(`${unitCode(u)} placed in ${roomTitle(rm)}`);
+    const room = Math.max(0, MAX_EQUIPMENT - pl.equipment.length);
+    const qty = Math.min(eqQtyRef.current, room);
+    const spots = placementSpots(snap(x, 0.25), snap(y, 0.25), qty, { inside: (px, py) => !rm || pointInPoly(rm.pts, px, py) });
+    const made = [];
+    for (const [sx, sy] of spots) made.push(makeEquipment(t, nextEquipNumber([...pl.equipment, ...made], t), sx, sy, eqStamp(pl)));
+    if (!made.length) return;
+    commit({ ...pl, equipment: [...pl.equipment, ...made] });
+    setSel({ kind: 'equipment', id: made[made.length - 1].id });
+    setEqNote(made.length === 1 ? `${unitCode(made[0])} placed in ${roomTitle(rm)}` : `${made.length} ${EQUIPMENT_TYPES[t].plural} placed in ${roomTitle(rm)} (${unitCode(made[0])} to ${unitCode(made[made.length - 1])}). Drag any one to move it.`);
+    if (eqQtyRef.current > 1) { eqQtyRef.current = 1; setEqQty(1); } // a bigger number is for one placement, so a second tap does not drop five more by accident
   }
   // a clean tap on the floorplan in equipment mode
   function equipTap(d, pl) {
@@ -1851,6 +1860,13 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                         </button>
                       );
                     })}
+                  </div>
+                  <div className="sk-eq-qty" role="group" aria-label="How many to place with one tap">
+                    <span>How many</span>
+                    <button type="button" aria-label="One fewer" disabled={eqQty <= 1} onClick={() => setEqQty((q) => Math.max(1, q - 1))}>{'\u2212'}</button>
+                    <input inputMode="numeric" aria-label="Quantity to place" value={eqQty} onChange={(e) => { const v = parseInt(e.target.value.replace(/\D/g, ''), 10); setEqQty(Number.isFinite(v) ? Math.min(MAX_PLACE_AT_ONCE, Math.max(1, v)) : 1); }} onFocus={(e) => e.target.select()} />
+                    <button type="button" aria-label="One more" disabled={eqQty >= MAX_PLACE_AT_ONCE} onClick={() => setEqQty((q) => Math.min(MAX_PLACE_AT_ONCE, q + 1))}>+</button>
+                    <span className="muted">{eqQty > 1 ? `Next tap places ${eqQty} ${EQUIPMENT_TYPES[eqType].plural}` : 'Next tap places one'}</span>
                   </div>
                   {days.length > 1 && curDay && curDay.date !== todayKey() && <div className="sk-pastday" role="note">Logging on {dayName(days, curDay.id)} ({dateText(curDay.date)}), not today. Use the Day button to change it.</div>}
                   <button type="button" className="sk-eq-sum" aria-expanded={eqListOpen} onClick={() => { setEqListOpen(!eqListOpen); setDayOpen(false); setLayersOpen(false); }}>
@@ -2610,7 +2626,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
       {stdOpen && (
         <div className="sketch-modal" role="presentation" onPointerDown={(e) => { if (e.target === e.currentTarget) setStdOpen(false); }}>
           <div className="sketch-modal-card sk-std" role="dialog" aria-label="Dry standards">
-            <div className="sketch-pop-head"><strong>Dry standards for this sketch</strong><button type="button" className="sk-x" aria-label="Close" onClick={() => setStdOpen(false)}>{'\u00d7'}</button></div>
+            <div className="sketch-pop-head"><strong>Dry standards for this job</strong><button type="button" className="sk-x" aria-label="Close" onClick={() => setStdOpen(false)}>{'\u00d7'}</button></div>
             <p className="muted" style={{ margin: 0 }}>The reading of each material in an unaffected area. A point is dry when its latest reading is at or under its standard. A point can have its own standard under More in its sheet. Dry standard points on the plan are measured and used first.</p>
             <div className="sk-std-list">
               {Object.entries(MOISTURE_MATERIALS).map(([k, label]) => {

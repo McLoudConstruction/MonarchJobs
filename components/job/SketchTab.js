@@ -6,7 +6,7 @@ import { backupAction, clearAside, clearBackup, readAside, readBackup, scheduleB
 import { cacheRead, cacheWrite } from '@/lib/offlineClient';
 import { isNetworkError } from '@/lib/jobPack';
 import { normalizePlan, roomPhotoCounts } from '@/lib/sketch';
-import SketchCanvas from '@/components/job/SketchCanvas';
+import FloorCanvas from '@/components/job/FloorCanvas';
 import QuoteFromSketch from '@/components/job/QuoteFromSketch';
 import { hasFeature } from '@/lib/services';
 
@@ -243,7 +243,7 @@ export default function SketchTab({ jobId, sketches, photos, isOffice, staff = n
       {!loaded && !loadErr && <p className="muted">Opening sketch...</p>}
       {loaded && (
         <>
-          <SketchCanvas
+          <FloorCanvas
             key={loaded.id}
             plan={loaded.plan}
             exportName={loaded.name}

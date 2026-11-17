@@ -1,0 +1,6 @@
+.floors-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; }
+.floors-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.floors-tabs button { min-height: 36px; padding: 4px 14px; border: 1px solid var(--rule, #ced4da); border-radius: 18px; background: #fff; color: inherit; font-weight: 600; }
+.floors-tabs button.on { background: #212529; color: #fff; border-color: #212529; }
+.floors-pop { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; padding: 8px 10px; border: 1px solid var(--rule, #ced4da); border-radius: 10px; background: #f8f9fa; }
+.floors-pop input { max-width: 200px; }

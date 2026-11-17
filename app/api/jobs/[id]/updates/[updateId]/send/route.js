@@ -4,6 +4,7 @@ import { getAdmin } from '@/lib/supabaseAdmin';
 import { siteUrl } from '@/lib/integrations';
 import { sendSms, sendEmail } from '@/lib/notify';
 import { buildUpdateMessages, isUuid, updateRecipients } from '@/lib/jobDocs';
+import { photosStillMissing, sendBlockedText } from '@/lib/updatePhotos';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +29,14 @@ export async function POST(request, { params }) {
 
   const payload = await request.json().catch(() => ({}));
   const manual = payload?.manual === true;
+
+  // an update waits for its photos: none of them may still be on a phone
+  const named = Array.isArray(upd.photo_ids) ? upd.photo_ids.filter(isUuid) : [];
+  if (named.length) {
+    const { data: have } = await admin.from('job_photos').select('id').eq('job_id', upd.job_id).in('id', named);
+    const missing = photosStillMissing(named, (have || []).map((r) => r.id));
+    if (missing.length) return NextResponse.json({ error: sendBlockedText(missing), code: 'PHOTOS_WAITING', missing: missing.length }, { status: 409 });
+  }
 
   const [{ data: job }, { data: links }, { data: settings }] = await Promise.all([
     admin.from('jobs').select('job_number,customer:customers(display_name,phone,email)').eq('id', upd.job_id).maybeSingle(),

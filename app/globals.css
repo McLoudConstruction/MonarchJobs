@@ -2289,3 +2289,8 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]){ margin: 0
 .job-fab-btn{ overflow: visible; }
 .job-fab-dot{ position: absolute; top: -4px; right: -4px; min-width: 22px; height: 22px; padding: 0 5px; box-sizing: border-box; border-radius: 11px; background: #d93025; color: #fff; border: 2px solid var(--card-bg); font: inherit; font-size: 11px; font-style: normal; font-weight: 700; line-height: 18px; text-align: center; }
 .job-fab-badge{ display: inline-block; margin-left: 10px; min-width: 20px; padding: 0 6px; border-radius: 10px; background: #d93025; color: #fff; font-size: 12px; line-height: 20px; text-align: center; }
+
+/* quantity box in equipment mode */
+.sketch-over .sk-eq-qty{ display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 2px; font-size: 13px; font-weight: 600; }
+.sketch-over .sk-eq-qty button{ min-width: 44px; min-height: 44px; border-radius: 10px; font-size: 20px; line-height: 1; padding: 0; }
+.sketch-over .sk-eq-qty input{ width: 56px; min-height: 44px; text-align: center; font-size: 18px; font-weight: 700; border-radius: 10px; }

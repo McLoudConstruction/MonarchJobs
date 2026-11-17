@@ -1,0 +1,14 @@
+.cost-tab{ display: flex; flex-direction: column; gap: 14px; }
+.cost-grid{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 12px 0; }
+.cost-stat{ padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); display: flex; flex-direction: column; gap: 4px; }
+.cost-stat span{ font-size: 13px; color: var(--muted); }
+.cost-stat strong{ font-size: 20px; }
+.cost-stat.total{ border-color: var(--accent); }
+.inv-sums .big.loss{ color: #8a1f14; }
+.cost-rate{ width: 96px; text-align: right; }
+.cost-rate-row{ display: flex; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.cost-rate-row > span:first-child{ flex: 1 1 auto; min-width: 0; }
+.cost-void td{ opacity: .55; text-decoration: line-through; }
+.cost-void td .muted{ text-decoration: none; }
+.cost-void td:last-child{ opacity: 1; text-decoration: none; }
+.cost-toggle{ display: flex; gap: 8px; align-items: center; margin-top: 10px; }

@@ -17,6 +17,9 @@ import MoistureTab from '@/components/job/MoistureTab';
 import InspectionTab from '@/components/job/InspectionTab';
 import ReportsTab from '@/components/job/ReportsTab';
 import InvoiceTab from '@/components/job/InvoiceTab';
+import CostsTab from '@/components/job/CostsTab';
+import { normalizePlan } from '@/lib/sketch';
+import { unitsStillOnSite } from '@/lib/equipment';
 import CustomerPageCard from '@/components/job/CustomerPageCard';
 import UpdatesTab from '@/components/job/UpdatesTab';
 import ThreadPanel from '@/components/chat/ThreadPanel';
@@ -57,6 +60,7 @@ const JOB_TABS = [
   ['thread', 'Chat'],
   ['estimate', 'Estimate'],
   ['invoice', 'Invoice'],
+  ['costs', 'Costs'],
   ['reports', 'Reports'],
   ['history', 'History'],
 ];
@@ -256,8 +260,10 @@ function JobInner({ id, staff, token }) {
 
   // What this kind of job shows. A tab the service does not have falls back to Overview (its data stays saved).
   const service = serviceOf(job);
-  const shownTabs = tabsFor(JOB_TABS, service);
+  const shownTabs = tabsFor(JOB_TABS, service).filter(([k]) => k !== 'costs' || staff.role === 'owner'); // job costs are for the owner alone
   const tab = shownTabs.some(([k]) => k === tabState) ? tabState : 'overview';
+  // a finished job should have all its equipment picked up
+  const shortCount = ['completed', 'closed'].includes(job.status) ? sketches.flatMap((sk) => unitsStillOnSite(normalizePlan(sk.plan))) : [];
 
   const openViewer = (list, startId) => setViewer({ ids: list.map((p) => p.id), startId });
   const viewerList = viewer ? viewer.ids.map((i) => photosById.get(i)).filter(Boolean) : [];
@@ -370,6 +376,12 @@ function JobInner({ id, staff, token }) {
 
       {fromPhone && (
         <div className="msg err" role="status">You are looking at a copy saved on this phone (no signal). Photos, notes and sketch changes you make are kept and sent when you have signal. Visit and status buttons need a connection.</div>
+      )}
+      {shortCount.length > 0 && (
+        <div className="msg err" role="alert">
+          <strong>{shortCount.length} piece{shortCount.length === 1 ? '' : 's'} of equipment {shortCount.length === 1 ? 'is' : 'are'} still marked on site</strong> ({shortCount.slice(0, 8).join(', ')}{shortCount.length > 8 ? ', ...' : ''}). Pick {shortCount.length === 1 ? 'it' : 'them'} up on the {hasFeature(service, 'moistureTab') ? 'Moisture' : 'Sketch'} tab, or {shortCount.length === 1 ? 'it' : 'they'} stay on the count.
+          {' '}<button type="button" className="secondary small" onClick={() => openTab(hasFeature(service, 'moistureTab') ? 'moisture' : 'sketch')}>Open {hasFeature(service, 'moistureTab') ? 'Moisture' : 'Sketch'}</button>
+        </div>
       )}
       <div className="tabs" role="tablist">
         {shownTabs.map(([k, label]) => {
@@ -562,6 +574,8 @@ function JobInner({ id, staff, token }) {
           onOpenSketch={() => openTab('sketch')}
           jobId={id}
           isOffice={isOffice}
+          jobStandards={job.dry_standards}
+          onJobStandards={(std) => setJob((j) => (j ? { ...j, dry_standards: std } : j))}
           jobInfo={{ jobId: id, customer: job.customer.display_name, address: addressLine(job.address), jobNumber: job.job_number, jobType: serviceTitle(service) || JOB_TYPES[job.job_type] }}
           photos={photos}
           onAddPhoto={addRoomPhoto}
@@ -610,6 +624,7 @@ function JobInner({ id, staff, token }) {
           rooms={rooms}
           sketches={sketches}
           isOffice={isOffice}
+          jobStandards={job.dry_standards}
           info={{ jobId: id, customer: job.customer.display_name, address: addressLine(job.address), jobNumber: job.job_number, jobType: serviceTitle(service) || JOB_TYPES[job.job_type] }}
         />
       )}
@@ -630,6 +645,10 @@ function JobInner({ id, staff, token }) {
 
       {tab === 'invoice' && (
         <InvoiceTab jobId={id} job={job} photos={photos} staff={staff} token={token} isOffice={isOffice} onChanged={loadEvents} />
+      )}
+
+      {tab === 'costs' && staff.role === 'owner' && (
+        <CostsTab jobId={id} sketches={sketches} staffList={staffList} />
       )}
 
       {tab === 'history' && (

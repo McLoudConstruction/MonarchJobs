@@ -35,9 +35,10 @@
 .chat-edit textarea{ width: 100%; }
 
 .chat-composer{ display: flex; flex-direction: column; gap: 8px; }
-.chat-quick{ display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.chat-quick{ display: flex; gap: 6px; align-items: center; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
 .chat-quick::-webkit-scrollbar{ display: none; }
-.chat-quick button{ flex: 0 0 auto; border-radius: 999px; padding: 6px 14px; min-height: 36px; font-size: 14px; }
+.chat-quick button{ flex: 0 0 auto; border-radius: 999px; padding: 3px 10px; min-height: 28px; font-size: 12.5px; line-height: 1.2; }
+.chat-quick .chat-quick-photo{ display: inline-flex; align-items: center; justify-content: center; width: 32px; min-width: 32px; padding: 0; position: sticky; left: 0; }
 .chat-compose-row{ display: flex; gap: 8px; align-items: flex-end; }
 .chat-compose-row .mention-box{ flex: 1; min-width: 0; }
 .chat-compose-row textarea{ width: 100%; font-size: 16px; }

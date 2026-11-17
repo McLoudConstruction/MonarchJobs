@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { emptyPlan, normalizePlan, newRoom, ensureRoomNums } from '../lib/sketch.js';
 import { removeDay } from '../lib/moistureDays.js';
 import {
-  EQUIPMENT_TYPES, EQUIPMENT_ORDER, MAX_ACTIONS, countText, daysOnSite, cleanEquipment, equipmentActionsOnDay, equipmentCounts, equipmentOnPlan, equipmentOnSite,
+  calendarDatesOnSite, placementSpots, EQUIPMENT_TYPES, EQUIPMENT_ORDER, MAX_ACTIONS, countText, daysOnSite, cleanEquipment, equipmentActionsOnDay, equipmentCounts, equipmentOnPlan, equipmentOnSite,
   hitEquipment, makeEquipment, moveUnit, nextEquipNumber, pickUpUnit, putBackUnit, unitAt, unitCode,
 } from '../lib/equipment.js';
 import { buildEquipment, equipmentLogCsv, equipmentLogRows, unitHistory } from '../lib/equipmentLog.js';
@@ -134,15 +134,15 @@ test('days on site run in 24-hour days from the date placed: picked up Nov 13 af
   assert.equal(daysOnSite(p, u), 4, 'through the latest day by default');
   const gone = pickUpUnit(p, u, { day: 'd4', by });
   const q = { ...p, equipment: [gone] };
-  assert.equal(daysOnSite(q, gone), 3);
+  assert.equal(daysOnSite(q, gone), 4, 'placed Nov 10, picked up Nov 13: calendar days 10, 11, 12, 13');
   assert.equal(daysOnSite(q, gone, 'd2'), 2, 'asked about an earlier day, the pick-up has not happened yet');
   // placed and picked up on the same day counts as one day
   const same = pickUpUnit(p, u, { day: 'd1', by });
   assert.equal(daysOnSite({ ...p, equipment: [same] }, same), 1);
-  // picked up Nov 11 and put back Nov 13, then still there: 1 + 1 (Nov 13 only)
+  // picked up Nov 11 and put back Nov 13, then still there: Nov 10 and 11, then Nov 13 = 3 calendar days
   let w = pickUpUnit(p, u, { day: 'd2', by });
   w = putBackUnit({ ...p, equipment: [w] }, w, { day: 'd4', by });
-  assert.equal(daysOnSite({ ...p, equipment: [w] }, w), 2);
+  assert.equal(daysOnSite({ ...p, equipment: [w] }, w), 3);
   assert.equal(daysOnSite({ ...emptyPlan() }, u), 0, 'no days: nothing to count');
 });
 
@@ -245,10 +245,10 @@ test('buildEquipment: units, rooms, per-day counts, the busiest day and days on 
   assert.equal(am2.lastRoom, '#2 Bedroom');
   const dh = eq.units.find((x) => x.code === 'DH 1');
   assert.equal(dh.state, 'out');
-  assert.equal(dh.days, 3);
+  assert.equal(dh.days, 4, 'placed Nov 10, picked up Nov 13: calendar days 10, 11, 12, 13');
   assert.equal(dh.pickedUp.day.id, 'd4');
   assert.equal(dh.placed.by, 'Sam Tech');
-  assert.equal(eq.unitDays, 4 + 4 + 3 + 3, 'AM 1: 4, AM 2: 4, DH 1: 3, AS 1: Nov 11-13 = 3');
+  assert.equal(eq.unitDays, 4 + 4 + 4 + 3, 'AM 1: 4, AM 2: 4, DH 1: 4 (picked up on its 4th calendar day), AS 1: Nov 11-13 = 3');
   // rows for the room table: Kitchen first, then Bedroom, types in a fixed order
   assert.deepEqual(eq.roomRows.map((r) => [r.roomName, r.t, r.cells]), [
     ['#1 Kitchen', 'airmover', [2, 2, 1, 1]],
@@ -333,4 +333,33 @@ test('the equipment log (CSV) does not name who placed or picked up a unit', () 
   p = { ...p, equipment: [pickUpUnit(p, p.equipment[0], { day: 'd3', by })] };
   assert.ok(!/\bby\b/i.test(equipmentLogCsv(p).split('\r\n')[0].replace('by wall', '')));
   assert.ok(!equipmentLogCsv(p).includes(by.name));
+});
+
+test('calendar days: any hour on a date counts that whole date, and a date is never counted twice', () => {
+  const p = place(plan0(), 'airmover', 5, 5, 'd1');
+  const u = p.equipment[0];
+  assert.deepEqual(calendarDatesOnSite(p, u), ['2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13']);
+  // placed in the evening and picked up the next morning: two calendar days, though barely 12 hours
+  const evening = { ...u, log: [{ ...u.log[0], at: at(10, 22) }] };
+  const gone = pickUpUnit({ ...p, equipment: [evening] }, evening, { day: 'd2', at: at(11, 8), by });
+  assert.equal(daysOnSite({ ...p, equipment: [gone] }, gone), 2);
+  // days nobody visited are filled in
+  const gap = { ...plan0(), days: [{ id: 'a', date: '2026-11-10' }, { id: 'b', date: '2026-11-14' }] };
+  const g = place(gap, 'dehu', 5, 5, 'a');
+  assert.equal(calendarDatesOnSite(g, g.equipment[0]).length, 5);
+});
+
+test('placementSpots: the first unit goes on the tap, the rest fan out inside the room, and n units always come back', () => {
+  const spots = placementSpots(5, 5, 5, { spacing: 2 });
+  assert.equal(spots.length, 5);
+  assert.deepEqual(spots[0], [5, 5]);
+  assert.equal(new Set(spots.map((s) => s.join(','))).size, 5, 'no two on the same spot when there is room');
+  // a tiny room: only the tap itself is inside, so the rest stack on it
+  const stacked = placementSpots(1, 1, 3, { inside: (x, y) => x === 1 && y === 1 });
+  assert.deepEqual(stacked, [[1, 1], [1, 1], [1, 1]]);
+  assert.equal(placementSpots(0, 0, 0).length, 0);
+  assert.equal(placementSpots(0, 0, 99).length, 20, 'capped at 20 at once');
+  // spots outside the room are skipped
+  const inRoom = placementSpots(1, 1, 4, { spacing: 1, inside: (x, y) => x >= 0 && x <= 12 && y >= 0 && y <= 10 });
+  assert.ok(inRoom.every(([x, y]) => x >= 0 && y >= 0));
 });

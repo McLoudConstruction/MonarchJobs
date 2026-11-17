@@ -6,7 +6,8 @@ import { backupAction, clearAside, clearBackup, readAside, readBackup, scheduleB
 import { cacheRead, cacheWrite } from '@/lib/offlineClient';
 import { isNetworkError } from '@/lib/jobPack';
 import { normalizePlan, roomPhotoCounts } from '@/lib/sketch';
-import SketchCanvas from '@/components/job/SketchCanvas';
+import { sameStandards, withJobStandards } from '@/lib/moisture';
+import FloorCanvas from '@/components/job/FloorCanvas';
 import AdjusterLink from '@/components/job/AdjusterLink';
 import { assetChanges, assetTag, assetUsage } from '@/lib/assets';
 import { unitAt } from '@/lib/equipment';
@@ -15,7 +16,7 @@ const SAVE_DELAY_MS = 1200;
 
 // Moisture tab: the sketch as a plain floorplan with a layer per affected area. Tap to place a reading point,
 // tap a pin to log a recheck. Points live in the sketch's plan, so they save the same way the sketch does.
-export default function MoistureTab({ sketches, startId = null, onActive, staff = null, staffList = [], onOpenSketch, command = null, onCommandDone = null, photos = [], onAddPhoto = null, onViewPhotos = null, jobInfo = null, jobId = null, isOffice = false }) {
+export default function MoistureTab({ sketches, startId = null, onActive, staff = null, staffList = [], onOpenSketch, command = null, onCommandDone = null, photos = [], onAddPhoto = null, onViewPhotos = null, jobInfo = null, jobId = null, isOffice = false, jobStandards = null, onJobStandards = null }) {
   const [linkOpen, setLinkOpen] = useState(false);
   const [biz, setBiz] = useState(null); // the company's name and contact line for the report header
   const [activeId, setActiveId] = useState(startId);
@@ -72,6 +73,17 @@ export default function MoistureTab({ sketches, startId = null, onActive, staff 
     }
     if (changed) loadInventory();
   }, [jobId, loadInventory]);
+
+  // Dry standards are kept on the job, so every sketch of the job uses the same ones.
+  const jobStdRef = useRef(jobStandards || {});
+  useEffect(() => { jobStdRef.current = jobStandards || {}; }, [jobStandards]);
+  const saveJobStandards = useCallback(async (std) => {
+    if (!jobId || sameStandards(std, jobStdRef.current)) return;
+    const { error } = await getSupabase().rpc('set_job_dry_standards', { p_job: jobId, p_standards: std });
+    if (error) return; // migration 021 not run yet, or no signal: the sketch still keeps its own copy
+    jobStdRef.current = std;
+    onJobStandards?.(std);
+  }, [jobId, onJobStandards]);
 
   const stamps = useRef({});
   const pending = useRef(null);
@@ -173,10 +185,12 @@ export default function MoistureTab({ sketches, startId = null, onActive, staff 
     else if (act === 'aside') { setAside(data.id, b); setNotice(''); }
     else { if (b) clearBackup(data.id); setNotice(''); }
     setAsideCopy(!!readAside(data.id));
+    if (Object.keys(jobStdRef.current || {}).length) plan = withJobStandards(plan, jobStdRef.current); // the job's standards win over the sketch's own
+    else if (Object.keys(plan.standards || {}).length) saveJobStandards(plan.standards); // the first sketch to have any sets the job's
     setLoaded({ id: data.id, name: data.name, plan });
     if (fromCopy) setNotice('Opened the copy saved on this phone (no signal). Your changes are kept on this phone and saved when you have signal.');
     if (act === 'restore') queueSave(data.id, plan);
-  }, [queueSave]);
+  }, [queueSave, saveJobStandards]);
 
   useEffect(() => {
     if (!activeId) { setLoaded(null); return; }
@@ -225,7 +239,7 @@ export default function MoistureTab({ sketches, startId = null, onActive, staff 
         </div>
       )}
       {loaded && !noRooms && (
-        <SketchCanvas
+        <FloorCanvas
           key={loaded.id}
           variant="moisture"
           plan={loaded.plan}
@@ -233,7 +247,7 @@ export default function MoistureTab({ sketches, startId = null, onActive, staff 
           headSlot={headSlot}
           staff={staff}
           staffList={staffList}
-          onChange={(plan) => queueSave(loaded.id, plan)}
+          onChange={(plan) => { queueSave(loaded.id, plan); saveJobStandards(plan.standards || {}); }}
           reportInfo={{ ...(jobInfo || {}), ...(biz || {}) }}
           photoCounts={roomPhotoCounts(photos, loaded.id)}
           onAddReadingPhoto={onAddPhoto ? (key) => onAddPhoto(loaded.id, { id: key }) : undefined}

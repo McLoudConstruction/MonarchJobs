@@ -3,6 +3,7 @@ import { getAdmin } from '@/lib/supabaseAdmin';
 import { isUuid } from '@/lib/jobDocs';
 import { normalizePlan } from '@/lib/sketch';
 import { adjusterView } from '@/lib/adjusterView';
+import { withJobStandards } from '@/lib/moisture';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,13 +29,13 @@ export async function GET(request, { params }) {
   }
 
   const [{ data: job }, { data: settings }, { data: sketches }] = await Promise.all([
-    admin.from('jobs').select('job_number,job_type,customer:customers(display_name),address:addresses(street,unit,city,state,zip)').eq('id', link.job_id).maybeSingle(),
+    admin.from('jobs').select('job_number,job_type,dry_standards,customer:customers(display_name),address:addresses(street,unit,city,state,zip)').eq('id', link.job_id).maybeSingle(),
     admin.from('settings').select('business_name,phone,email,logo_path').eq('id', 1).maybeSingle(),
     admin.from('job_sketches').select('name,plan').eq('job_id', link.job_id).order('sort_order').order('created_at'),
   ]);
 
   const views = (sketches || [])
-    .map((s) => adjusterView(normalizePlan(s.plan), s.name))
+    .map((s) => adjusterView(withJobStandards(normalizePlan(s.plan), job?.dry_standards), s.name))
     .filter((v) => v.hasData || v.equipment);
 
   return NextResponse.json({

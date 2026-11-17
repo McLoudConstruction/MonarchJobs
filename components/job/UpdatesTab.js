@@ -11,7 +11,8 @@ import { fmtDateTime } from '@/lib/format';
 import { displayPhone } from '@/lib/phone';
 import { apiFetch } from '@/lib/useAuth';
 import { saveNewUpdate } from '@/lib/offlineActions';
-import { getOps } from '@/lib/offlineClient';
+import { getOps, useWaitingPhotos } from '@/lib/offlineClient';
+import { photosStillMissing, sendBlockedText, waitingPhotosText } from '@/lib/updatePhotos';
 
 const blank = (kind) => ({ id: null, kind, category: kind === 'internal' ? INTERNAL_CATEGORIES[0] : '', title: '', body: '', next_steps: '', photo_ids: [] });
 
@@ -108,6 +109,8 @@ export default function UpdatesTab({ service = '', jobId, updates, photos, isOff
     [updates, mode, queuedNotes],
   );
   const photoById = useMemo(() => new Map(photos.map((p) => [p.id, p])), [photos]);
+  const waitingHere = useWaitingPhotos(jobId); // taken on this phone and not uploaded yet
+  const missingFor = (upd) => photosStillMissing(upd.photo_ids || [], photoById); // photos an update names that the job does not have yet
   const canEdit = (u) => !u._pending && u.status !== 'sent' && (isOffice || u.created_by === staff.id);
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -244,6 +247,11 @@ export default function UpdatesTab({ service = '', jobId, updates, photos, isOff
               {u.body && <p className="update-body">{u.body}</p>}
               {u.next_steps && <p className="update-body"><strong>Next:</strong> {u.next_steps}</p>}
               {pics.length > 0 && <PhotoGrid photos={pics} onOpen={(p) => onOpenPhotos(pics, p.id)} />}
+              {u.kind === 'progress' && u.status === 'draft' && missingFor(u).length > 0 && (
+                <div className="msg" role="status" style={{ marginTop: 8 }}>
+                  Waiting for photos: {waitingPhotosText(missingFor(u).length)}{missingFor(u).some((i) => waitingHere.some((w) => w.id === i)) ? ' (saved on this phone, going up when there is signal)' : ' (taken on another phone or not saved yet)'}. You can send this update once {missingFor(u).length === 1 ? 'it has' : 'they have'} arrived.
+                </div>
+              )}
               {u.kind === 'progress' && u.status === 'sent' && (
                 <div className="meta" style={{ marginTop: 6 }}>
                   Sent {fmtDateTime(u.sent_at)}{u.delivery?.manual ? ' (by hand)' : ''} · {u.view_count ? `viewed ${u.view_count} time${u.view_count === 1 ? '' : 's'}, last ${fmtDateTime(u.last_viewed_at)}` : 'not viewed yet'}
@@ -253,7 +261,7 @@ export default function UpdatesTab({ service = '', jobId, updates, photos, isOff
                 {canEdit(u) && <button type="button" className="secondary small" onClick={() => { setMode(u.kind); setErr(''); setForm({ id: u.id, kind: u.kind, category: u.category, title: u.title, body: u.body, next_steps: u.next_steps, photo_ids: u.photo_ids || [] }); }}>Edit</button>}
                 {canEdit(u) && <button type="button" className="danger small" onClick={() => remove(u)}>Delete</button>}
                 {u.kind === 'internal' && <button type="button" className="secondary small" onClick={() => openNew('progress', { body: u.body, photo_ids: u.photo_ids || [] })}>Use in a progress update</button>}
-                {u.kind === 'progress' && u.status === 'draft' && isOffice && <button type="button" className="primary small" onClick={() => setSending(u)}>Send to customer</button>}
+                {u.kind === 'progress' && u.status === 'draft' && isOffice && <button type="button" className="primary small" disabled={missingFor(u).length > 0} title={missingFor(u).length ? sendBlockedText(missingFor(u)) : undefined} onClick={() => setSending(u)}>Send to customer</button>}
                 {u.kind === 'progress' && u.status === 'sent' && <button type="button" className="secondary small" onClick={() => copyLink(u)}>{copied === u.id ? 'Copied' : 'Copy link'}</button>}
                 {u.kind === 'progress' && u.status === 'sent' && isOffice && <button type="button" className="secondary small" onClick={() => setSending(u)}>Send again</button>}
               </div>

@@ -4,12 +4,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
 import { PHOTO_KINDS, PHOTO_KIND_KEYS, countByKind } from '@/lib/jobDocs';
 import { normalizePlan } from '@/lib/sketch';
+import { withJobStandards } from '@/lib/moisture';
+import { flattenFloors } from '@/lib/floors';
 import { moistureLogCsv, moistureSummaryCsv } from '@/lib/moistureLog';
 import { equipmentLogCsv } from '@/lib/equipmentLog';
 import { buildMoistureReportPdf } from '@/lib/reportExport';
 import { MAX_REPORT_PHOTOS, photoSections, beforeAfterPairs, renderPhotoReport } from '@/lib/photoReport';
 import { fetchReportPhotos, downloadBytes, safeName } from '@/lib/photoReportClient';
 import { reportGroups, sketchContents, defaultSketch, dryingReady, DRYING_REPORTS, reportFileName } from '@/lib/reports';
+import { buildJobPacket } from '@/lib/jobPacketClient';
+import { packetFileName } from '@/lib/jobPacket';
 import AdjusterLink from '@/components/job/AdjusterLink';
 import './reports.css';
 
@@ -17,7 +21,7 @@ import './reports.css';
 // so a report is never out of date). Photos (every kind of job): the photo report and before & after. Drying (jobs that
 // have the Moisture tab): the customer report, summary, equipment report, carrier packet and spreadsheets.
 // None of them names staff. info = { business, phone, email, customer, address, jobNumber, jobType }.
-export default function ReportsTab({ jobId, service, photos, rooms, sketches: pageSketches, info, isOffice }) {
+export default function ReportsTab({ jobId, service, photos, rooms, sketches: pageSketches, info, isOffice, jobStandards = null }) {
   const [biz, setBiz] = useState(null);
   const [fresh, setFresh] = useState(null); // sketches read just now (the Moisture tab saves on its own, so the page's copy can be old)
   const [sketchId, setSketchId] = useState(null);
@@ -91,7 +95,7 @@ export default function ReportsTab({ jobId, service, photos, rooms, sketches: pa
 
   const makeDrying = (r) => run(r.key, async () => {
     if (!chosenSketch) throw new Error('There is no sketch to report on yet.');
-    const plan = normalizePlan(chosenSketch.plan);
+    const plan = flattenFloors(withJobStandards(normalizePlan(chosenSketch.plan), jobStandards)); // the job's dry standards, so every sketch reports against the same ones
     if (r.format === 'pdf') {
       const pdf = await buildMoistureReportPdf(plan, { variant: r.variant, title: info.address || info.customer || 'Job', info: header });
       downloadBytes(pdf, reportFileName(info.jobNumber, r.variant === 'full' ? 'moisture-report' : `moisture-${r.variant}`, 'pdf'));
@@ -103,6 +107,12 @@ export default function ReportsTab({ jobId, service, photos, rooms, sketches: pa
     setMsg({ ok: true, text: 'Report made.' });
   });
 
+  const makePacket = () => run('packet', async () => {
+    const pdf = await buildJobPacket(jobId, header);
+    downloadBytes(pdf, packetFileName(info.jobNumber));
+    setMsg({ ok: true, text: 'Packet made.' });
+  });
+
   const progress = (mode) => (busy.startsWith(`${mode}:`) ? ` (${busy.split(':')[1]})` : '');
 
   return (
@@ -112,6 +122,21 @@ export default function ReportsTab({ jobId, service, photos, rooms, sketches: pa
         <p className="hint">Made fresh from this job each time you tap, so they are always up to date. They show the company, never a staff member. Nothing is sent from here: download the file to print, email or upload it.</p>
         {msg && <div className={`msg ${msg.ok ? 'ok' : 'err'}`} role="status">{msg.text}</div>}
       </div>
+
+      {isOffice && (
+        <div className="card">
+          <h3>Full job packet</h3>
+          <div className="rep-item">
+            <div className="rep-head">
+              <div>
+                <div className="rep-title">Everything signed, plus the invoice</div>
+                <div className="hint" style={{ margin: 0 }}>One PDF: the invoices with their payments, the signed estimate and the signed inspections. Anything not signed or sent yet is left out.</div>
+              </div>
+              <button type="button" className="primary" disabled={!!busy} onClick={makePacket}>{busy === 'packet' ? 'Making…' : 'Download PDF'}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {groups.map((g) => (
         <div className="card" key={g.key}>

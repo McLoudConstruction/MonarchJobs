@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { getSupabase } from '@/lib/supabaseClient';
 import MentionBox from '@/components/job/MentionBox';
 import { segments } from '@/lib/sketchComments';
+import { CameraIcon } from '@/components/job/photoIcons';
 import { prepareImage } from '@/lib/photoUpload';
 import { useChatPhotoUrls } from '@/lib/chatPhotos';
 import { useChatDock } from '@/components/chat/ChatDockContext';
@@ -354,13 +355,13 @@ export default function ThreadPanel({ kind, refId, staff, compact = false, activ
       {error && <div className="msg err" role="alert">{error}</div>}
       <div className="chat-composer">
         <div className="chat-quick" aria-label="Quick replies">
+          <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => sendPhoto(e.target.files?.[0])} />
+          <button type="button" className="secondary chat-quick-photo" aria-label="Send a picture" title="Send a picture" disabled={busy} onClick={() => fileRef.current?.click()}><CameraIcon size={16} /></button>
           {quickRepliesFor(staff.role).map((q) => (
             <button key={q} type="button" className="secondary" disabled={busy} onClick={() => send(q)}>{q}</button>
           ))}
         </div>
         <div className="chat-compose-row">
-          <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => sendPhoto(e.target.files?.[0])} />
-          <button type="button" className="secondary icon-btn" aria-label="Send a picture" disabled={busy} onClick={() => fileRef.current?.click()}>Photo</button>
           <MentionBox people={mentionable} value={text} onChange={setText} onSubmit={() => send(text, true)} rows={2} maxLength={MAX_BODY} placeholder="Message. Type @ to tag someone" />
           <button type="button" className="send" disabled={busy || !cleanBody(text)} onClick={() => send(text, true)}>Send</button>
         </div>
