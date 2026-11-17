@@ -39,6 +39,7 @@ import { getSupabase } from '@/lib/supabaseClient';
 import { doubleBookedIds } from '@/lib/schedule';
 import { fmtDateTime, fmtDuration, JOB_STATUS, JOB_TYPES, addressLine } from '@/lib/format';
 import MapLink from '@/components/MapLink';
+import PhoneInput from '@/components/PhoneInput';
 import { hasFeature, serviceOf, serviceTitle, tabsFor, SERVICES, SERVICE_HINTS } from '@/lib/services';
 import { displayPhone, telHref } from '@/lib/phone';
 import { staffName, displayNameFor } from '@/lib/userDisplay';
@@ -111,6 +112,7 @@ function JobInner({ id, staff, token }) {
   const [flagged, setFlagged] = useState(new Set());
   const [contacts, setContacts] = useState([]);
   const [jobContactIds, setJobContactIds] = useState([]);
+  const [newContact, setNewContact] = useState(null); // inline 'add a contact' form on the Also notify card
   const [events, setEvents] = useState([]);
   const [staffList, setStaffList] = useState([]);
   const [msg, setMsg] = useState(null);
@@ -316,6 +318,25 @@ function JobInner({ id, staff, token }) {
     load();
   }
 
+  // Creates a new contact on the customer and adds it to this job's notifications in one step.
+  async function addContact(e) {
+    e.preventDefault();
+    const name = newContact.name.trim();
+    if (!name) return;
+    if (!newContact.phone && !newContact.email) { setMsg({ err: true, text: 'Add a phone number or an email so there is a way to notify them.' }); return; }
+    const sb = getSupabase();
+    const { data: created, error } = await sb.from('contacts')
+      .insert({ customer_id: job.customer.id, name, role: newContact.role.trim(), phone: newContact.phone, email: newContact.email.trim(), receives_notifications: true })
+      .select('id').single();
+    if (error) { setMsg({ err: true, text: error.message }); return; }
+    const { error: linkErr } = await sb.from('job_contacts').insert({ job_id: id, contact_id: created.id });
+    if (linkErr) { setMsg({ err: true, text: linkErr.message }); load(); return; }
+    await logEvent('contact_added', { contact_id: created.id, name });
+    setMsg(null);
+    setNewContact(null);
+    load();
+  }
+
   async function cancelVisit(v) {
     if (!window.confirm('Cancel this visit?')) return;
     await getSupabase().from('job_visits').update({ status: 'cancelled' }).eq('id', v.id);
@@ -467,16 +488,34 @@ function JobInner({ id, staff, token }) {
             )}
           </div>
 
-          {isOffice && contacts.length > 0 && (
+          {isOffice && (
             <div className="card wide">
-              <h2>Also notify</h2>
-              <p className="hint">Extra contacts receive this job's progress updates (and its other notifications once messaging is switched on).</p>
+              <div className="row" style={{ justifyContent: 'space-between' }}>
+                <h2>Also notify</h2>
+                {!newContact && <button type="button" className="secondary small" onClick={() => setNewContact({ name: '', role: '', phone: '', email: '' })}>Add contact</button>}
+              </div>
+              <p className="hint">Extra contacts receive this job's progress updates (and its other notifications once messaging is switched on). New contacts are also saved on the customer.</p>
               {contacts.map((c) => (
                 <label key={c.id} className="row" style={{ marginBottom: 8 }}>
                   <input type="checkbox" checked={jobContactIds.includes(c.id)} onChange={() => toggleContact(c.id)} />
                   {c.name} {c.role && <span className="badge off">{c.role}</span>} <span className="muted">{[displayPhone(c.phone), c.email].filter(Boolean).join(' · ')}</span>
                 </label>
               ))}
+              {contacts.length === 0 && !newContact && <p className="muted">No extra contacts yet.</p>}
+              {newContact && (
+                <form onSubmit={addContact} style={{ marginTop: 10 }}>
+                  <div className="grid2">
+                    <div className="field"><label>Name</label><input required autoFocus value={newContact.name} onChange={(e) => setNewContact({ ...newContact, name: e.target.value })} /></div>
+                    <div className="field"><label>Role</label><input placeholder="Adjuster, manager, tenant..." value={newContact.role} onChange={(e) => setNewContact({ ...newContact, role: e.target.value })} /></div>
+                    <div className="field"><label>Phone</label><PhoneInput value={newContact.phone} onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })} /></div>
+                    <div className="field"><label>Email</label><input type="email" value={newContact.email} onChange={(e) => setNewContact({ ...newContact, email: e.target.value })} /></div>
+                  </div>
+                  <div className="row">
+                    <button className="primary">Add and notify</button>
+                    <button type="button" className="secondary" onClick={() => setNewContact(null)}>Cancel</button>
+                  </div>
+                </form>
+              )}
             </div>
           )}
           {isOffice && hasFeature(service, 'customerPage') && <CustomerPageCard jobId={id} token={token} staff={staff} jobStatus={job.status} />}

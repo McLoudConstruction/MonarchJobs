@@ -92,7 +92,7 @@ function Detail({ id }) {
   const setN = (k) => (e) => setNewContact({ ...newContact, [k]: k === 'receives_notifications' ? e.target.checked : e.target.value });
 
   return (
-    <>
+    <div className="cust-detail">
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <h1>{c.display_name}</h1>
         <Link href={`/leads/new?customer=${id}`}><button className="primary">New lead</button></Link>
@@ -201,7 +201,7 @@ function Detail({ id }) {
         ))}
         {jobs.length === 0 && <p className="muted">No jobs yet.</p>}
       </div>
-    </>
+    </div>
   );
 }
 

@@ -2299,3 +2299,18 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]){ margin: 0
 .sketch-over .sk-eq-qty{ display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 2px; font-size: 13px; font-weight: 600; }
 .sketch-over .sk-eq-qty button{ min-width: 44px; min-height: 44px; border-radius: 10px; font-size: 20px; line-height: 1; padding: 0; }
 .sketch-over .sk-eq-qty input{ width: 56px; min-height: 44px; text-align: center; font-size: 18px; font-weight: 700; border-radius: 10px; }
+
+/* Customer detail page: tighter spacing. Scoped so other pages keep their roomier layout. Input and button
+   heights are left alone (tablet tap targets stay big); only the empty space around them shrinks. */
+.cust-detail > .row:first-child{ margin-bottom: 4px; }
+.cust-detail .sub{ margin-bottom: 14px; }
+.cust-detail .card{ padding: 14px 16px; margin-bottom: 12px; }
+.cust-detail .card h2{ margin: 0 0 6px; }
+.cust-detail .card .hint{ margin: 0 0 10px; }
+.cust-detail .field{ margin-bottom: 8px; }
+.cust-detail .field label{ margin: 0 0 4px; }
+.cust-detail .field textarea{ min-height: 80px; }
+.cust-detail .grid2{ gap: 0 12px; }
+.cust-detail label.row{ margin: 0 0 8px; }
+.cust-detail .list-item{ padding: 10px 14px; margin-bottom: 8px; }
+.cust-detail .card p.muted{ margin: 4px 0 0; }
