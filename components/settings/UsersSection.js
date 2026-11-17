@@ -5,14 +5,17 @@ import { getSupabase } from '@/lib/supabaseClient';
 import { apiFetch } from '@/lib/useAuth';
 import { validateNewUser, validateName } from '@/lib/newUser';
 import { hasRealName, staffName } from '@/lib/userDisplay';
+import './users.css';
 
 const EMPTY = { full_name: '', email: '', role: 'tech' };
 
-// Sign-in setup status shown under a person's name until they have chosen their own password.
-const PENDING_TEXT = {
-  invited: 'Invite sent. Waiting for them to open the link.',
-  no_password: 'Has not chosen their own password yet.',
-};
+// What to show in the Status column. A deactivated person always reads "Inactive".
+function statusFor(u, pendingKind) {
+  if (!u.active) return { text: 'Inactive', cls: '', tip: 'Deactivated. Cannot sign in.' };
+  if (pendingKind === 'invited') return { text: 'Invited', cls: 'wait', tip: 'Invite sent. Waiting for them to open the link.' };
+  if (pendingKind === 'no_password') return { text: 'No password yet', cls: 'wait', tip: 'Has not chosen their own password yet.' };
+  return { text: 'Active', cls: 'active', tip: '' };
+}
 
 export default function UsersSection({ currentUserId, token }) {
   const [users, setUsers] = useState([]);
@@ -156,55 +159,49 @@ export default function UsersSection({ currentUserId, token }) {
         </form>
       )}
 
-      <table className="table">
-        <thead><tr><th>Name</th><th>Role</th><th>Access</th></tr></thead>
-        <tbody>
-          {users.map((u) => {
-            const self = u.id === currentUserId;
-            return (
-              <tr key={u.id}>
-                <td>
-                  <input
-                    key={`${u.id}-${u.full_name}`}
-                    type="text"
-                    defaultValue={hasRealName(u.full_name) ? u.full_name : ''}
-                    placeholder={staffName(u)}
-                    aria-label={`Name for ${staffName(u)}`}
-                    onBlur={(e) => rename(u, e.target.value)}
-                  />
-                  {self ? ' (you)' : ''}
-                  {pending[u.id] && (
-                    <div className="note" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
-                      <span>{PENDING_TEXT[pending[u.id]]}</span>
-                      {!self && <button type="button" className="secondary small" disabled={resending === u.id} onClick={() => resend(u)}>{resending === u.id ? 'Sending...' : 'Resend email'}</button>}
-                    </div>
-                  )}
-                </td>
-                <td>
-                  <select value={u.role} disabled={self} onChange={(e) => update(u.id, { role: e.target.value })}>
-                    <option value="owner">Owner</option>
-                    <option value="office">Office</option>
-                    <option value="tech">Tech</option>
-                  </select>
-                </td>
-                <td>
-                  {self ? <span className="muted">Active</span> : (
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      {u.active
-                        ? <button type="button" className="secondary" style={{ minHeight: 40 }} disabled={working === u.id} onClick={() => deactivate(u)}>Deactivate</button>
-                        : <button type="button" className="primary" style={{ minHeight: 40 }} disabled={working === u.id} onClick={() => update(u.id, { active: true })}>Reactivate</button>}
-                      {(!u.active || pending[u.id] === 'invited') && (
-                        <button type="button" className="danger" style={{ minHeight: 40 }} disabled={working === u.id} onClick={() => remove(u)}>Delete</button>
-                      )}
-                    </div>
-                  )}
-                  {!u.active && !self && <div className="note" style={{ marginTop: 4 }}>Deactivated. Cannot sign in.</div>}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      <div className="users-scroll">
+        <table className="table users-table">
+          <thead><tr><th>Name</th><th>Role</th><th>Status</th><th /></tr></thead>
+          <tbody>
+            {users.map((u) => {
+              const self = u.id === currentUserId;
+              const st = statusFor(u, pending[u.id]);
+              const invited = pending[u.id] === 'invited';
+              const busyRow = working === u.id;
+              return (
+                <tr key={u.id}>
+                  <td className="u-name">
+                    <input
+                      key={`${u.id}-${u.full_name}`}
+                      type="text"
+                      defaultValue={hasRealName(u.full_name) ? u.full_name : ''}
+                      placeholder={staffName(u)}
+                      aria-label={`Name for ${staffName(u)}`}
+                      onBlur={(e) => rename(u, e.target.value)}
+                    />
+                  </td>
+                  <td>
+                    <select value={u.role} disabled={self} onChange={(e) => update(u.id, { role: e.target.value })}>
+                      <option value="owner">Owner</option>
+                      <option value="office">Office</option>
+                      <option value="tech">Tech</option>
+                    </select>
+                  </td>
+                  <td><span className={`u-status ${st.cls}`} title={st.tip}>{st.text}{self ? ' (you)' : ''}</span></td>
+                  <td className="u-actions">
+                    {!self && u.active && pending[u.id] && (
+                      <button type="button" className="secondary" disabled={resending === u.id} onClick={() => resend(u)}>{resending === u.id ? 'Sending...' : 'Resend email'}</button>
+                    )}
+                    {!self && u.active && !invited && <button type="button" className="secondary" disabled={busyRow} onClick={() => deactivate(u)}>Deactivate</button>}
+                    {!self && !u.active && <button type="button" className="primary" disabled={busyRow} onClick={() => update(u.id, { active: true })}>Reactivate</button>}
+                    {!self && (!u.active || invited) && <button type="button" className="danger" disabled={busyRow} onClick={() => remove(u)}>Delete</button>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
