@@ -23,6 +23,7 @@ export default function UsersSection({ currentUserId, token }) {
   const [formError, setFormError] = useState('');
   const [pending, setPending] = useState({}); // userId -> 'invited' | 'no_password'
   const [resending, setResending] = useState(null);
+  const [working, setWorking] = useState(null); // id of the person a deactivate / delete is running for
 
   const load = useCallback(async () => {
     const { data } = await getSupabase()
@@ -62,6 +63,33 @@ export default function UsersSection({ currentUserId, token }) {
       setMsg(err.message);
     } finally {
       setResending(null);
+    }
+  }
+
+  async function deactivate(u) {
+    const who = hasRealName(u.full_name) ? u.full_name : u.email;
+    if (!window.confirm(`Deactivate ${who}? They will be blocked from the app right away. Their name stays on everything they did, and you can reactivate them any time.`)) return;
+    setWorking(u.id);
+    await update(u.id, { active: false });
+    setWorking(null);
+  }
+
+  async function remove(u) {
+    const who = hasRealName(u.full_name) ? u.full_name : u.email;
+    const never = pending[u.id] === 'invited';
+    if (!window.confirm(never
+      ? `Delete the invite for ${who}? Their login is removed and the invite link stops working.`
+      : `Permanently delete ${who}? Their login is removed for good and cannot be restored. Jobs, notes, photos and messages they added stay, but no longer show their name. (Leaving them deactivated keeps their name on everything.)`)) return;
+    setMsg(null);
+    setWorking(u.id);
+    try {
+      await apiFetch(`/api/users/${u.id}`, token, { method: 'DELETE' });
+      setMsg({ ok: `${who} was deleted.` });
+      load();
+    } catch (err) {
+      setMsg(err.message);
+    } finally {
+      setWorking(null);
     }
   }
 
@@ -129,7 +157,7 @@ export default function UsersSection({ currentUserId, token }) {
       )}
 
       <table className="table">
-        <thead><tr><th>Name</th><th>Role</th><th>Active</th></tr></thead>
+        <thead><tr><th>Name</th><th>Role</th><th>Access</th></tr></thead>
         <tbody>
           {users.map((u) => {
             const self = u.id === currentUserId;
@@ -160,7 +188,17 @@ export default function UsersSection({ currentUserId, token }) {
                   </select>
                 </td>
                 <td>
-                  <input type="checkbox" checked={u.active} disabled={self} onChange={(e) => update(u.id, { active: e.target.checked })} />
+                  {self ? <span className="muted">Active</span> : (
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {u.active
+                        ? <button type="button" className="secondary" style={{ minHeight: 40 }} disabled={working === u.id} onClick={() => deactivate(u)}>Deactivate</button>
+                        : <button type="button" className="primary" style={{ minHeight: 40 }} disabled={working === u.id} onClick={() => update(u.id, { active: true })}>Reactivate</button>}
+                      {(!u.active || pending[u.id] === 'invited') && (
+                        <button type="button" className="danger" style={{ minHeight: 40 }} disabled={working === u.id} onClick={() => remove(u)}>Delete</button>
+                      )}
+                    </div>
+                  )}
+                  {!u.active && !self && <div className="note" style={{ marginTop: 4 }}>Deactivated. Cannot sign in.</div>}
                 </td>
               </tr>
             );

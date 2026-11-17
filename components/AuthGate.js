@@ -25,8 +25,8 @@ export default function AuthGate({ ownerOnly = false, officeOnly = false, childr
   if (auth.error === 'pending') {
     return (
       <CenterCard>
-        <h2 className="auth-welcome">Waiting for approval</h2>
-        <p className="hint auth-sub">Your account exists but has not been activated. Ask the owner to activate it in Settings.</p>
+        <h2 className="auth-welcome">Account not active</h2>
+        <p className="hint auth-sub">Your account is not active right now. Ask the owner to activate it in Settings.</p>
         <button className="secondary" style={{ width: '100%', marginTop: 8 }} onClick={auth.signOut}>Sign out</button>
       </CenterCard>
     );

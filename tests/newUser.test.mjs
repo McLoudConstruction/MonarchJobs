@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateNewUser, validateName, inviteErrorMessage } from '../lib/newUser.js';
+import { validateNewUser, validateName, inviteErrorMessage, deleteBlockReason } from '../lib/newUser.js';
 
 const good = { email: ' Pat.Lee@Example.com ', full_name: '  Pat   Lee ', role: 'tech' };
 
@@ -44,4 +44,11 @@ test('needsPasswordChange only when the flag is true', () => {
   assert.equal(needsPasswordChange({ user_metadata: { must_change_password: false } }), false);
   assert.equal(needsPasswordChange({ user_metadata: {} }), false);
   assert.equal(needsPasswordChange(null), false);
+});
+
+test('deleteBlockReason: only deactivated people or unaccepted invites can be deleted, never yourself', () => {
+  assert.match(deleteBlockReason({ isSelf: true, active: false, confirmed: true }), /your own/);
+  assert.match(deleteBlockReason({ isSelf: false, active: true, confirmed: true }), /Deactivate this person first/);
+  assert.equal(deleteBlockReason({ isSelf: false, active: false, confirmed: true }), '');
+  assert.equal(deleteBlockReason({ isSelf: false, active: true, confirmed: false }), ''); // invite never accepted
 });
