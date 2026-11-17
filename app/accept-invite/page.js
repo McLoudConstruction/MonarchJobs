@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { getSupabase } from '@/lib/supabaseClient';
 import { parseAuthLinkError } from '@/lib/authLink';
 import NewPasswordForm from '@/components/NewPasswordForm';
+import BrandLogo from '@/components/BrandLogo';
 import { hasRealName } from '@/lib/userDisplay';
 
 // Landing page for the emailed invite link. Supabase reads the invite token from the address and
@@ -79,14 +80,18 @@ export default function AcceptInvitePage() {
 
   return (
     <div className="center-wrap">
-      <div className="card">
-        <span className="brand">Monarch <span>Jobs</span></span>
+      <div className="card compact">
+        {expired && !user
+          ? <span className="brand">Monarch <span>Jobs</span></span>
+          : <BrandLogo enabled={!!user} />}
         {done ? (
           <div className="msg ok">Password saved. Taking you to the app...</div>
         ) : user ? (
           <>
-            <h2 style={{ marginTop: 0 }}>{first ? `Welcome, ${first}` : 'Welcome'}</h2>
-            <p className="hint">Choose a password for your MonarchJobs account ({user.email}). You will use it with your email to sign in.</p>
+            <div className="auth-head">
+              <h2 className="auth-welcome">{first ? `Welcome, ${first}` : 'Welcome'}</h2>
+              <span className="auth-email">{user.email}</span>
+            </div>
             <NewPasswordForm
               onSubmit={save}
               submitLabel="Save password and continue"

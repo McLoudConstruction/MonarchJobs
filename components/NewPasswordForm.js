@@ -26,7 +26,7 @@ export default function NewPasswordForm({ onSubmit, submitLabel = 'Save password
   }
 
   return (
-    <form onSubmit={submit} noValidate>
+    <form className="pw-form" onSubmit={submit} noValidate>
       {/* lets a password manager save the new password against the right account */}
       {email && <input className="pw-username" type="email" name="username" autoComplete="username" value={email} readOnly tabIndex={-1} aria-hidden="true" />}
       <PasswordField id="new-password" label="New password" value={password} onChange={setPassword} autoFocus describedBy="new-password-meter" />
@@ -34,7 +34,7 @@ export default function NewPasswordForm({ onSubmit, submitLabel = 'Save password
       <ul className="pw-reqs" aria-label="Password requirements">
         {passwordRequirements(password).map((r) => (
           <li key={r.id} className={r.met ? 'met' : ''}>
-            <span aria-hidden="true">{r.met ? '✓' : '○'}</span> {r.label}<span className="sr-only"> {r.met ? '(done)' : '(not yet)'}</span>
+            <span aria-hidden="true">{r.met ? '✓' : '○'}</span>{r.label}<span className="sr-only"> {r.met ? '(done)' : '(not yet)'}</span>
           </li>
         ))}
       </ul>
