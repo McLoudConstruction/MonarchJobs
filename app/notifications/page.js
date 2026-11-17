@@ -1,11 +1,6 @@
-'use client';
+import TabRedirect from '@/components/TabRedirect';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-
-// This page is now part of Activity. Old links, bookmarks and push notifications still land in the right place.
-export default function Redirect() {
-  const router = useRouter();
-  useEffect(() => { router.replace('/activity'); }, [router]);
-  return null;
+// Old address for the notifications list; it is the Activity tab on the Dashboard now.
+export default function Page() {
+  return <TabRedirect tab="activity" />;
 }

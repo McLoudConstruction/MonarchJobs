@@ -1,11 +1,6 @@
-'use client';
+import TabRedirect from '@/components/TabRedirect';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-
-// This page is now part of Activity. Old links, bookmarks and push notifications still land in the right place.
-export default function Redirect() {
-  const router = useRouter();
-  useEffect(() => { router.replace('/activity#messages'); }, [router]);
-  return null;
+// Old address for the chat inbox: the Messages view of the Activity tab on the Dashboard.
+export default function Page() {
+  return <TabRedirect tab="activity" hash="#messages" />;
 }

@@ -1,15 +1,24 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import AuthGate from '@/components/AuthGate';
+import ActivityPanel from '@/components/dashboard/ActivityPanel';
+import InvoicesPanel from '@/components/dashboard/InvoicesPanel';
+import OwnerDashboard from '@/components/owner/OwnerDashboard';
+import { useNotificationCenter } from '@/lib/useNotifications';
+import { useChatCenter } from '@/lib/useChatInbox';
+import { useInvoiceFlags } from '@/lib/useInvoiceFlags';
+import { tabsFor, parseTab, tabHref, invoiceBadge } from '@/lib/dashboardTabs';
+import { centsToText } from '@/lib/invoice';
 import { getSupabase } from '@/lib/supabaseClient';
 import { startOfDay, addDays, fmtTime, fmtDateTime, fmtDuration, JOB_TYPES, leadDisplayName } from '@/lib/format';
 import { displayPhone } from '@/lib/phone';
 import { doubleBookedIds } from '@/lib/schedule';
 import { displayNameFor } from '@/lib/userDisplay';
 
-function DashboardInner({ staff }) {
+function TodayPanel({ staff, activityCount, invoiceFlags }) {
   const isOffice = staff.role !== 'tech';
   const [today, setToday] = useState([]);
   const [newLeads, setNewLeads] = useState([]);
@@ -42,22 +51,26 @@ function DashboardInner({ staff }) {
 
   return (
     <>
-      <div className="row dash-head" style={{ justifyContent: 'space-between' }}>
-        <h1>{isOffice ? 'Dashboard' : 'My day'}</h1>
-        {isOffice && (
-          <div className="row" style={{ gap: 8 }}>
-            <Link href="/leads/new"><button type="button" className="primary">Create Lead</button></Link>
-            <Link href="/jobs/new"><button type="button" className="secondary">Book Job</button></Link>
-          </div>
-        )}
-      </div>
-      <p className="sub">Welcome, {displayNameFor(staff.full_name, staff.email)}.</p>
-
       <div className="stat-row">
         <div className="stat-tile"><div className="stat-num">{today.length}</div><div className="stat-label">Visits today</div></div>
         {isOffice && <Link href="/leads" className="stat-tile"><div className="stat-num">{ready.length}</div><div className="stat-label">Ready to schedule</div></Link>}
         {isOffice && <Link href="/leads" className="stat-tile"><div className="stat-num">{newLeads.length}</div><div className="stat-label">New leads</div></Link>}
       </div>
+
+      {isOffice && invoiceFlags.pastDue > 0 && (
+        <div className="banner flag">
+          <Link href={tabHref('invoices')} style={{ color: 'inherit', textDecoration: 'underline' }}>
+            {invoiceFlags.pastDue} invoice{invoiceFlags.pastDue === 1 ? ' is' : 's are'} past due ({centsToText(invoiceFlags.pastDueCents)} owed) &rsaquo;
+          </Link>
+        </div>
+      )}
+      {activityCount > 0 && (
+        <div className="banner">
+          <Link href={tabHref('activity')} style={{ color: 'inherit', textDecoration: 'underline' }}>
+            {activityCount} unread in Activity (alerts and chats) &rsaquo;
+          </Link>
+        </div>
+      )}
 
       {isOffice && (flagged > 0 || unassigned.count > 0) && (
         <div className="banner flag">
@@ -117,6 +130,65 @@ function DashboardInner({ staff }) {
   );
 }
 
+function DashboardInner({ staff, token }) {
+  const isOffice = staff.role !== 'tech';
+  const params = useSearchParams();
+  const tab = parseTab(params.toString(), staff.role);
+  const { unread } = useNotificationCenter();
+  const { unread: chatUnread } = useChatCenter();
+  const activityCount = (unread || 0) + (chatUnread || 0);
+  const invoiceFlags = useInvoiceFlags();
+  const invBadge = isOffice ? invoiceBadge(invoiceFlags) : null;
+
+  const open = (key) => {
+    const href = tabHref(key);
+    if (`${window.location.pathname}${window.location.search}` !== href) window.history.pushState(null, '', href);
+  };
+
+  const badgeFor = (key) => {
+    if (key === 'activity' && activityCount > 0) return { count: activityCount, tone: 'accent', title: 'Unread alerts, chats and changes waiting for your OK' };
+    if (key === 'invoices') return invBadge;
+    return null;
+  };
+
+  return (
+    <>
+      <div className="row dash-head" style={{ justifyContent: 'space-between' }}>
+        <h1>{isOffice ? 'Dashboard' : 'My day'}</h1>
+        {isOffice && tab === 'today' && (
+          <div className="row" style={{ gap: 8 }}>
+            <Link href="/leads/new"><button type="button" className="primary">Create Lead</button></Link>
+            <Link href="/jobs/new"><button type="button" className="secondary">Book Job</button></Link>
+          </div>
+        )}
+      </div>
+      <p className="sub">Welcome, {displayNameFor(staff.full_name, staff.email)}.</p>
+
+      <div className="tabs dash-tabs" role="tablist" aria-label="Dashboard sections">
+        {tabsFor(staff.role).map((t) => {
+          const b = badgeFor(t.key);
+          return (
+            <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={tab === t.key ? 'on' : ''} onClick={() => open(t.key)}>
+              {t.label}
+              {b && <span className={`tab-count ${b.tone}`} title={b.title} aria-label={b.title}>{b.count > 99 ? '99+' : b.count}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {tab === 'today' && <TodayPanel staff={staff} activityCount={activityCount} invoiceFlags={invoiceFlags} />}
+      {tab === 'activity' && <ActivityPanel staff={staff} token={token} />}
+      {tab === 'invoices' && <InvoicesPanel />}
+      {tab === 'owner' && <OwnerDashboard />}
+    </>
+  );
+}
+
 export default function DashboardPage() {
-  return <AuthGate>{({ staff }) => <DashboardInner staff={staff} />}</AuthGate>;
+  // Suspense because the tab is read from the address (?tab=...)
+  return (
+    <Suspense fallback={null}>
+      <AuthGate>{({ staff, token }) => <DashboardInner staff={staff} token={token} />}</AuthGate>
+    </Suspense>
+  );
 }

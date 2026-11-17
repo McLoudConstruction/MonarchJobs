@@ -117,7 +117,7 @@ function Overview({ fin, inv, cust, work, attn, rangeLabel }) {
       <div className="own-tiles">
         <Tile num={dollars(fin.bookedCents)} label={`Booked, ${rangeLabel.toLowerCase()}`} change={changeText(fin.bookedCents, fin.prevBookedCents)} />
         <Tile num={dollars(inv.collectedCents)} label="Collected" change={changeText(inv.collectedCents, inv.prevCollectedCents)} />
-        <Tile num={dollars(inv.owedCents)} label="Owed by customers" href="/invoices" good={false} />
+        <Tile num={dollars(inv.owedCents)} label="Owed by customers" href="/dashboard?tab=invoices" good={false} />
         <Tile num={fin.winRate === null ? '—' : `${fin.winRate}%`} label="Estimates won" />
         <Tile num={cust.newInRange} label="New customers" change={changeText(cust.newInRange, cust.newPrev)} href="/customers" />
         <Tile num={work.openCount} label="Jobs open now" href="/jobs" />
@@ -171,8 +171,8 @@ function Financials({ fin, inv, invoicesMissing, rangeLabel }) {
       </div>
       <div className="own-tiles">
         <Tile num={dollars(inv.collectedCents)} label={`Collected, ${rangeLabel.toLowerCase()}`} change={changeText(inv.collectedCents, inv.prevCollectedCents)} />
-        <Tile num={dollars(inv.owedCents)} label={`Owed by customers (${inv.openCount})`} href="/invoices" good={false} />
-        <Tile num={dollars(inv.pastDueCents)} label={`Past due (${inv.pastDueCount})`} href="/invoices" good={false} />
+        <Tile num={dollars(inv.owedCents)} label={`Owed by customers (${inv.openCount})`} href="/dashboard?tab=invoices" good={false} />
+        <Tile num={dollars(inv.pastDueCents)} label={`Past due (${inv.pastDueCount})`} href="/dashboard?tab=invoices" good={false} />
         <Tile num={dollars(inv.invoicedCents)} label={`Invoiced, ${rangeLabel.toLowerCase()} (${inv.invoicedCount})`} />
       </div>
       <div className="own-grid">
@@ -357,7 +357,7 @@ export default function OwnerDashboard() {
   return (
     <>
       <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-        <h1>Owner dashboard</h1>
+        <h2 style={{ margin: 0 }}>Owner reports</h2>
         <div className="own-range" role="group" aria-label="Time period">
           {RANGES.map(([k, label]) => <button key={k} type="button" className={range === k ? 'on' : ''} aria-pressed={range === k} onClick={() => pickRange(k)}>{label}</button>)}
         </div>

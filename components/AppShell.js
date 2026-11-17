@@ -1,14 +1,14 @@
 'use client';
 
 import OfflineBanner from '@/components/OfflineBanner';
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { getSupabase } from '@/lib/supabaseClient';
 import { useTheme } from '@/lib/useTheme';
 import ThemeSwitch from '@/components/ThemeSwitch';
 import { initialsFor, displayNameFor } from '@/lib/userDisplay';
-import { DashboardIcon, SalesIcon, ScheduleIcon, JobDashboardIcon, SettingsIcon, UserIcon, SignOutIcon, MoreIcon, BellIcon, EquipmentIcon, OwnerIcon, InvoiceIcon } from '@/components/icons';
+import { DashboardIcon, SalesIcon, ScheduleIcon, JobDashboardIcon, SettingsIcon, UserIcon, SignOutIcon, MoreIcon, BellIcon, EquipmentIcon } from '@/components/icons';
 import BottomSheet from '@/components/BottomSheet';
 import JobJumpSearch from '@/components/JobJumpSearch';
 import { logoUrl } from '@/lib/branding';
@@ -16,6 +16,8 @@ import { NotificationsProvider, useNotificationCenter } from '@/lib/useNotificat
 import { ChatDockProvider } from '@/components/chat/ChatDock';
 import { ChatInboxProvider, useChatCenter } from '@/lib/useChatInbox';
 import { readPushStatus, resyncPush } from '@/lib/push';
+import { InvoiceFlagsProvider, useInvoiceFlags } from '@/lib/useInvoiceFlags';
+import { dashboardBadge, tabHref } from '@/lib/dashboardTabs';
 
 const ALL = ['owner', 'office', 'tech'];
 const OFFICE = ['owner', 'office'];
@@ -29,12 +31,8 @@ const NAV = [
   { href: '/schedule', label: 'Schedule', icon: ScheduleIcon, roles: ALL, primary: true },
   { href: '/jobs', label: 'Jobs', icon: JobDashboardIcon, roles: ALL, primary: true },
   { href: '/customers', label: 'Customers', icon: UserIcon, roles: OFFICE },
-  { href: '/invoices', label: 'Invoices', icon: InvoiceIcon, roles: OFFICE },
   { href: '/equipment', label: 'Equipment', icon: EquipmentIcon, roles: ALL },
-  // sideOnly: phones reach it from the bell in the top bar
-  { href: '/activity', label: 'Activity', icon: BellIcon, roles: ALL, sideOnly: true },
-  // owner only; on phones these sit under More with the other secondary pages
-  { href: '/owner', label: 'Owner', icon: OwnerIcon, roles: ['owner'] },
+  // Activity, Invoices and Owner are tabs on the Dashboard now; their alerts roll up into its badge.
   { href: '/settings', label: 'Settings', icon: SettingsIcon, roles: ['owner'] },
 ];
 
@@ -78,14 +76,31 @@ const isActive = (item, pathname) => pathname === item.href || pathname.startsWi
 
 // Wraps the shell so the sidebar badge, the phone top bar and the Notifications page share one live feed.
 export default function AppShell(props) {
+  const pathname = usePathname() || '';
   return (
     <NotificationsProvider userId={props.staff.id}>
       <ChatInboxProvider userId={props.staff.id}>
-        <ChatDockProvider staff={props.staff}>
-          <AppShellInner {...props} />
-        </ChatDockProvider>
+        <InvoiceFlagsProvider enabled={OFFICE.includes(props.staff.role)} pathname={pathname}>
+          <ChatDockProvider staff={props.staff}>
+            <AppShellInner {...props} />
+          </ChatDockProvider>
+        </InvoiceFlagsProvider>
       </ChatInboxProvider>
     </NotificationsProvider>
+  );
+}
+
+// The "get notified" reminder. It points at the Activity tab, so it hides while that tab is open.
+function PushNudge({ nudge, dismiss }) {
+  const pathname = usePathname() || '';
+  const params = useSearchParams();
+  if (pathname === '/dashboard' && params.get('tab') === 'activity') return null;
+  return (
+    <div className="push-nudge" role="status">
+      <span>{nudge === 'needs_install' ? 'Add MonarchJobs to your Home Screen to get notifications.' : 'Get notified when something needs you, even when the app is closed.'}</span>
+      <Link href={tabHref('activity')} onClick={dismiss}>Set up</Link>
+      <button type="button" aria-label="Dismiss" onClick={dismiss}>&times;</button>
+    </div>
   );
 }
 
@@ -94,6 +109,9 @@ function AppShellInner({ staff, signOut, children }) {
   const { unread } = useNotificationCenter();
   const { unread: chatUnread } = useChatCenter();
   const activityCount = (unread || 0) + (chatUnread || 0);
+  const { pastDue } = useInvoiceFlags();
+  // One badge on Dashboard for everything folded into it; red when an invoice is past due
+  const dashFlag = dashboardBadge({ activity: activityCount, pastDue });
   const [nudge, setNudge] = useState(null);
   const { theme, setTheme } = useTheme();
   const [ready, setReady] = useState(0);
@@ -167,7 +185,7 @@ function AppShellInner({ staff, signOut, children }) {
               <n.icon className="side-icon" />
               <span>{n.label}</span>
               {n.href === '/leads' && ready > 0 && <span className="nav-count" title="Approved estimates waiting to be scheduled">{ready}</span>}
-              {n.href === '/activity' && activityCount > 0 && <span className="nav-count" title="Unread alerts, chats and changes waiting for your OK">{activityCount > 99 ? '99+' : activityCount}</span>}
+              {n.href === '/dashboard' && dashFlag && <span className={`nav-count ${dashFlag.tone}`} title={dashFlag.title} aria-label={dashFlag.title}>{dashFlag.count > 99 ? '99+' : dashFlag.count}</span>}
             </Link>
           ))}
         </nav>
@@ -199,7 +217,7 @@ function AppShellInner({ staff, signOut, children }) {
       <div className="shell-topbar shell-topbar-mobile">
         <div className="shell-logo"><Brand brand={brand} /></div>
         <div className="shell-topbar-actions">
-          <Link href="/activity" className="shell-topbar-icon-btn" aria-label={`Activity${activityCount ? `, ${activityCount} waiting` : ''}`}>
+          <Link href={tabHref('activity')} className="shell-topbar-icon-btn" aria-label={`Activity${activityCount ? `, ${activityCount} waiting` : ''}`}>
             <BellIcon />
             {activityCount > 0 && <span className="shell-topbar-count">{activityCount > 99 ? '99+' : activityCount}</span>}
           </Link>
@@ -214,6 +232,7 @@ function AppShellInner({ staff, signOut, children }) {
                 <span style={{ position: 'relative', display: 'inline-flex' }}>
                   <n.icon className="shell-bottomnav-icon" />
                   {n.href === '/leads' && ready > 0 && <span className="shell-bottomnav-dot" />}
+                  {n.href === '/dashboard' && dashFlag && <span className="shell-bottomnav-dot" title={dashFlag.title} />}
                 </span>
                 <span className="shell-bottomnav-label">{n.label}</span>
               </Link>
@@ -246,13 +265,7 @@ function AppShellInner({ staff, signOut, children }) {
 
         <div className="shell-content">
           <div className="page">
-            {nudge && pathname !== '/activity' && (
-              <div className="push-nudge" role="status">
-                <span>{nudge === 'needs_install' ? 'Add MonarchJobs to your Home Screen to get notifications.' : 'Get notified when something needs you, even when the app is closed.'}</span>
-                <Link href="/activity" onClick={dismissNudge}>Set up</Link>
-                <button type="button" aria-label="Dismiss" onClick={dismissNudge}>&times;</button>
-              </div>
-            )}
+            {nudge && <Suspense fallback={null}><PushNudge nudge={nudge} dismiss={dismissNudge} /></Suspense>}
             <OfflineBanner staff={staff} />
             {children}
           </div>
