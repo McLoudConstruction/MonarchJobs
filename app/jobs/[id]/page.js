@@ -15,6 +15,7 @@ import PhotosTab from '@/components/job/PhotosTab';
 import SketchTab from '@/components/job/SketchTab';
 import MoistureTab from '@/components/job/MoistureTab';
 import InspectionTab from '@/components/job/InspectionTab';
+import EvalSheetTab from '@/components/job/EvalSheetTab';
 import ReportsTab from '@/components/job/ReportsTab';
 import InvoiceTab from '@/components/job/InvoiceTab';
 import CostsTab from '@/components/job/CostsTab';
@@ -60,6 +61,7 @@ const JOB_TABS = [
   ['sketch', 'Sketch'],
   ['moisture', 'Moisture'],
   ['inspection', 'Inspection'],
+  ['evalsheet', 'Eval sheet'],
   ['updates', 'Updates'],
   ['thread', 'Chat'],
   ['estimate', 'Estimate'],
@@ -641,6 +643,10 @@ function JobInner({ id, staff, token }) {
 
       {tab === 'inspection' && (
         <InspectionTab jobId={id} staff={staff} sketches={sketches} photos={photos} uploader={uploader} onOpenPhotos={openViewer} canEdit={!['closed', 'cancelled'].includes(job.status)} launch={inspLaunch} />
+      )}
+
+      {tab === 'evalsheet' && (
+        <EvalSheetTab jobId={id} job={job} staff={staff} photos={photos} uploader={uploader} onOpenPhotos={openViewer} canEdit={!['closed', 'cancelled'].includes(job.status)} />
       )}
 
       {tab === 'updates' && (

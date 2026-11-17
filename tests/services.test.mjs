@@ -123,3 +123,14 @@ test('equipment notes: needs text, only damage and not-working count as open iss
   const n = [{ kind: 'damage' }, { kind: 'note' }, { kind: 'not_working', resolved_at: 'x' }, { kind: 'not_working' }];
   assert.equal(openIssues(n).length, 2);
 });
+
+test('the eval sheet is a carpet-only tab', () => {
+  const tabs = [['overview', 'Overview'], ['inspection', 'Inspection'], ['evalsheet', 'Eval sheet']];
+  assert.equal(hasFeature('carpet', 'evalSheet'), true);
+  for (const svc of ['extraction', 'mitigation', 'remediation']) {
+    assert.equal(hasFeature(svc, 'evalSheet'), false, svc);
+    assert.ok(!tabsFor(tabs, svc).some(([k]) => k === 'evalsheet'), svc);
+  }
+  assert.ok(tabsFor(tabs, 'carpet').some(([k]) => k === 'evalsheet'));
+  assert.ok(tabsFor(tabs, '').some(([k]) => k === 'evalsheet')); // no service shows everything
+});

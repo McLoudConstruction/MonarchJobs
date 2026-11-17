@@ -1,0 +1,54 @@
+/* Eval sheet tab: big tap targets for the iPad, and a print layout of the paper form. */
+.es-edit, .es-list { display: flex; flex-direction: column; gap: 12px; }
+.es-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.es-save { font-size: 12.5px; }
+.es-card h3 { margin: 0 0 10px; }
+.es-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.es-grid .es-wide { grid-column: 1 / -1; }
+.es-sizes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+.es-size { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 64px; padding: 8px; border: 2px solid var(--line); border-radius: 10px; background: var(--card-bg); color: var(--ink); font-size: 15px; cursor: pointer; }
+.es-size b { font-size: 17px; }
+.es-size.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--card-bg)); }
+.es-size:disabled { opacity: 0.7; cursor: default; }
+.es-line, .es-addon { display: flex; align-items: center; justify-content: space-between; gap: 10px 14px; flex-wrap: wrap; padding: 8px 0; border-top: 1px solid var(--line); min-height: 52px; }
+.es-line { border-top: 0; }
+.es-name { font-size: 15px; font-weight: 600; }
+.es-name .muted { font-weight: 400; font-size: 13px; margin-left: 6px; }
+.es-check { display: flex; align-items: center; gap: 12px; cursor: pointer; min-height: 44px; flex: 1 1 220px; }
+.es-check input[type=checkbox] { width: 26px; height: 26px; flex: none; }
+.es-addon-fields { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; justify-content: flex-end; flex: 1 1 260px; }
+.es-step { display: inline-flex; align-items: center; gap: 6px; }
+.es-step button { min-width: 46px; min-height: 46px; padding: 0; font-size: 22px; line-height: 1; }
+.es-step-n { min-width: 54px; text-align: center; font-weight: 700; font-size: 16px; }
+.es-price { display: inline-flex; align-items: center; gap: 4px; }
+.es-price input { width: 84px; min-height: 44px; }
+.es-other { flex: 1 1 160px; min-height: 44px; min-width: 0; }
+.es-amt { min-width: 72px; text-align: right; }
+.es-replace { border-top: 1px solid var(--line); padding-top: 8px; }
+.es-lines { width: 100%; border-collapse: collapse; }
+.es-lines td { padding: 4px 0; }
+.es-lines td.r, .es-print-root td.r { text-align: right; white-space: nowrap; }
+.es-total-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 20px; padding-top: 8px; border-top: 2px solid var(--line); margin-top: 6px; }
+.es-total-row b { font-size: 24px; }
+.es-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; width: 100%; cursor: pointer; min-height: 60px; font: inherit; color: inherit; }
+.es-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+@media (max-width: 600px) {
+  .es-grid { grid-template-columns: 1fr 1fr; }
+  .es-sizes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* printing: only the paper layout */
+.es-print-root { display: none; }
+@media print {
+  body > *:not(.es-print-root) { display: none !important; }
+  .es-print-root { display: block; padding: 0.4in; color: #000; background: #fff; font-family: Arial, Helvetica, sans-serif; font-size: 13px; }
+  .es-print-root h1 { font-size: 34px; margin: 0; text-align: center; letter-spacing: 1px; }
+  .es-print-root .es-print-sub { text-align: center; margin: 0 0 14px; font-size: 12px; }
+  .es-print-root h2 { font-size: 17px; text-align: center; margin: 12px 0 14px; }
+  .es-print-root h3 { font-size: 15px; margin: 14px 0 4px; }
+  .es-print-root p { margin: 4px 0; }
+  .es-print-root table { width: 100%; border-collapse: collapse; margin: 4px 0; }
+  .es-print-root td { padding: 3px 0; border-bottom: 1px solid #bbb; }
+  .es-print-root .es-print-lines { margin-top: 14px; }
+  .es-print-root .es-print-total { font-size: 17px; margin-top: 14px; }
+}
