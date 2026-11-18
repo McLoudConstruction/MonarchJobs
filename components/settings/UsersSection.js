@@ -5,6 +5,7 @@ import { getSupabase } from '@/lib/supabaseClient';
 import { apiFetch } from '@/lib/useAuth';
 import { validateNewUser, validateName } from '@/lib/newUser';
 import { hasRealName, staffName } from '@/lib/userDisplay';
+import { USER_COLORS, colorFor } from '@/lib/userColors';
 import './users.css';
 
 const EMPTY = { full_name: '', email: '', role: 'tech' };
@@ -31,7 +32,7 @@ export default function UsersSection({ currentUserId, token }) {
   const load = useCallback(async () => {
     const { data } = await getSupabase()
       .from('staff_users')
-      .select('id,email,full_name,role,active,created_at')
+      .select('id,email,full_name,role,active,created_at,color')
       .order('created_at');
     setUsers(data || []);
     try {
@@ -161,7 +162,7 @@ export default function UsersSection({ currentUserId, token }) {
 
       <div className="users-scroll">
         <table className="table users-table">
-          <thead><tr><th>Name</th><th>Role</th><th>Status</th><th /></tr></thead>
+          <thead><tr><th>Name</th><th>Role</th><th>Color</th><th>Status</th><th /></tr></thead>
           <tbody>
             {users.map((u) => {
               const self = u.id === currentUserId;
@@ -185,6 +186,12 @@ export default function UsersSection({ currentUserId, token }) {
                       <option value="owner">Owner</option>
                       <option value="office">Office</option>
                       <option value="tech">Tech</option>
+                    </select>
+                  </td>
+                  <td className="u-color">
+                    <span className="u-swatch" style={{ background: colorFor(u, users).hex }} aria-hidden="true" />
+                    <select value={colorFor(u, users).key} aria-label={`Color for ${staffName(u)}`} onChange={(e) => update(u.id, { color: e.target.value })}>
+                      {USER_COLORS.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
                     </select>
                   </td>
                   <td><span className={`u-status ${st.cls}`} title={st.tip}>{st.text}{self ? ' (you)' : ''}</span></td>

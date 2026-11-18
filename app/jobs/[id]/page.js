@@ -10,6 +10,7 @@ import VisitActions from '@/components/VisitActions';
 import OnTheWayModal from '@/components/OnTheWayModal';
 import AssignJobModal from '@/components/AssignJobModal';
 import VisitDock from '@/components/VisitDock';
+import ClockCard from '@/components/job/ClockCard';
 import EstimateCard from '@/components/EstimateCard';
 import PhotosTab from '@/components/job/PhotosTab';
 import SketchTab from '@/components/job/SketchTab';
@@ -460,6 +461,8 @@ function JobInner({ id, staff, token }) {
               <div>{job.loss_summary}</div>
             </div>
           )}
+
+          <ClockCard jobId={id} staff={staff} staffList={staffList} token={token} service={service} jobStatus={job.status} refreshKey={visits.map((v) => v.status).join(',')} />
 
           <div className="card wide">
             <div className="row" style={{ justifyContent: 'space-between' }}>

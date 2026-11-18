@@ -5,6 +5,7 @@ import { planTransition } from '@/lib/visitFlow';
 import { siteUrl } from '@/lib/integrations';
 import { sendAftercare } from '@/lib/aftercareServer';
 import { advancePlan } from '@/lib/outreach';
+import { applyClockForVisit } from '@/lib/clockServer';
 
 export const dynamic = 'force-dynamic';
 
@@ -81,6 +82,10 @@ export async function POST(request, { params }) {
     kind: plan.eventKind,
     details: opId ? { ...plan.eventDetails, op_id: opId, at: when.toISOString() } : plan.eventDetails,
   });
+
+  // The job clock follows the buttons: restoration starts at On the way, carpet at Start job, Finish job stops it.
+  // The tap is already saved, so a clock problem never fails it.
+  try { await applyClockForVisit(admin, { visit, action: body.action, when }); } catch (e) { console.error('job clock:', e.message); }
 
   // When the whole job is finished: move a recurring plan to its next date and send the care instructions.
   // Neither can make the finish fail.

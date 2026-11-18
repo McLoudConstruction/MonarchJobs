@@ -1,0 +1,7 @@
+.cp-badge{ display: inline-block; margin-left: 8px; min-width: 22px; padding: 1px 7px; border-radius: 999px; background: #b9560a; color: #fff; font-size: 13px; text-align: center; }
+.cp-req{ display: flex; flex-wrap: wrap; gap: 8px 14px; justify-content: space-between; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.cp-main{ flex: 1 1 280px; min-width: 0; }
+.cp-times{ font-size: 14px; color: var(--muted); }
+.cp-why{ font-size: 14px; margin-top: 2px; }
+.cp-buttons{ display: flex; gap: 8px; }
+.cp-sub{ margin: 14px 0 4px; }

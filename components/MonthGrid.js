@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { getSupabase } from '@/lib/supabaseClient';
 import { fmtTime, fmtDuration } from '@/lib/format';
-import { techColor } from '@/lib/weekGrid';
+import { techColorOf, UNASSIGNED_COLOR } from '@/lib/userColors';
 import { monthGridDays, monthStart, addMonths, groupVisitsByDay, dayRows, dayKey } from '@/lib/monthGrid';
 import { doubleBookedIds } from '@/lib/schedule';
 import { staffName } from '@/lib/userDisplay';
@@ -40,7 +40,6 @@ export default function MonthGrid({ month, onMonthChange, techs, focusTechId = '
     return () => { cancelled = true; };
   }, [rangeStart, rangeEnd]);
 
-  const techIds = useMemo(() => techs.map((t) => t.id), [techs]);
   const techName = (id) => { const t = techs.find((x) => x.id === id); return t ? staffName(t) : 'Unassigned'; };
   const shown = useMemo(() => visits.filter((v) => view === 'all' || v.tech_id === view), [visits, view]);
   const flagged = useMemo(() => doubleBookedIds(shown), [shown]);
@@ -52,7 +51,7 @@ export default function MonthGrid({ month, onMonthChange, techs, focusTechId = '
   function row(v) {
     const mins = v.duration_minutes || Math.round((new Date(v.ends_at) - new Date(v.starts_at)) / 60000);
     const cls = `mg-row${v.status === 'finished' ? ' done' : ''}${flagged.has(v.id) ? ' flag' : ''}`;
-    const style = { '--mg-color': techColor(techIds, v.tech_id) };
+    const style = { '--mg-color': techColorOf(techs, v.tech_id) };
     const title = `${fmtTime(v.starts_at)} · ${fmtDuration(mins)} · ${techName(v.tech_id)} - #${v.job?.job_number} ${v.job?.customer?.display_name || ''}${v.job?.address?.street ? `, ${v.job.address.street}` : ''}`;
     const body = <><b>{fmtTime(v.starts_at)}</b> #{v.job?.job_number} {v.job?.customer?.display_name}</>;
     return linkVisits && v.job?.id
@@ -69,9 +68,9 @@ export default function MonthGrid({ month, onMonthChange, techs, focusTechId = '
         <span className="range">{month.toLocaleDateString([], { month: 'long', year: 'numeric' })}</span>
         <span className="mg-legend">
           {techs.filter((t) => view === 'all' || t.id === view).map((t) => (
-            <span key={t.id}><i style={{ background: techColor(techIds, t.id) }} />{staffName(t)}</span>
+            <span key={t.id}><i style={{ background: techColorOf(techs, t.id) }} />{staffName(t)}</span>
           ))}
-          <span><i style={{ background: techColor(techIds, null) }} />Unassigned</span>
+          <span><i style={{ background: UNASSIGNED_COLOR }} />Unassigned</span>
         </span>
         <span style={{ flex: 1 }} />
         {techs.length > 1 && (

@@ -1,0 +1,17 @@
+.clock-card{ display: flex; flex-direction: column; gap: 10px; }
+.clock-head{ display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.clock-total{ margin-left: auto; color: var(--muted); font-size: 14px; }
+.clock-chip{ display: inline-block; padding: 4px 10px; border-radius: 999px; font-weight: 600; font-size: 14px; background: var(--panel); border: 1px solid var(--line); }
+.clock-chip.run{ border-color: #1f7a43; color: #1f7a43; }
+.clock-allot{ font-size: 14px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.clock-allot.over{ border-color: #b9560a; }
+.clock-actions{ display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.clock-actions button.big{ min-height: 52px; padding: 0 22px; font-size: 17px; }
+.clock-list{ display: flex; flex-direction: column; }
+.clock-row{ display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between; padding: 9px 0; border-top: 1px solid var(--line); }
+.clock-main{ flex: 1 1 260px; min-width: 0; }
+.clock-buttons{ display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.clock-dot{ display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+.clock-request{ flex: 1 1 100%; font-size: 13px; color: var(--muted); }
+.clock-edit{ border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--panel); }
+.clock-history summary{ cursor: pointer; font-size: 14px; color: var(--muted); }

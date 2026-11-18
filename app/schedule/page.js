@@ -37,10 +37,13 @@ function ScheduleInner({ staff }) {
         .select('id,tech_id,starts_at,ends_at,duration_minutes,status,job:jobs(id,job_number,job_type,customer:customers(display_name),address:addresses(street,city))')
         .gte('starts_at', start.toISOString()).lt('starts_at', end.toISOString())
         .neq('status', 'cancelled').order('starts_at'),
-      sb.from('staff_users').select('id,full_name,email,role').eq('active', true).order('full_name'),
+      sb.from('staff_users').select('id,full_name,email,role,color,created_at').eq('active', true).order('full_name'),
     ]);
     setVisits(v.data || []);
-    setTechs(s.data || []);
+    if (s.error) { // the color column is added by migration 024; until it is run, still show the people
+      const plain = await sb.from('staff_users').select('id,full_name,email,role').eq('active', true).order('full_name');
+      setTechs(plain.data || []);
+    } else setTechs(s.data || []);
   }, [start, end]);
 
   useEffect(() => { load(); }, [load]);

@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { getSupabase } from '@/lib/supabaseClient';
 import { addDays, fmtDay, fmtTime, fmtDuration } from '@/lib/format';
 import { doubleBookedIds } from '@/lib/schedule';
-import { DAY_START_HOUR, DAY_END_HOUR, layoutDay, timeFromFraction, fractionFromTime, dragStartFromPoint, weekStartMonday, techColor } from '@/lib/weekGrid';
+import { DAY_START_HOUR, DAY_END_HOUR, layoutDay, timeFromFraction, fractionFromTime, dragStartFromPoint, weekStartMonday } from '@/lib/weekGrid';
+import { techColorOf, UNASSIGNED_COLOR } from '@/lib/userColors';
 import { staffName } from '@/lib/userDisplay';
 import './weekgrid.css';
 
@@ -57,7 +58,6 @@ export default function WeekGrid({
     return () => { cancelled = true; };
   }, [rangeStart, rangeEnd]);
 
-  const techIds = useMemo(() => techs.map((t) => t.id), [techs]);
   const techName = (id) => { const t = techs.find((x) => x.id === id); return t ? staffName(t) : 'Unassigned'; };
   const shown = useMemo(
     () => visits.filter((v) => v.id !== excludeVisitId && (view === 'all' || v.tech_id === view)),
@@ -170,9 +170,9 @@ export default function WeekGrid({
         <span className="range">{fmtDay(days[rolling ? firstIdx : 0])} to {fmtDay(days[Math.min((rolling ? firstIdx : 0) + 6, days.length - 1)])}</span>
         <span className="wg-legend">
           {techs.filter((t) => view === 'all' || t.id === view).map((t) => (
-            <span key={t.id}><i style={{ background: techColor(techIds, t.id) }} />{staffName(t)}</span>
+            <span key={t.id}><i style={{ background: techColorOf(techs, t.id) }} />{staffName(t)}</span>
           ))}
-          <span><i style={{ background: techColor(techIds, null) }} />Unassigned</span>
+          <span><i style={{ background: UNASSIGNED_COLOR }} />Unassigned</span>
         </span>
         <span style={{ flex: 1 }} />
         <select value={view} onChange={(e) => setView(e.target.value)} aria-label="Show">
@@ -212,7 +212,7 @@ export default function WeekGrid({
                   {items.map(({ visit: v, top, height, lane, lanes }) => {
                     const style = {
                       top: `${top * 100}%`, height: `${height * 100}%`, left: `calc(${(lane / lanes) * 100}% + 1px)`,
-                      width: `calc(${100 / lanes}% - 2px)`, '--wg-color': techColor(techIds, v.tech_id),
+                      width: `calc(${100 / lanes}% - 2px)`, '--wg-color': techColorOf(techs, v.tech_id),
                     };
                     const mins = v.duration_minutes || Math.round((new Date(v.ends_at) - new Date(v.starts_at)) / 60000);
                     const cls = `wg-visit${v.status === 'finished' ? ' done' : ''}${flagged.has(v.id) ? ' flag' : ''}`;

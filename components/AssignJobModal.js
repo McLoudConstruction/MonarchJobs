@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import PopupModal from '@/components/PopupModal';
 import WeekGrid from '@/components/WeekGrid';
-import { weekStartMonday, techColor } from '@/lib/weekGrid';
+import { weekStartMonday } from '@/lib/weekGrid';
+import { techColorOf } from '@/lib/userColors';
 import { getSupabase } from '@/lib/supabaseClient';
 import { fmtDateTime, fmtDuration } from '@/lib/format';
 import { staffName } from '@/lib/userDisplay';
@@ -18,6 +19,12 @@ export default function AssignJobModal({ open, visit, staffList, onClose, onDone
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
   const [weekStart, setWeekStart] = useState(() => weekStartMonday(new Date()));
+  const [colors, setColors] = useState({}); // staff id -> { color, created_at }
+
+  useEffect(() => {
+    if (!open) return;
+    getSupabase().from('staff_users').select('id,color,created_at').then(({ data, error }) => { if (!error) setColors(Object.fromEntries((data || []).map((p) => [p.id, p]))); });
+  }, [open]);
 
   useEffect(() => {
     if (open) { setTechId(''); setConflicts([]); setOverride(false); setMsg(null); if (visit) setWeekStart(weekStartMonday(new Date(visit.starts_at))); }
@@ -50,7 +57,7 @@ export default function AssignJobModal({ open, visit, staffList, onClose, onDone
     onDone();
   }
 
-  const techIds = staffList.map((s) => s.id);
+  const people = staffList.map((s) => ({ ...s, ...(colors[s.id] || {}) }));
 
   return (
     <PopupModal open={open} onClose={() => { if (!busy) onClose(); }} title="Assign job" wide>
@@ -60,7 +67,7 @@ export default function AssignJobModal({ open, visit, staffList, onClose, onDone
           {staffList.map((s) => (
             <button key={s.id} type="button" role="radio" aria-checked={techId === s.id} className={`assign-tech${techId === s.id ? ' on' : ''}`}
               onClick={() => setTechId(techId === s.id ? '' : s.id)}>
-              <i style={{ background: techColor(techIds, s.id) }} />{staffName(s)} <small>{s.role}</small>
+              <i style={{ background: techColorOf(people, s.id) }} />{staffName(s)} <small>{s.role}</small>
             </button>
           ))}
         </div>
@@ -68,7 +75,7 @@ export default function AssignJobModal({ open, visit, staffList, onClose, onDone
           <WeekGrid
             weekStart={weekStart}
             onWeekChange={setWeekStart}
-            techs={staffList}
+            techs={people}
             focusTechId={techId}
             proposed={{ start: visit.starts_at, duration: visit.duration_minutes }}
             proposedLabel="This job"

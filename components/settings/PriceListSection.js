@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
 import { money, UNIT_LABELS } from '@/lib/format';
 
-const BLANK = { name: '', description: '', unit: 'sqft', price: '', is_addon: false, bookable_online: false, aftercare: '', dry_hours: '' };
+const BLANK = { name: '', description: '', unit: 'sqft', price: '', is_addon: false, bookable_online: false, aftercare: '', dry_hours: '', minutes: '' };
 
 export default function PriceListSection() {
   const [items, setItems] = useState([]);
@@ -37,7 +37,9 @@ export default function PriceListSection() {
     e.preventDefault();
     const dry = form.dry_hours === '' ? null : Math.round(Number(form.dry_hours));
     if (dry !== null && !(dry >= 1 && dry <= 72)) { setMsg({ err: true, text: 'Drying time is 1 to 72 hours, or leave it blank.' }); return; }
-    const row = { name: form.name.trim(), description: form.description, unit: form.unit, price: Number(form.price), is_addon: !!form.is_addon, bookable_online: !!form.bookable_online, aftercare: form.aftercare.trim(), dry_hours: dry };
+    const mins = form.minutes === '' ? null : Number(form.minutes);
+    if (mins !== null && !(mins >= 0 && mins <= 100000)) { setMsg({ err: true, text: 'Time per unit is a number of minutes (0 or more), or leave it blank.' }); return; }
+    const row = { minutes_per_unit: mins, name: form.name.trim(), description: form.description, unit: form.unit, price: Number(form.price), is_addon: !!form.is_addon, bookable_online: !!form.bookable_online, aftercare: form.aftercare.trim(), dry_hours: dry };
     if (!row.name || Number.isNaN(row.price) || row.price < 0) { setMsg({ err: true, text: 'Enter a name and a price of zero or more.' }); return; }
     const sb = getSupabase();
     const { error } = editId ? await sb.from('price_items').update(row).eq('id', editId) : await sb.from('price_items').insert(row);
@@ -56,7 +58,7 @@ export default function PriceListSection() {
   function edit(it) {
     setEditId(it.id);
     if (typeof window !== 'undefined' && window.innerWidth < 900) window.scrollTo({ top: 0, behavior: 'smooth' });
-    setForm({ name: it.name, description: it.description, unit: it.unit, price: String(it.price), is_addon: !!it.is_addon, bookable_online: !!it.bookable_online, aftercare: it.aftercare || '', dry_hours: it.dry_hours ? String(it.dry_hours) : '' });
+    setForm({ name: it.name, description: it.description, unit: it.unit, price: String(it.price), is_addon: !!it.is_addon, bookable_online: !!it.bookable_online, aftercare: it.aftercare || '', dry_hours: it.dry_hours ? String(it.dry_hours) : '', minutes: it.minutes_per_unit != null ? String(it.minutes_per_unit) : '' });
   }
 
   return (
@@ -88,6 +90,11 @@ export default function PriceListSection() {
           <div className="field"><label>Aftercare for the customer (optional)</label>
             <textarea className="sig-notes" rows={3} maxLength={1500} value={form.aftercare} onChange={set('aftercare')} placeholder="Stay off the carpet for 2 hours. Wait 24 hours before moving furniture back..." />
           </div>
+          <div className="field" style={{ maxWidth: 320 }}>
+            <label>Time to do one unit (minutes, optional)</label>
+            <input type="number" min="0" max="100000" step="0.01" value={form.minutes} onChange={set('minutes')} placeholder={form.unit === 'sqft' ? 'e.g. 0.05 minutes per sq ft' : form.unit === 'room' ? 'e.g. 20 minutes per room' : 'minutes for one'} />
+            <div className="hint" style={{ marginTop: 4 }}>Sets the allotted time on carpet jobs: this many minutes for each {form.unit === 'sqft' ? 'sq ft' : form.unit === 'room' ? 'room' : form.unit === 'hour' ? 'hour (hours always count as 60 minutes)' : 'unit'} on the estimate. Compared with the clock to track dollars per hour.</div>
+          </div>
           <div className="field" style={{ maxWidth: 220 }}><label>Dries in about (hours, optional)</label><input type="number" min="1" max="72" value={form.dry_hours} onChange={set('dry_hours')} /></div>
           <div className="row">
             <button className="primary">{editId ? 'Save item' : 'Add item'}</button>
@@ -112,6 +119,7 @@ export default function PriceListSection() {
               <div className="price-row-main">
                 <div className="price-row-name">{it.name}{it.is_addon && <span className="badge s-quoted" style={{ marginLeft: 6 }}>add-on</span>}{it.bookable_online && <span className="badge s-booked" style={{ marginLeft: 6 }}>online</span>}</div>
                 {it.description && <div className="muted">{it.description}</div>}
+                {it.minutes_per_unit != null && it.unit !== 'hour' && <div className="muted">Takes {Number(it.minutes_per_unit)} min {UNIT_LABELS[it.unit]}</div>}
                 {(it.aftercare || it.dry_hours) && <div className="muted">Aftercare{it.dry_hours ? `, dries in about ${it.dry_hours} h` : ''}</div>}
               </div>
               <div className="price-row-price">{money(it.price)}<span className="muted"> {UNIT_LABELS[it.unit]}</span></div>
