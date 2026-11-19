@@ -39,6 +39,7 @@ import { usePhotoUploader } from '@/lib/usePhotoUploader';
 import { eventLabel, updateRecipients, INTERNAL_CATEGORIES } from '@/lib/jobDocs';
 import { fabActions, FAB_LABELS, FAB_HIDDEN_TABS } from '@/lib/jobFab';
 import { reasonText } from '@/lib/visitReasons';
+import { groupVisits } from '@/lib/visitCrew';
 import { getSupabase } from '@/lib/supabaseClient';
 import { doubleBookedIds } from '@/lib/schedule';
 import { fmtDateTime, fmtDuration, JOB_STATUS, JOB_TYPES, addressLine } from '@/lib/format';
@@ -363,10 +364,12 @@ function JobInner({ id, staff, token }) {
     load();
   }
 
+  // Cancel a visit; for a crew, every member who has not started goes with it.
   async function cancelVisit(v) {
-    if (!window.confirm('Cancel this visit?')) return;
-    await getSupabase().from('job_visits').update({ status: 'cancelled' }).eq('id', v.id);
-    await logEvent('visit_cancelled', { visit_id: v.id });
+    const crew = v.crew_id ? visits.filter((x) => x.crew_id === v.crew_id && x.status === 'scheduled') : [v];
+    if (!window.confirm(crew.length > 1 ? `Cancel this visit for all ${crew.length} team members?` : 'Cancel this visit?')) return;
+    await getSupabase().from('job_visits').update({ status: 'cancelled' }).in('id', crew.map((x) => x.id));
+    await logEvent('visit_cancelled', { visit_id: v.id, ...(crew.length > 1 ? { crew: crew.map((x) => x.tech_id).filter(Boolean) } : {}) });
     load();
   }
 
@@ -515,28 +518,41 @@ function JobInner({ id, staff, token }) {
               <h2>Visits</h2>
               {isOffice && <button className="secondary small" onClick={() => setVisitEdit({})}>Add visit</button>}
             </div>
-            {visitsShown.map((v) => (
-              <div key={v.id} className="visit-row">
-                <div className="visit-main">
-                  <div className="title">
-                    {fmtDateTime(v.starts_at)} for {fmtDuration(v.duration_minutes)}{' '}
-                    <span className="badge off">{VISIT_STATUS[v.status]}</span>
-                    {flagged.has(v.id) && v.status !== 'cancelled' && <> <span className="badge warn">Double-booked</span></>}
+            {groupVisits(visitsShown).map((g) => {
+              const v = g.lead;
+              const canEditGroup = isOffice && g.members.some((m) => m.status === 'scheduled');
+              const editRow = g.members.find((m) => m.status === 'scheduled') || v;
+              return (
+                <div key={g.key} className="visit-row">
+                  <div className="visit-main">
+                    <div className="title">
+                      {fmtDateTime(v.starts_at)} for {fmtDuration(v.duration_minutes)}{' '}
+                      {g.solo && <span className="badge off">{VISIT_STATUS[v.status]}</span>}
+                      {g.members.some((m) => flagged.has(m.id) && m.status !== 'cancelled') && <> <span className="badge warn">Double-booked</span></>}
+                    </div>
+                    {g.solo
+                      ? <div className="meta">{name(v.tech_id)}{v.minutes_out ? ` · ${v.minutes_out} min out` : ''}</div>
+                      : g.members.map((m) => (
+                        <div key={m.id} className="visit-member">
+                          <span>{name(m.tech_id)}{m.minutes_out ? ` · ${m.minutes_out} min out` : ''}</span>
+                          <span className="badge off">{VISIT_STATUS[m.status]}</span>
+                          {(isOffice || m.tech_id === staff.id) && <VisitActions visit={m} token={token} onDone={load} onAction={onVisitAction} />}
+                        </div>
+                      ))}
+                    {reasonText(v) && <div className="meta">Reason: {reasonText(v)}{isOffice && gobacks[v.id] && <> <span className="badge warn">Go-back: {name(gobacks[v.id])}</span></>}</div>}
                   </div>
-                  <div className="meta">{name(v.tech_id)}{v.minutes_out ? ` · ${v.minutes_out} min out` : ''}</div>
-                  {reasonText(v) && <div className="meta">Reason: {reasonText(v)}{isOffice && gobacks[v.id] && <> <span className="badge warn">Go-back: {name(gobacks[v.id])}</span></>}</div>}
+                  <div className="visit-buttons">
+                    {g.solo && (isOffice || v.tech_id === staff.id) && <VisitActions visit={v} token={token} onDone={load} onAction={onVisitAction} />}
+                    {canEditGroup && (
+                      <>
+                        <button className="secondary small" onClick={() => setVisitEdit(editRow)}>Reschedule</button>
+                        <button className="linklike danger-link" onClick={() => cancelVisit(editRow)}>Cancel</button>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <div className="visit-buttons">
-                  {(isOffice || v.tech_id === staff.id) && <VisitActions visit={v} token={token} onDone={load} onAction={onVisitAction} />}
-                  {isOffice && v.status === 'scheduled' && (
-                    <>
-                      <button className="secondary small" onClick={() => setVisitEdit(v)}>Reschedule</button>
-                      <button className="linklike danger-link" onClick={() => cancelVisit(v)}>Cancel</button>
-                    </>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
             {visitsShown.length === 0 && <p className="muted">No visits scheduled.</p>}
           </div>
 

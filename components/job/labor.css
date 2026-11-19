@@ -28,3 +28,11 @@
 .lp-sign{ display: flex; flex-direction: column; gap: 8px; }
 .lp-actions{ position: sticky; bottom: -16px; background: var(--card-bg); padding: 10px 0 4px; border-top: 1px solid var(--line); z-index: 2; }
 @media (max-width: 520px){ .lp-hours{ grid-template-columns: 1fr; } }
+
+/* team members on a visit (visit form and visits list) */
+.visit-crew-list{ display: flex; flex-wrap: wrap; gap: 8px; }
+.visit-crew-chip{ display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; min-height: 36px; cursor: pointer; background: var(--card-bg); font-size: 14px; }
+.visit-crew-chip.on{ background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.visit-crew-chip input{ margin: 0; }
+.visit-member{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 0; }
+.visit-member .badge{ font-size: 11px; }

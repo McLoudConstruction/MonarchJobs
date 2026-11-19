@@ -6,6 +6,7 @@ import { siteUrl } from '@/lib/integrations';
 import { sendAftercare } from '@/lib/aftercareServer';
 import { advancePlan } from '@/lib/outreach';
 import { applyClockForVisit } from '@/lib/clockServer';
+import { isReturnVisit } from '@/lib/visitCrew';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,12 +48,14 @@ export async function POST(request, { params }) {
     return NextResponse.json({ error: `This job is ${job.status}.`, code: 'JOB_CLOSED' }, { status: 409 });
   }
 
-  const { count: othersActive } = await admin
+  // other visits still planned or under way. A crew mate who has not started is part of this same visit, not a return trip.
+  const { data: otherRows } = await admin
     .from('job_visits')
-    .select('id', { count: 'exact', head: true })
+    .select('id,crew_id,status')
     .eq('job_id', visit.job_id)
     .neq('id', visit.id)
     .in('status', ['scheduled', 'on_the_way', 'started']);
+  const othersActive = (otherRows || []).filter((r) => isReturnVisit(r, visit)).length;
 
   const plan = planTransition({ visit, action: body.action, minutes: body.minutes, othersActive: othersActive || 0, now: when });
   if (plan.error) {
@@ -82,6 +85,14 @@ export async function POST(request, { params }) {
     kind: plan.eventKind,
     details: opId ? { ...plan.eventDetails, op_id: opId, at: when.toISOString() } : plan.eventDetails,
   });
+
+  // The job is complete: crew mates who never started are not coming, so their waiting visit is cancelled rather than left on their schedule.
+  if (plan.jobPatch.status === 'completed' && visit.crew_id) {
+    try {
+      const { data: gone } = await admin.from('job_visits').update({ status: 'cancelled' }).eq('crew_id', visit.crew_id).eq('status', 'scheduled').neq('id', visit.id).select('id,tech_id');
+      if (gone?.length) await admin.from('job_events').insert({ job_id: job.id, actor_id: auth.staff.id, actor_email: auth.staff.email, kind: 'visit_cancelled', details: { crew: gone.map((g) => g.tech_id), note: 'Team member never started; the visit finished without them.' } });
+    } catch { /* the visit is already saved */ }
+  }
 
   // The job clock follows the buttons: restoration starts at On the way, carpet at Start job, Finish job stops it.
   // The tap is already saved, so a clock problem never fails it.
