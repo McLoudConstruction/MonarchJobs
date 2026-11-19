@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { hasFeature, serviceOf, tabsFor, noteCategories, areaKindsFor, serviceTitle, JOB_TYPE_FOR_SERVICE, FEATURES, SERVICE_KEYS } from '../lib/services.js';
+import { hasFeature, serviceOf, tabsFor, noteCategories, areaKindsFor, serviceTitle, JOB_TYPE_FOR_SERVICE, FEATURES, SERVICE_KEYS, evalSheetFor, EVAL_CUSTOMER_TYPES } from '../lib/services.js';
 import { INTERNAL_CATEGORIES } from '../lib/jobDocs.js';
 import { fabActions } from '../lib/jobFab.js';
 
@@ -124,13 +124,24 @@ test('equipment notes: needs text, only damage and not-working count as open iss
   assert.equal(openIssues(n).length, 2);
 });
 
-test('the eval sheet is a carpet-only tab', () => {
+test('the eval sheet is a carpet-only tab, and only for commercial and multifamily customers', () => {
   const tabs = [['overview', 'Overview'], ['inspection', 'Inspection'], ['evalsheet', 'Eval sheet']];
+  const has = (svc, customerType) => tabsFor(tabs, svc, { customerType }).some(([k]) => k === 'evalsheet');
   assert.equal(hasFeature('carpet', 'evalSheet'), true);
   for (const svc of ['extraction', 'mitigation', 'remediation']) {
     assert.equal(hasFeature(svc, 'evalSheet'), false, svc);
-    assert.ok(!tabsFor(tabs, svc).some(([k]) => k === 'evalsheet'), svc);
+    for (const t of EVAL_CUSTOMER_TYPES) assert.equal(has(svc, t), false, `${svc} ${t}`);
   }
-  assert.ok(tabsFor(tabs, 'carpet').some(([k]) => k === 'evalsheet'));
-  assert.ok(tabsFor(tabs, '').some(([k]) => k === 'evalsheet')); // no service shows everything
+  assert.equal(has('carpet', 'multifamily'), true);
+  assert.equal(has('carpet', 'commercial'), true);
+  assert.equal(has('carpet', 'residential'), false);
+  assert.equal(has('carpet', ''), false);
+  assert.equal(has('carpet', undefined), false);
+  assert.equal(has('', 'multifamily'), true); // no service shows everything the customer type allows
+  assert.equal(has('', 'residential'), false);
+  assert.equal(evalSheetFor('carpet', 'commercial'), true);
+  assert.equal(evalSheetFor('carpet', 'residential'), false);
+  assert.equal(evalSheetFor('mitigation', 'multifamily'), false);
+  // other tabs do not depend on the customer type
+  assert.ok(tabsFor(tabs, 'carpet').some(([k]) => k === 'inspection'));
 });

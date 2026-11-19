@@ -67,4 +67,8 @@
 .chat-panel.compact .chat-edit{ width: min(260px, 70vw); }
 .chat-minihead{ display: flex; justify-content: flex-end; padding: 2px 10px; border-bottom: 1px solid var(--line); }
 .chat-minihead button{ background: none; border: 0; padding: 2px 0; min-height: 0; font-size: 11px; color: var(--ink-soft); text-decoration: underline; cursor: pointer; }
+.chat-panel.fill{ padding: 8px 10px 10px; gap: 6px; }
+.chat-panel.fill .chat-minihead{ padding: 0 2px 2px; border-bottom: 0; }
+.chat-panel.fill .chat-list{ height: calc(100dvh - 270px); min-height: 320px; padding: 8px; }
+.chat-panel.fill .chat-composer{ gap: 6px; }
 .chat-page .chat-list{ height: calc(100dvh - 300px); min-height: 320px; }

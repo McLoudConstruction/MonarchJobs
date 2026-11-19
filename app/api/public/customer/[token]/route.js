@@ -27,7 +27,7 @@ export async function GET(request, { params }) {
     const i = latestSigned(inspections || [], kind);
     if (!i) return null;
     const d = cleanInspection(kind, i.data);
-    return { signed_by: i.signer_name, absent: !!i.customer_absent, signed_at: i.signed_at, rooms: d.rooms, notes: d.notes, drying_hours: d.drying_hours ?? null, comments: d.comments ?? '' };
+    return { signed_by: i.signer_name, absent: !!i.customer_absent, signed_at: i.signed_at, room_count: d.room_count, rooms: d.rooms, notes: d.notes, drying_hours: d.drying_hours ?? null, comments: d.comments ?? '' };
   };
 
   return NextResponse.json({

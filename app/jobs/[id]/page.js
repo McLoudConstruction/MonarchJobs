@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import AuthGate from '@/components/AuthGate';
 import Breadcrumb from '@/components/Breadcrumb';
 import VisitForm from '@/components/VisitForm';
+import PopupModal from '@/components/PopupModal';
 import VisitActions from '@/components/VisitActions';
 import OnTheWayModal from '@/components/OnTheWayModal';
 import AssignJobModal from '@/components/AssignJobModal';
@@ -37,6 +38,7 @@ import { UploadStatus } from '@/components/job/PhotoUi';
 import { usePhotoUploader } from '@/lib/usePhotoUploader';
 import { eventLabel, updateRecipients, INTERNAL_CATEGORIES } from '@/lib/jobDocs';
 import { fabActions, FAB_LABELS, FAB_HIDDEN_TABS } from '@/lib/jobFab';
+import { reasonText } from '@/lib/visitReasons';
 import { getSupabase } from '@/lib/supabaseClient';
 import { doubleBookedIds } from '@/lib/schedule';
 import { fmtDateTime, fmtDuration, JOB_STATUS, JOB_TYPES, addressLine } from '@/lib/format';
@@ -138,6 +140,9 @@ function JobInner({ id, staff, token }) {
   // one-shot requests from the phone's action button to a tab: { n } objects, cleared by the tab once it has acted
   const [moistCmd, setMoistCmd] = useState(null);
   const [updCmd, setUpdCmd] = useState(null);
+  const [clockTick, setClockTick] = useState(0);        // bumped when the job clock changes (phone button or the clock card), so each re-reads it
+  const [clockRunning, setClockRunning] = useState(false); // this person's job clock is running now
+  const [gobacks, setGobacks] = useState({});            // visit id -> tech id, for visits added as a tech's go-back (office and owner only)
 
   // keep the open tab across refreshes and back/forward (#overview, #photos, #sketch ...)
   useEffect(() => {
@@ -236,6 +241,23 @@ function JobInner({ id, staff, token }) {
     loadEvents();
   }, [id, loadEvents]);
 
+  // is this person's job clock running? (the phone button reads Clock Out while it is, Clock In when it is stopped)
+  const visitStatusKey = visits.map((v) => v.status).join(',');
+  useEffect(() => {
+    let alive = true;
+    getSupabase().from('job_clock_sessions').select('id').eq('job_id', id).eq('staff_id', staff.id).is('ended_at', null).is('voided_at', null).limit(1)
+      .then(({ data, error }) => { if (alive && !error) setClockRunning((data || []).length > 0); });
+    return () => { alive = false; };
+  }, [id, staff.id, clockTick, visitStatusKey]);
+  // go-backs logged on this job's visits (a missing table just means migration 026 is not run yet)
+  useEffect(() => {
+    if (!isOffice) return undefined;
+    let alive = true;
+    getSupabase().from('job_gobacks').select('visit_id,tech_id').eq('job_id', id).is('voided_at', null)
+      .then(({ data, error }) => { if (alive && !error) setGobacks(Object.fromEntries((data || []).filter((g) => g.visit_id).map((g) => [g.visit_id, g.tech_id]))); });
+    return () => { alive = false; };
+  }, [id, isOffice, visits]);
+
   const logEvent = useCallback(async (kind, details) => {
     await getSupabase().from('job_events').insert({ job_id: id, actor_id: staff.id, actor_email: staff.email, kind, details });
     loadEvents();
@@ -269,7 +291,7 @@ function JobInner({ id, staff, token }) {
 
   // What this kind of job shows. A tab the service does not have falls back to Overview (its data stays saved).
   const service = serviceOf(job);
-  const shownTabs = tabsFor(JOB_TABS, service).filter(([k]) => k !== 'costs' || staff.role === 'owner').filter(([k]) => !(UPDATES_SHELVED && k === 'updates')); // job costs are for the owner alone
+  const shownTabs = tabsFor(JOB_TABS, service, { customerType: job.customer?.customer_type }).filter(([k]) => k !== 'costs' || staff.role === 'owner').filter(([k]) => !(UPDATES_SHELVED && k === 'updates')); // job costs are for the owner alone
   const tab = shownTabs.some(([k]) => k === tabState) ? tabState : 'overview';
   // a finished job should have all its equipment picked up
   const shortCount = ['completed', 'closed'].includes(job.status) ? sketches.flatMap((sk) => unitsStillOnSite(normalizePlan(sk.plan))) : [];
@@ -357,7 +379,10 @@ function JobInner({ id, staff, token }) {
   // the phone's action bar follows the visit under way, otherwise the next one waiting
   const dockVisit = visitsShown.find((v) => v.status === 'started' && (isOffice || v.tech_id === staff.id)) || otwVisit;
   // phone action button: Start Recheck / Start Sketch / Start Job, which becomes Complete Job once the visit is under way
-  const fabKeys = FAB_HIDDEN_TABS.includes(tab) ? [] : fabActions({ hasSketch: sketches.length > 0, visitStatus: dockVisit?.status || null, docsMissing, recheck: hasFeature(service, 'recheck'), chat: true }).filter((k) => !(UPDATES_SHELVED && (k === 'complete' || k === 'internal'))); // those two write an Updates note
+  // job clock for the phone button: Clock Out while this person's clock runs, Clock In when their visit is under way and it is stopped
+  const myVisitStarted = visitsShown.some((v) => v.status === 'started' && v.tech_id === staff.id);
+  const clockMode = ['closed', 'cancelled'].includes(job.status) ? null : clockRunning ? 'out' : myVisitStarted ? 'in' : null;
+  const fabKeys = FAB_HIDDEN_TABS.includes(tab) ? [] : fabActions({ hasSketch: sketches.length > 0, visitStatus: dockVisit?.status || null, docsMissing, recheck: hasFeature(service, 'recheck'), chat: true, clock: clockMode }).filter((k) => !(UPDATES_SHELVED && (k === 'complete' || k === 'internal'))); // those two write an Updates note
   // Carpet jobs: Start opens the before-cleaning record, Finish opens the after-cleaning record.
   const canDoc = hasFeature(service, 'inspectionTab') && !['closed', 'cancelled'].includes(job.status);
   const onVisitAction = (action) => {
@@ -378,6 +403,8 @@ function JobInner({ id, staff, token }) {
       await load();
       if (!r?.queued) onVisitAction('started');
     },
+    clock_out: async () => { await apiFetch(`/api/jobs/${id}/clock`, token, { method: 'POST', body: JSON.stringify({ action: 'out' }) }); setClockTick((n) => n + 1); },
+    clock_in: async () => { await apiFetch(`/api/jobs/${id}/clock`, token, { method: 'POST', body: JSON.stringify({ action: 'in' }) }); setClockTick((n) => n + 1); },
     complete: () => { openTab('updates'); setUpdCmd({ kind: 'internal', category: 'Completed Job', n: Date.now() }); },
     internal: () => { openTab('updates'); setUpdCmd({ kind: 'internal', category: INTERNAL_CATEGORIES[0], n: Date.now() }); },
   };
@@ -445,6 +472,25 @@ function JobInner({ id, staff, token }) {
               {job.customer.email && <a className="chip-link" href={`mailto:${job.customer.email}`}>{job.customer.email}</a>}
               {!job.customer.phone && !job.customer.email && <span className="muted">No phone or email on file.</span>}
             </div>
+            {isOffice && (
+              <div className="customer-contacts">
+                {!newContact && <button type="button" className="secondary small" onClick={() => setNewContact({ name: '', role: '', phone: '', email: '' })}>Add contact</button>}
+                {newContact && (
+                  <form onSubmit={addContact} style={{ marginTop: 10 }}>
+                    <div className="grid2">
+                      <div className="field"><label>Name</label><input required autoFocus value={newContact.name} onChange={(e) => setNewContact({ ...newContact, name: e.target.value })} /></div>
+                      <div className="field"><label>Role</label><input placeholder="Adjuster, manager, tenant..." value={newContact.role} onChange={(e) => setNewContact({ ...newContact, role: e.target.value })} /></div>
+                      <div className="field"><label>Phone</label><PhoneInput value={newContact.phone} onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })} /></div>
+                      <div className="field"><label>Email</label><input type="email" value={newContact.email} onChange={(e) => setNewContact({ ...newContact, email: e.target.value })} /></div>
+                    </div>
+                    <div className="row">
+                      <button className="primary">Add and notify</button>
+                      <button type="button" className="secondary" onClick={() => setNewContact(null)}>Cancel</button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="card">
@@ -462,7 +508,7 @@ function JobInner({ id, staff, token }) {
             </div>
           )}
 
-          <ClockCard jobId={id} staff={staff} staffList={staffList} token={token} service={service} jobStatus={job.status} refreshKey={visits.map((v) => v.status).join(',')} />
+          <ClockCard jobId={id} staff={staff} staffList={staffList} token={token} service={service} jobStatus={job.status} refreshKey={`${visitStatusKey}|${clockTick}`} onChanged={() => setClockTick((n) => n + 1)} />
 
           <div className="card wide">
             <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -478,6 +524,7 @@ function JobInner({ id, staff, token }) {
                     {flagged.has(v.id) && v.status !== 'cancelled' && <> <span className="badge warn">Double-booked</span></>}
                   </div>
                   <div className="meta">{name(v.tech_id)}{v.minutes_out ? ` · ${v.minutes_out} min out` : ''}</div>
+                  {reasonText(v) && <div className="meta">Reason: {reasonText(v)}{isOffice && gobacks[v.id] && <> <span className="badge warn">Go-back: {name(gobacks[v.id])}</span></>}</div>}
                 </div>
                 <div className="visit-buttons">
                   {(isOffice || v.tech_id === staff.id) && <VisitActions visit={v} token={token} onDone={load} onAction={onVisitAction} />}
@@ -491,47 +538,19 @@ function JobInner({ id, staff, token }) {
               </div>
             ))}
             {visitsShown.length === 0 && <p className="muted">No visits scheduled.</p>}
-            {visitEdit && (
-              <VisitForm
-                jobId={id}
-                visit={visitEdit.id ? visitEdit : null}
-                staffList={staffList}
-                staff={staff}
-                onDone={() => { setVisitEdit(null); load(); }}
-                onCancel={() => setVisitEdit(null)}
-                logEvent={logEvent}
-              />
-            )}
           </div>
 
           {isOffice && (
             <div className="card wide">
-              <div className="row" style={{ justifyContent: 'space-between' }}>
-                <h2>Also notify</h2>
-                {!newContact && <button type="button" className="secondary small" onClick={() => setNewContact({ name: '', role: '', phone: '', email: '' })}>Add contact</button>}
-              </div>
-              <p className="hint">Extra contacts receive this job's progress updates (and its other notifications once messaging is switched on). New contacts are also saved on the customer.</p>
+              <h2>Also notify</h2>
+              <p className="hint">Extra contacts receive this job's progress updates (and its other notifications once messaging is switched on). Add a new contact from the Customer card above; it is also saved on the customer.</p>
               {contacts.map((c) => (
                 <label key={c.id} className="row" style={{ marginBottom: 8 }}>
                   <input type="checkbox" checked={jobContactIds.includes(c.id)} onChange={() => toggleContact(c.id)} />
                   {c.name} {c.role && <span className="badge off">{c.role}</span>} <span className="muted">{[displayPhone(c.phone), c.email].filter(Boolean).join(' · ')}</span>
                 </label>
               ))}
-              {contacts.length === 0 && !newContact && <p className="muted">No extra contacts yet.</p>}
-              {newContact && (
-                <form onSubmit={addContact} style={{ marginTop: 10 }}>
-                  <div className="grid2">
-                    <div className="field"><label>Name</label><input required autoFocus value={newContact.name} onChange={(e) => setNewContact({ ...newContact, name: e.target.value })} /></div>
-                    <div className="field"><label>Role</label><input placeholder="Adjuster, manager, tenant..." value={newContact.role} onChange={(e) => setNewContact({ ...newContact, role: e.target.value })} /></div>
-                    <div className="field"><label>Phone</label><PhoneInput value={newContact.phone} onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })} /></div>
-                    <div className="field"><label>Email</label><input type="email" value={newContact.email} onChange={(e) => setNewContact({ ...newContact, email: e.target.value })} /></div>
-                  </div>
-                  <div className="row">
-                    <button className="primary">Add and notify</button>
-                    <button type="button" className="secondary" onClick={() => setNewContact(null)}>Cancel</button>
-                  </div>
-                </form>
-              )}
+              {contacts.length === 0 && <p className="muted">No extra contacts yet.</p>}
             </div>
           )}
           {isOffice && hasFeature(service, 'customerPage') && <CustomerPageCard jobId={id} token={token} staff={staff} jobStatus={job.status} />}
@@ -676,7 +695,7 @@ function JobInner({ id, staff, token }) {
         />
       )}
 
-      {tab === 'thread' && <ThreadPanel kind="job" refId={id} staff={staff} />}
+      {tab === 'thread' && <ThreadPanel kind="job" refId={id} staff={staff} fill />}
 
       {tab === 'reports' && (
         <ReportsTab
@@ -726,6 +745,22 @@ function JobInner({ id, staff, token }) {
           {events.length === 0 && <p className="muted">No history yet.</p>}
         </div>
       )}
+
+      <PopupModal open={isOffice && !!visitEdit} onClose={() => setVisitEdit(null)} title={visitEdit?.id ? 'Reschedule visit' : 'Add visit'} wide closeOnOverlay={false}>
+        {visitEdit && (
+          <VisitForm
+            jobId={id}
+            visit={visitEdit.id ? visitEdit : null}
+            visits={visits}
+            service={service}
+            staffList={staffList}
+            staff={staff}
+            onDone={() => { setVisitEdit(null); load(); }}
+            onCancel={() => setVisitEdit(null)}
+            logEvent={logEvent}
+          />
+        )}
+      </PopupModal>
 
       <JobFab items={fabItems} />
 

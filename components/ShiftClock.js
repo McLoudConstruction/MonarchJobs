@@ -42,7 +42,11 @@ export default function ShiftClock({ staff }) {
 
   async function act(action) {
     setBusy(true); setMsg(null);
-    try { await apiFetch('/api/shifts', await token(), { method: 'POST', body: JSON.stringify({ action }) }); await load(); }
+    try {
+      const r = await apiFetch('/api/shifts', await token(), { method: 'POST', body: JSON.stringify({ action }) });
+      if (r?.discarded) setMsg({ text: `That shift was under ${r.minutes || 5} minutes, so it was not recorded.` });
+      await load();
+    }
     catch (e) { setMsg({ err: true, text: e.message }); await load(); }
     setBusy(false);
   }

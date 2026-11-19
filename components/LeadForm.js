@@ -2,6 +2,7 @@
 
 import AddressFields from '@/components/AddressFields';
 import PhoneInput from '@/components/PhoneInput';
+import NameSuggest from '@/components/NameSuggest';
 import { JOB_TYPES, CUSTOMER_TYPES } from '@/lib/format';
 import { ContactExtra, AddressExtra, RestorationLoss, RestorationSafety, RestorationInsurance, CarpetService, CarpetCondition, CarpetTiming, TypeCard } from '@/components/LeadIntake';
 
@@ -26,14 +27,18 @@ export function pickLeadFields(obj) {
 
 // The three groups of fields, exported so the new-lead wizard can show them one step at a time.
 // The lead page still shows them all together through LeadForm below.
-export function ContactSection({ value, onChange, autoFocusName = false, extra = null, hint = null }) {
+export function ContactSection({ value, onChange, autoFocusName = false, extra = null, hint = null, linkedId = null, onUseCustomer = null }) {
   const set = (k) => (e) => onChange({ [k]: e.target.value });
+  // With onUseCustomer (the new-lead form) the name fields suggest customers on file; elsewhere they are plain inputs.
+  const suggest = (k, focus = false) => (onUseCustomer
+    ? <NameSuggest value={value[k]} nameValue={value} linkedId={linkedId} onChange={set(k)} onPick={onUseCustomer} autoFocus={focus} />
+    : <input value={value[k]} onChange={set(k)} autoComplete="off" autoFocus={focus} />);
   return (
     <div className="card">
       <h2>Contact</h2>
       <div className="grid2">
-        <div className="field"><label>First name</label><input value={value.first_name} onChange={set('first_name')} autoComplete="off" autoFocus={autoFocusName} /></div>
-        <div className="field"><label>Last name</label><input value={value.last_name} onChange={set('last_name')} autoComplete="off" /></div>
+        <div className="field"><label>First name</label>{suggest('first_name', autoFocusName)}</div>
+        <div className="field"><label>Last name</label>{suggest('last_name')}</div>
         <div className="field"><label>Phone</label><PhoneInput value={value.phone} onChange={set('phone')} /></div>
         <div className="field"><label>Email</label><input type="email" value={value.email} onChange={set('email')} /></div>
         <div className="field"><label>Customer type</label>
@@ -41,7 +46,7 @@ export function ContactSection({ value, onChange, autoFocusName = false, extra =
             {Object.entries(CUSTOMER_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         </div>
-        <div className="field"><label>Company (optional)</label><input value={value.company_name} onChange={set('company_name')} /></div>
+        <div className="field"><label>Company (optional)</label>{suggest('company_name')}</div>
         <div className="field"><label>How did they reach us?</label>
           <select value={value.source} onChange={set('source')}>
             <option value="phone">Phone call</option><option value="web">Website</option>

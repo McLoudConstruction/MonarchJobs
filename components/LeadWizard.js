@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { ContactSection, AddressSection } from '@/components/LeadForm';
 import {
-  ContactExtra, AddressExtra, CustomerMatchHint,
+  ContactExtra, AddressExtra,
   RestorationLoss, RestorationSafety, RestorationInsurance, CarpetService, CarpetCondition, CarpetTiming,
 } from '@/components/LeadIntake';
 import AppointmentPicker from '@/components/AppointmentPicker';
@@ -83,7 +83,7 @@ export default function LeadWizard({
           <>
             <div className="wizard-two lead-form">
               <ContactSection {...common} autoFocusName extra={<ContactExtra kind={kind} {...common} />}
-                hint={<CustomerMatchHint value={value} linkedId={linkedCustomerId} onUse={onUseCustomer} />} />
+                linkedId={linkedCustomerId} onUseCustomer={onUseCustomer} />
               <AddressSection {...common} after={<AddressExtra kind={kind} {...common} />} />
             </div>
           </>

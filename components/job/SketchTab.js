@@ -30,6 +30,7 @@ export default function SketchTab({ jobId, sketches, photos, isOffice, staff = n
   const [quote, setQuote] = useState(null); // { roomId|null } while the quote dialog is open
   const [quoted, setQuoted] = useState(0); // lines just added, for a short note
   const livePlan = useRef(null); // the sketch as it stands now, drawn or not yet saved
+  const autoStarted = useRef(false); // a job with no sketch gets "Main floor" once, so the pad is open on landing
 
   const stamps = useRef({});      // per sketch: updated_at we last saw, to notice a save from another device
   const pending = useRef(null);   // { id, plan } waiting to be saved
@@ -146,6 +147,19 @@ export default function SketchTab({ jobId, sketches, photos, isOffice, staff = n
     return undefined;
   }, [activeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // No "Start sketch" step: a job with no sketch opens on a new "Main floor" with the pad ready to draw.
+  useEffect(() => {
+    if (sketches.length || autoStarted.current) return;
+    autoStarted.current = true;
+    (async () => {
+      const { data, error } = await getSupabase().from('job_sketches').insert({ job_id: jobId, name: 'Main floor', sort_order: 0 }).select('id,name').single();
+      if (error) { autoStarted.current = false; setLoadErr(error.message); return; }
+      await logEvent('sketch_created', { name: 'Main floor' });
+      await onReload();
+      setActiveId(data.id);
+    })();
+  }, [sketches.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function addSketch(e) {
     e.preventDefault();
     const name = newName.trim() || `Sketch ${sketches.length + 1}`;
@@ -200,12 +214,9 @@ export default function SketchTab({ jobId, sketches, photos, isOffice, staff = n
     return (
       <div className="card">
         <h2>Sketch</h2>
-        <p className="hint">Draw the rooms for this job: any shape, with angled walls, wall breaks, sizes, notes and photos on each room. Mark where the water went with the Water tool and the wet square footage is worked out for each room. When the sketch is done, move to the Moisture tab to log readings. Shortcuts: V select, R room, B wall break, C corner, W water.</p>
-        {loadErr && <div className="msg err">{loadErr}</div>}
-        <form className="row" onSubmit={addSketch}>
-          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Name, for example Main floor" maxLength={60} style={{ flex: 1, minWidth: 180 }} aria-label="Sketch name" />
-          <button className="primary" disabled={busy}>Start sketch</button>
-        </form>
+        {loadErr
+          ? <div className="msg err">{loadErr} <button type="button" className="secondary small" onClick={() => { setLoadErr(''); autoStarted.current = false; onReload(); }}>Try again</button></div>
+          : <p className="muted">Opening the sketch...</p>}
       </div>
     );
   }

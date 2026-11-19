@@ -1,11 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import PhoneInput from '@/components/PhoneInput';
-import { getSupabase } from '@/lib/supabaseClient';
-import { displayPhone } from '@/lib/phone';
-import { customerSearchArgs } from '@/lib/customerSearch';
 import * as L from '@/lib/leadIntake';
 
 // The Stage 1 questions for Restoration and Carpet leads. Every section is a card (or two) of
@@ -96,44 +91,6 @@ export function AddressExtra({ kind, value, onChange }) {
     <div className="grid2">
       {kind === 'restoration' && <Pick label="Property" value={i.property_type} onChange={(v) => set({ property_type: v })} options={L.PROPERTY_TYPES} />}
       <Text wide={kind !== 'restoration'} label={kind === 'restoration' ? 'Mailing address (if different)' : 'Billing address (if different)'} value={i.alt_address} onChange={(v) => set({ alt_address: v })} />
-    </div>
-  );
-}
-
-// A repeat caller should not be entered twice: as the office types a name, phone or email, offer the
-// customers on file that match. "Use this customer" fills in their contact info and last address.
-export function CustomerMatchHint({ value, linkedId, onUse }) {
-  const [matches, setMatches] = useState([]);
-  const args = customerSearchArgs(value);
-  const key = args ? `${args.p_name}|${args.p_phone}|${args.p_email}` : '';
-  useEffect(() => {
-    if (linkedId || !key) { setMatches([]); return undefined; }
-    let live = true;
-    const t = setTimeout(() => {
-      getSupabase().rpc('search_customers', args)
-        .then(({ data }) => { if (live) setMatches(data || []); });
-    }, 300);
-    return () => { live = false; clearTimeout(t); };
-    // args is rebuilt every render; key is what changes when the typed text does
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, linkedId]);
-  if (!matches.length) return null;
-  return (
-    <div className="match-card">
-      <div className="match-title">Existing customer?</div>
-      <div className="match-sub">Customers on file that match what you have typed. Tap one to fill in their info.</div>
-      {matches.map((m) => (
-        <div key={m.id} className="match-row">
-          <div className="match-who">
-            <strong>{m.display_name}</strong>
-            <span>{[m.phone && displayPhone(m.phone), m.email].filter(Boolean).join(' · ')}</span>
-          </div>
-          <div className="match-actions">
-            <Link href={`/customers/${m.id}`} target="_blank" className="match-view">View</Link>
-            <button type="button" className="secondary small" onClick={() => onUse(m.id)}>Use this customer</button>
-          </div>
-        </div>
-      ))}
     </div>
   );
 }

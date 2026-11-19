@@ -5,3 +5,7 @@
 .insp-foot{ flex: none; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--panel, #f8f9fa); }
 .insp-foot button{ width: 100%; }
 @media (min-width: 900px){ .insp-body{ padding: 18px max(24px, calc((100vw - 760px) / 2)); } }
+
+.insp-stepper{ display: flex; align-items: stretch; gap: 10px; max-width: 320px; }
+.insp-stepper button{ flex: 0 0 64px; min-height: 56px; font-size: 28px; line-height: 1; padding: 0; }
+.insp-stepper input{ flex: 1; min-width: 0; min-height: 56px; text-align: center; font-size: 28px; font-weight: 700; }

@@ -1,0 +1,30 @@
+/* Job clock > Labor pool: the section on the clock card and the Add labor pool form. */
+.lp-section{ display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; }
+.lp-head{ display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.lp-head h3{ margin: 0; font-size: 16px; }
+.lp-total{ margin-left: auto; color: var(--muted); font-size: 14px; }
+.lp-group{ border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: var(--panel); }
+.lp-group-head{ display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: space-between; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.lp-entry{ display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; justify-content: space-between; padding: 6px 0; border-top: 1px solid var(--line); font-size: 15px; }
+.lp-entry:first-of-type{ border-top: 0; }
+.lp-entry .lp-who{ font-weight: 600; }
+.lp-sig-view{ margin-top: 6px; }
+.lp-sig-view img{ max-width: 240px; max-height: 80px; border: 1px solid var(--line); border-radius: 6px; background: #fff; display: block; }
+
+.lp-form{ display: flex; flex-direction: column; gap: 12px; }
+.lp-hours{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.lp-hours .field{ margin-bottom: 0; }
+.lp-quick{ display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.lp-rows{ display: flex; flex-direction: column; gap: 10px; }
+.lp-row{ border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--panel); display: flex; flex-direction: column; gap: 8px; }
+.lp-line{ display: flex; align-items: flex-end; gap: 10px; }
+.lp-name{ flex: 1; min-width: 0; margin-bottom: 0; position: relative; }
+.lp-mins{ min-width: 64px; text-align: right; padding-bottom: 12px; font-size: 14px; white-space: nowrap; }
+.lp-x{ margin-bottom: 4px; }
+.lp-suggest{ position: absolute; left: 0; right: 0; top: 100%; z-index: 5; background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.2); overflow: hidden; }
+.lp-suggest button{ display: block; width: 100%; text-align: left; background: none; border: 0; border-radius: 0; padding: 10px 12px; min-height: 44px; font-size: 16px; color: var(--ink); }
+.lp-suggest button:hover{ background: var(--panel); }
+.lp-custom{ display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); min-height: 32px; }
+.lp-sign{ display: flex; flex-direction: column; gap: 8px; }
+.lp-actions{ position: sticky; bottom: -16px; background: var(--card-bg); padding: 10px 0 4px; border-top: 1px solid var(--line); z-index: 2; }
+@media (max-width: 520px){ .lp-hours{ grid-template-columns: 1fr; } }

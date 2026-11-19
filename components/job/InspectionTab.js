@@ -8,15 +8,15 @@ import PhotoAttach from '@/components/job/PhotoAttach';
 import './inspection.css';
 import { fmtDateTime } from '@/lib/format';
 import {
-  KINDS, FIBERS, ISSUE_TYPES, PRETEST, RESULTS, NOT_REMOVED, blankRoom, blankIssue, cleanInspection, seedPostFromPre,
+  KINDS, FIBERS, ISSUE_TYPES, PRETEST, RESULTS, NOT_REMOVED, MAX_ROOM_COUNT, blankRoom, blankIssue, cleanInspection, seedPostFromPre,
   missingBeforeSigning, summarize, latestSigned,
 } from '@/lib/inspection';
 
 const SAVE_DELAY_MS = 900;
 
-// Before and after cleaning record, room by room, signed by the customer on this phone. Pre: fiber, traffic,
-// spot test and spots noted. Post: the same rooms with a result for every spot, drying time and a walk-through.
-// A signed record can never change; a new one starts from the old.
+// Before and after cleaning record, signed by the customer on this phone. The simple record is how many rooms and photos;
+// the tech can also call out specific rooms (Pre: fiber, traffic, spot test and spots noted. Post: the same rooms with a result
+// for every spot), then add drying time and a walk-through. A signed record can never change; a new one starts from the old.
 function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, photos, uploader, onOpenPhotos, launch }) {
   const signed = latestSigned(rows, kind);
   const draft = rows.filter((r) => r.kind === kind && !r.signed_at).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0] || null;
@@ -60,7 +60,6 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, pho
     } else {
       base = cleanInspection('pre', {});
     }
-    if (!base.rooms.length) base.rooms = [blankRoom()]; // start with one room; add more as you walk
     const { error } = await getSupabase().from('job_inspections').insert({ job_id: jobId, kind, data: base, created_by: staff.id });
     if (error) { setMsg({ err: true, text: error.message.includes('row-level') ? 'Not allowed. The job may be closed.' : error.message }); return; }
     setStep('edit');
@@ -174,10 +173,32 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, pho
             {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
             {step === 'edit' ? (
               <>
+          <div className="card" style={{ margin: '10px 0', padding: 14 }}>
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label htmlFor="insp-rooms">How many rooms?</label>
+              <div className="insp-stepper">
+                <button type="button" className="secondary big" aria-label="One fewer room" disabled={(data.room_count || 0) <= data.rooms.length}
+                  onClick={() => update((d) => { d.room_count = Math.max(d.rooms.length, (d.room_count || 0) - 1); return d; })}>&minus;</button>
+                <input id="insp-rooms" type="number" inputMode="numeric" min="0" max={MAX_ROOM_COUNT} placeholder="0" value={data.room_count || ''}
+                  onChange={(e) => update((d) => { const n = Math.round(Number(e.target.value)); d.room_count = Number.isFinite(n) && n > 0 ? Math.min(n, MAX_ROOM_COUNT) : 0; return d; })}
+                  onBlur={() => update((d) => { d.room_count = Math.max(d.room_count || 0, d.rooms.length); return d; })} />
+                <button type="button" className="secondary big" aria-label="One more room"
+                  onClick={() => update((d) => { d.room_count = Math.min(MAX_ROOM_COUNT, (d.room_count || 0) + 1); return d; })}>+</button>
+              </div>
+            </div>
+            <PhotoAttach photos={photos || []} ids={data.photo_ids || []} uploader={uploader} onOpen={onOpenPhotos} kind={kind === 'pre' ? 'before' : 'after'}
+              label={kind === 'pre' ? 'Photos before cleaning' : 'Photos after cleaning'}
+              onChange={(ids) => update((d) => { d.photo_ids = ids; return d; })} />
+            <div className="field" style={{ marginTop: 8, marginBottom: 0 }}><label htmlFor="insp-notes">Notes (optional)</label>
+              <input id="insp-notes" value={data.notes || ''} maxLength={800} onChange={(e) => update((d) => { d.notes = e.target.value; return d; })} />
+            </div>
+          </div>
+          <h3 style={{ margin: '16px 0 2px' }}>Rooms to call out <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></h3>
+          <p className="hint" style={{ marginTop: 0 }}>Add a room only if something needs noting there: a stain, a different fiber, a spot test, or photos of just that room.</p>
           {data.rooms.map((r, i) => (
             <div key={r.id} className="card" style={{ margin: '10px 0', padding: 12 }}>
               <div className="row" style={{ alignItems: 'flex-end' }}>
-                <div className="field" style={{ flex: 1, marginBottom: 0 }}><label>Room</label><input value={r.name} onChange={(e) => update((d) => { d.rooms[i].name = e.target.value; return d; })} /></div>
+                <div className="field" style={{ flex: 1, marginBottom: 0 }}><label>Room name</label><input value={r.name} onChange={(e) => update((d) => { d.rooms[i].name = e.target.value; return d; })} /></div>
                 <button type="button" className="danger small" onClick={() => update((d) => { d.rooms.splice(i, 1); return d; })}>Remove</button>
               </div>
               {kind === 'pre' && (
@@ -232,7 +253,7 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, pho
             </div>
           ))}
                 <div className="row">
-                  <button type="button" className="secondary small" onClick={() => update((d) => { d.rooms.push(blankRoom()); return d; })}>+ Add a room</button>
+                  <button type="button" className="secondary small" onClick={() => update((d) => { d.rooms.push(blankRoom()); d.room_count = Math.max(d.room_count || 0, d.rooms.length); return d; })}>+ Call out a room</button>
                   <button type="button" className="secondary small" onClick={discard}>Discard</button>
                 </div>
           {kind === 'post' && (

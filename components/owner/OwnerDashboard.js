@@ -8,6 +8,7 @@ import { RANGES, rangeBounds, financials, invoiceStats, customerStats, workStats
 import { PAYMENT_METHODS } from '@/lib/invoice';
 import { PlansDue, MailingList } from '@/components/customer/OutreachPanels';
 import ClockPanel from '@/components/owner/ClockPanel';
+import GobackPanel from '@/components/owner/GobackPanel';
 import './owner.css';
 
 const TITLES = { overview: 'Overview', financials: 'Financials', customers: 'Customers', work: 'Jobs & leads' };
@@ -368,6 +369,7 @@ export default function OwnerDashboard({ section = 'overview' }) {
       {!error && !calc && <p className="muted">Loading…</p>}
       {calc && tab === 'overview' && <Overview {...calc} rangeLabel={rangeLabel} />}
       {calc && tab === 'overview' && <ClockPanel bounds={bounds} rangeLabel={rangeLabel} />}
+      {calc && tab === 'overview' && <GobackPanel bounds={bounds} rangeLabel={rangeLabel} />}
       {calc && tab === 'financials' && <Financials fin={calc.fin} inv={calc.inv} invoicesMissing={calc.invoicesMissing} rangeLabel={rangeLabel} />}
       {calc && tab === 'customers' && <Customers cust={calc.cust} rangeLabel={rangeLabel} />}
       {calc && tab === 'work' && <Work work={calc.work} rangeLabel={rangeLabel} />}

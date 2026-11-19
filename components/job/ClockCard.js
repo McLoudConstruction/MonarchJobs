@@ -7,12 +7,17 @@ import { fmtDateTime, fmtTime, toLocalInput, fromLocalInput } from '@/lib/format
 import { staffName } from '@/lib/userDisplay';
 import { colorHex } from '@/lib/userColors';
 import { allottedMinutes, clockText, durationText, sessionMinutes, totalMinutes, EDIT_STATUS } from '@/lib/jobClock';
+import { groupByCertification, minutesText, entryMinutes, totalMinutes as laborMinutes } from '@/lib/laborPool';
+import LaborPoolDialog from '@/components/job/LaborPoolDialog';
 import './clock.css';
+import './labor.css';
 
 // Job > Overview: the job clock. A tech sees their own entries; office and owner see everyone's.
 // The clock itself runs from the visit buttons (On the way / Start job / Finish job); this card shows it, lets the person clock
 // out and back in for a break, and lets a tech ask for a time change (the owner approves it).
 // No money here. Office and owner also see allotted time against clocked time on carpet jobs.
+// Labor pool: helpers who are not on the staff list (day labor), entered by a staff member with names and times and certified with
+// that staff member's signature. Kept apart from the staff clock above; their names live in the labor pool, not the staff list.
 export default function ClockCard({ jobId, staff, staffList, token, service, jobStatus, refreshKey = '', onChanged }) {
   const sb = getSupabase();
   const [sessions, setSessions] = useState([]);
@@ -25,6 +30,9 @@ export default function ClockCard({ jobId, staff, staffList, token, service, job
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState(null);
   const [edit, setEdit] = useState(null); // { id, start, end, reason, direct }
+  const [labor, setLabor] = useState({ certs: [], entries: [], err: '' }); // the labor pool entries on this job
+  const [laborOpen, setLaborOpen] = useState(false);
+  const [sigView, setSigView] = useState(null); // { id, png } while a signed form's signature is shown (office and owner)
   const office = staff.role !== 'tech';
   const isOwner = staff.role === 'owner';
   const closedJob = ['closed', 'cancelled'].includes(jobStatus);
@@ -37,6 +45,12 @@ export default function ClockCard({ jobId, staff, staffList, token, service, job
       sb.from('staff_users').select('id,color,created_at'),
     ]);
     if (!c.error) setColors(Object.fromEntries((c.data || []).map((p) => [p.id, p])));
+    const [lc, le] = await Promise.all([
+      sb.from('job_labor_certifications').select('id,certified_by,certifier_name,certified_at').eq('job_id', jobId).order('certified_at', { ascending: false }),
+      sb.from('job_labor_entries').select('id,certification_id,worker_name,started_at,ended_at,voided_at').eq('job_id', jobId).order('started_at', { ascending: true }),
+    ]);
+    const laborErr = lc.error || le.error;
+    setLabor(laborErr ? { certs: [], entries: [], err: /does not exist|schema cache/i.test(laborErr.message) ? 'The labor pool is not set up yet. Run migration 026, then reload.' : laborErr.message } : { certs: lc.data || [], entries: le.data || [], err: '' });
     const failed = [s, r].find((x) => x.error);
     if (failed) { setState({ loading: false, error: /does not exist|schema cache/i.test(failed.error.message) ? 'The job clock is not set up yet. Run migration 024, then reload.' : failed.error.message }); return; }
     setSessions(s.data || []); setRequests(r.data || []); setVisitStarted((v.data || []).length > 0);
@@ -95,9 +109,23 @@ export default function ClockCard({ jobId, staff, staffList, token, service, job
     return call(`dec-${r.id}`, `/api/clock/edit-requests/${r.id}`, { method: 'POST', body: JSON.stringify({ decision, note }) }, decision === 'approve' ? 'Change approved.' : 'Change turned down.');
   };
 
+  async function removeLabor(entry) {
+    const reason = window.prompt(`Remove ${entry.worker_name}'s labor pool time? It stays on the record as removed and stops counting. Why? (optional)`, '');
+    if (reason === null) return;
+    await call(`lrm-${entry.id}`, `/api/jobs/${jobId}/labor`, { method: 'POST', body: JSON.stringify({ action: 'void', entry_id: entry.id, reason }) }, 'Labor pool entry removed.');
+  }
+  async function toggleSignature(certId) {
+    if (sigView?.id === certId) { setSigView(null); return; }
+    const { data } = await sb.from('job_labor_certifications').select('signature_png').eq('id', certId).maybeSingle();
+    setSigView({ id: certId, png: data?.signature_png || '' });
+  }
+
   if (state.loading) return null;
   if (state.error) return isOwner ? <div className="card wide"><h2>Job clock</h2><div className="msg err">{state.error}</div></div> : null;
-  if (!shown.length && !mine && !visitStarted && !office) return null; // nothing to show a tech yet
+  if (!shown.length && !mine && !visitStarted && !office && !labor.entries.length) return null; // nothing to show a tech yet
+  const laborGroups = groupByCertification(labor.certs, labor.entries);
+  const laborTotal = laborMinutes(labor.entries);
+  const canAddLabor = !closedJob && !labor.err && (office || !!mine || visitStarted);
   const usedPct = allot?.any && clocked > 0 ? Math.round((clocked / allot.minutes) * 100) : null;
 
   return (
@@ -168,6 +196,33 @@ export default function ClockCard({ jobId, staff, staffList, token, service, job
           })}
         </div>
       )}
+
+      {(laborGroups.length > 0 || canAddLabor || (labor.err && isOwner)) && (
+        <div className="lp-section" id="labor-pool">
+          <div className="lp-head">
+            <h3>Labor pool</h3>
+            {canAddLabor && <button type="button" className="secondary small" onClick={() => { setMsg(null); setLaborOpen(true); }}>Add labor pool</button>}
+            <span className="lp-total">{laborGroups.length ? `Total ${durationText(laborTotal)}` : 'No labor pool time yet'}</span>
+          </div>
+          {labor.err && isOwner && <div className="msg err">{labor.err}</div>}
+          {laborGroups.map(({ cert, entries, minutes }) => (
+            <div key={cert.id} className="lp-group">
+              <div className="lp-group-head">
+                <span>Certified by {cert.certifier_name || 'staff'} · {fmtDateTime(cert.certified_at)}</span>
+                <span>{durationText(minutes)}{office && <> · <button type="button" className="linklike" onClick={() => toggleSignature(cert.id)}>{sigView?.id === cert.id ? 'Hide signature' : 'View signature'}</button></>}</span>
+              </div>
+              {sigView?.id === cert.id && <div className="lp-sig-view">{sigView.png ? <img src={sigView.png} alt="Signature certifying these times" /> : <span className="muted">No signature found.</span>}</div>}
+              {entries.map((e) => (
+                <div key={e.id} className="lp-entry">
+                  <span><span className="lp-who">{e.worker_name}</span> <span className="muted">{fmtDateTime(e.started_at)} to {fmtTime(e.ended_at)}</span></span>
+                  <span>{minutesText(entryMinutes(e))}{office && <> <button type="button" className="linklike danger-link" disabled={busy === `lrm-${e.id}`} onClick={() => removeLabor(e)}>Remove</button></>}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+      <LaborPoolDialog open={laborOpen} onClose={() => setLaborOpen(false)} jobId={jobId} token={token} staff={staff} onSaved={() => { load(); onChanged?.(); setMsg({ text: 'Labor pool time certified and saved.' }); }} />
 
       {edit && (
         <form className="clock-edit" onSubmit={submitEdit}>

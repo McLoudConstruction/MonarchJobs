@@ -1577,14 +1577,14 @@ a.stat-tile.flag:hover, a.stat-tile.warn:hover{ border-color: currentColor; }
 .intake-chip:hover{ border-color: var(--accent); }
 .intake-chip.on{ background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 
-.match-card{ background: var(--card-bg); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: 8px 14px 4px; margin-bottom: 10px; }
-.match-title{ font-size: 13px; font-weight: 700; color: var(--heading); }
-.match-sub{ font-size: 12px; color: var(--ink-soft); margin-bottom: 4px; }
-.match-row{ display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 8px 0; border-top: 1px solid var(--line); }
-.match-who{ display: flex; flex-direction: column; min-width: 0; font-size: 13.5px; }
-.match-who span{ color: var(--ink-soft); font-size: 12.5px; }
-.match-actions{ display: flex; align-items: center; gap: 12px; }
-.match-view{ font-size: 13px; color: var(--accent-text); }
+/* name autofill on the new-lead form */
+.name-suggest{ position: relative; }
+.name-suggest-list{ position: absolute; left: 0; right: 0; top: 100%; z-index: 40; margin: 2px 0 0; padding: 4px 0; list-style: none; max-height: 260px; overflow-y: auto;
+  background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,0.18); }
+.name-suggest-list li{ display: flex; flex-direction: column; padding: 8px 12px; cursor: pointer; font-size: 13.5px; }
+.name-suggest-list li span{ color: var(--ink-soft); font-size: 12px; }
+.name-suggest-list li:hover, .name-suggest-list li.on{ background: var(--accent); color: var(--accent-ink); }
+.name-suggest-list li:hover span, .name-suggest-list li.on span{ color: inherit; opacity: .85; }
 .banner.warn{ margin-top: 10px; margin-bottom: 0; }
 
 .badge.prio-emergency{ background: #b3382c; }

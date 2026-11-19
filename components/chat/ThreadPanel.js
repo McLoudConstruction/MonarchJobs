@@ -29,7 +29,7 @@ const friendly = (e) => (typeof navigator !== 'undefined' && navigator.onLine ==
   ? 'No signal. Your message was not sent.'
   : (e?.message || 'Could not send.');
 
-export default function ThreadPanel({ kind, refId, staff, compact = false, active = true }) {
+export default function ThreadPanel({ kind, refId, staff, compact = false, active = true, fill = false }) {
   const dock = useChatDock();
   const [state, setState] = useState('loading'); // loading | ready | missing | error
   const [error, setError] = useState('');
@@ -329,8 +329,8 @@ export default function ThreadPanel({ kind, refId, staff, compact = false, activ
   }
 
   return (
-    <div className={compact ? 'chat-panel compact' : 'card chat-panel'} id={compact ? undefined : 'thread'}>
-      {compact ? (
+    <div className={compact ? 'chat-panel compact' : `card chat-panel${fill ? ' fill' : ''}`} id={compact ? undefined : 'thread'}>
+      {compact || fill ? (
         <div className="chat-minihead"><button type="button" onClick={toggleMute} aria-pressed={muted}>{muted ? 'Unmute notifications' : 'Mute notifications'}</button></div>
       ) : (
         <div className="chat-head">

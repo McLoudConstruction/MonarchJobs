@@ -40,3 +40,15 @@ test('Chat is the top action when switched on, and off by default', () => {
   assert.deepEqual(fabActions({ docsMissing: true, visitStatus: 'scheduled', chat: true }), ['chat', 'otw', 'start']);
   assert.ok(!fabActions({}).includes('chat'));
 });
+
+test('Clock Out while the job clock runs, Clock In when it is stopped, before Internal Update', () => {
+  assert.deepEqual(fabActions({ hasSketch: true, visitStatus: 'started', clock: 'out' }), ['photos', 'recheck', 'complete', 'clock_out', 'internal']);
+  assert.deepEqual(fabActions({ hasSketch: true, visitStatus: 'started', clock: 'in' }), ['photos', 'recheck', 'complete', 'clock_in', 'internal']);
+  assert.deepEqual(fabActions({ hasSketch: false, visitStatus: null, clock: null }), ['photos', 'sketch', 'internal']);
+  assert.ok(!fabActions({ visitStatus: 'started', clock: 'out' }).includes('clock_in'));
+});
+
+test('the clock buttons come with the chat on top and without the photo tables', () => {
+  assert.deepEqual(fabActions({ hasSketch: false, visitStatus: 'started', chat: true, clock: 'out' }), ['chat', 'photos', 'sketch', 'complete', 'clock_out', 'internal']);
+  assert.deepEqual(fabActions({ docsMissing: true, visitStatus: 'started', clock: 'out' }), ['clock_out']);
+});

@@ -320,7 +320,7 @@ function LeadInner({ id, staff, token }) {
         </div>
       )}
 
-      {tab === 'thread' && <div className="lead-tab"><ThreadPanel kind="lead" refId={id} staff={staff} /></div>}
+      {tab === 'thread' && <div className="lead-tab"><ThreadPanel kind="lead" refId={id} staff={staff} fill /></div>}
 
       {tab === 'history' && (
         <div className="lead-tab">
