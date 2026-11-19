@@ -9,6 +9,7 @@ import {
   purchaseTotalCents, purchasesByCategory, timeEntryCents,
 } from '@/lib/jobCost';
 import { staffName } from '@/lib/userDisplay';
+import ReceiptScan from '@/components/job/ReceiptScan';
 import './invoice.css';
 import './costs.css';
 
@@ -228,6 +229,14 @@ export default function CostsTab({ jobId, sketches, staffList }) {
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Purchases</h3>
+        <ReceiptScan onResult={(r) => setPf((f) => ({
+          ...f,
+          date: r.date || f.date,
+          vendor: r.vendor || f.vendor,
+          description: r.description || f.description,
+          category: r.category || f.category,
+          amount: r.amountCents != null ? dollars(r.amountCents) : f.amount,
+        }))} />
         <form className="inv-box" onSubmit={addPurchase}>
           <div className="inv-row">
             <label className="field"><span>Date</span><input type="date" value={pf.date} onChange={(e) => setPf({ ...pf, date: e.target.value })} /></label>

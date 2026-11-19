@@ -1,0 +1,21 @@
+.shiftclock{ margin-bottom: 14px; }
+.sc-head{ display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; }
+.sc-buttons{ display: flex; flex-wrap: wrap; gap: 10px; }
+.sc-big{ min-height: 52px; min-width: 130px; font-size: 18px; }
+.sc-form{ display: grid; gap: 8px; margin: 12px 0; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+.sc-days{ margin-top: 12px; }
+.sc-day{ padding: 8px 0; border-top: 1px solid var(--line); }
+.sc-dayhead{ display: flex; justify-content: space-between; gap: 8px; }
+.sc-shift{ display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; padding-top: 2px; }
+.sc-break{ flex-basis: 100%; padding-left: 14px; font-size: 14px; }
+.sc-flag{ margin-top: 4px; font-size: 14px; color: #b9560a; }
+.sc-reqs{ margin-top: 10px; font-size: 14px; }
+.tc-week{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.tc-person{ margin-bottom: 14px; }
+.tc-day{ padding: 8px 0; border-top: 1px solid var(--line); }
+.tc-line{ display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }
+.tc-flag{ font-size: 14px; margin-top: 2px; }
+.tc-flag.warn{ color: #b9560a; }
+.tc-flag.info{ color: var(--muted); }
+.tc-total{ font-weight: 600; }
+.tc-edit{ display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin: 6px 0; }

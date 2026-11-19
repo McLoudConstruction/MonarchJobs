@@ -7,6 +7,8 @@ import AuthGate from '@/components/AuthGate';
 import ActivityPanel from '@/components/dashboard/ActivityPanel';
 import InvoicesPanel from '@/components/dashboard/InvoicesPanel';
 import OwnerDashboard from '@/components/owner/OwnerDashboard';
+import TimeClockTab from '@/components/owner/TimeClockTab';
+import ShiftClock from '@/components/ShiftClock';
 import { useNotificationCenter } from '@/lib/useNotifications';
 import { useChatCenter } from '@/lib/useChatInbox';
 import { useInvoiceFlags } from '@/lib/useInvoiceFlags';
@@ -51,6 +53,7 @@ function TodayPanel({ staff, activityCount, invoiceFlags }) {
 
   return (
     <>
+      <ShiftClock staff={staff} />
       <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 10 }}>
         <Link href="/book"><button type="button" className="primary">Book a job</button></Link>
       </div>
@@ -143,6 +146,19 @@ function DashboardInner({ staff, token }) {
   const activityCount = (unread || 0) + (chatUnread || 0);
   const invoiceFlags = useInvoiceFlags();
   const invBadge = isOffice ? invoiceBadge(invoiceFlags) : null;
+  const [clockPending, setClockPending] = useState(0);
+  useEffect(() => {
+    if (staff.role !== 'owner') return undefined;
+    const sb = getSupabase();
+    let live = true;
+    const count = async () => {
+      const a = await sb.from('shift_edit_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending');
+      if (live) setClockPending(a.count || 0);
+    };
+    count();
+    const t = setInterval(count, 60000);
+    return () => { live = false; clearInterval(t); };
+  }, [staff.role, tab]);
 
   const open = (key) => {
     const href = tabHref(key);
@@ -152,6 +168,7 @@ function DashboardInner({ staff, token }) {
   const badgeFor = (key) => {
     if (key === 'activity' && activityCount > 0) return { count: activityCount, tone: 'accent', title: 'Unread alerts, chats and changes waiting for your OK' };
     if (key === 'invoices') return invBadge;
+    if (key === 'timeclock' && clockPending > 0) return { count: clockPending, tone: 'warn', title: `${clockPending} day clock change${clockPending === 1 ? '' : 's'} to approve` };
     return null;
   };
 
@@ -184,6 +201,7 @@ function DashboardInner({ staff, token }) {
       {tab === 'activity' && <ActivityPanel staff={staff} token={token} />}
       {tab === 'invoices' && <InvoicesPanel />}
       {OWNER_TABS.includes(tab) && <OwnerDashboard section={tab} />}
+      {tab === 'timeclock' && <TimeClockTab />}
     </>
   );
 }

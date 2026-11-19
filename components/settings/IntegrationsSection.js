@@ -29,9 +29,21 @@ const RESEND_FIELDS = [
   { name: 'from_name', label: 'Send from (name, optional)', placeholder: 'McLoud Floor Care' },
 ];
 
+const ANTHROPIC_FIELDS = [
+  { name: 'api_key', label: 'API key', secret: true, placeholder: 'sk-ant-...' },
+  { name: 'model', label: 'Model (optional, leave blank for the default)', placeholder: 'claude-sonnet-5-5' },
+];
+
+const OPENAI_FIELDS = [
+  { name: 'api_key', label: 'API key', secret: true, placeholder: 'sk-...' },
+  { name: 'model', label: 'Model (optional, leave blank for the default)', placeholder: 'gpt-5.6-terra' },
+  { name: 'use_first', label: 'Use ChatGPT first when both are connected', options: ['no', 'yes'] },
+];
+
 export default function IntegrationsSection({ token }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const [scans, setScans] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -43,6 +55,7 @@ export default function IntegrationsSection({ token }) {
   }, [token]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { apiFetch('/api/ai/usage', token).then((r) => setScans(r.scansThisMonth)).catch(() => {}); }, [token, data]);
 
   if (error) return <div className="msg err">{error}</div>;
   if (!data) return <p>Loading integrations...</p>;
@@ -76,6 +89,27 @@ export default function IntegrationsSection({ token }) {
         onChanged={load}
         plainBadge
         help="Sends the estimate link by text. The texting number must be a Twilio number registered for business messaging (US carriers require this before texts are delivered)."
+      />
+      {scans != null && <p className="hint" style={{ margin: '4px 2px' }}>AI scans this month: {scans}.</p>}
+      <IntegrationPanel
+        provider="anthropic"
+        title="Claude (AI scanning)"
+        status={data.anthropic}
+        fields={ANTHROPIC_FIELDS}
+        token={token}
+        onChanged={load}
+        plainBadge
+        help="Reads receipts from a photo so nobody has to type them in. Paste an API key from the Anthropic Console (console.anthropic.com, API keys); it works as soon as it is saved. The scan fills in the purchase form and a person checks it before saving. Each scan costs a few cents on your Anthropic account."
+      />
+      <IntegrationPanel
+        provider="openai"
+        title="ChatGPT / OpenAI (AI scanning)"
+        status={data.openai}
+        fields={OPENAI_FIELDS}
+        token={token}
+        onChanged={load}
+        plainBadge
+        help="The same receipt scanning with an OpenAI key (platform.openai.com, API keys). Connect one or both: with both, Claude is tried first (or ChatGPT, if you set it above), and the other is the backup if the first one is down or out of credit."
       />
       <IntegrationPanel
         provider="resend"

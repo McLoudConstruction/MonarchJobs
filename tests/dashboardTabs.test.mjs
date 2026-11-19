@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { tabsFor, parseTab, tabHref, invoiceFlagCounts, invoiceBadge, dashboardBadge, legacyOwnerTab } from '../lib/dashboardTabs.js';
 
 test('tabs follow the role', () => {
-  assert.deepEqual(tabsFor('owner').map((t) => t.key), ['today', 'overview', 'invoices', 'activity', 'financials', 'work', 'customers']);
+  assert.deepEqual(tabsFor('owner').map((t) => t.key), ['today', 'overview', 'invoices', 'activity', 'financials', 'work', 'customers', 'timeclock']);
   assert.deepEqual(tabsFor('office').map((t) => t.key), ['today', 'invoices', 'activity']);
   assert.deepEqual(tabsFor('tech').map((t) => t.key), ['today', 'activity']);
   assert.equal(tabsFor('tech')[0].label, 'My day');
