@@ -4,17 +4,23 @@ import { useState } from 'react';
 import MapLink from '@/components/MapLink';
 import { displayPhone, telHref } from '@/lib/phone';
 import { quickActions } from '@/lib/quickActions';
+import { CarIcon, StopwatchIcon, FinishFlagIcon, ChatBubbleIcon } from '@/components/job/QuickIcons';
 import './quickactions.css';
+
+const ICONS = { otw: CarIcon, eta: CarIcon, start: StopwatchIcon, finish: FinishFlagIcon, chat: ChatBubbleIcon };
+const MAIN = ['otw', 'eta', 'start', 'finish', 'chat']; // the icon row; the rest are the buttons below it
 
 // Full-screen list of big buttons for everything the tech can do on this job right now (like Drive Mode in McLoudJobs).
 // Shows the customer, a tappable address (opens the maps app) and phone, then the actions for this kind of job and where the job is.
 // `run(key)` does the action (it may throw; the message shows here). The screen closes after an action that moves to another screen.
-export default function QuickActionScreen({ open, onClose, job, customerName, visitStatus, clock, service, tabs, hasSketch, run, badges = {} }) {
+export default function QuickActionScreen({ open, onClose, landing = false, job, customerName, visitStatus, clock, service, tabs, hasSketch, run, badges = {} }) {
   const [busy, setBusy] = useState('');
   const [err, setErr] = useState('');
   if (!open) return null;
 
   const actions = quickActions({ service, visitStatus, jobStatus: job.status, clock, tabs, hasSketch });
+  const main = actions.filter((a) => MAIN.includes(a.key));
+  const rest = actions.filter((a) => !MAIN.includes(a.key));
   const groups = [['now', 'Next'], ['work', 'On the job'], ['job', 'Job']];
   const phone = job.customer?.phone;
 
@@ -23,7 +29,7 @@ export default function QuickActionScreen({ open, onClose, job, customerName, vi
     setBusy(a.key);
     try {
       await run(a.key);
-      onClose();
+      if (!(landing && ['otw', 'eta', 'start', 'finish', 'clock_in', 'clock_out'].includes(a.key))) onClose(); // on the landing page these stay put; the buttons update in place
     } catch (e) {
       setErr(e?.message || 'That did not work. Try again.');
     }
@@ -31,13 +37,15 @@ export default function QuickActionScreen({ open, onClose, job, customerName, vi
   }
 
   return (
-    <div className="qa-screen" role="dialog" aria-modal="true" aria-label="Quick actions">
+    <div className={`qa-screen${landing ? ' landing' : ''}`} role={landing ? 'main' : 'dialog'} aria-label="Quick actions">
       <div className="qa-head">
         <div className="qa-title">
           <div className="qa-job">Job #{job.job_number}</div>
           <div className="qa-customer">{customerName}</div>
         </div>
-        <button type="button" className="qa-close" aria-label="Close quick actions" onClick={onClose}>&times;</button>
+        {landing
+          ? <button type="button" className="qa-details" onClick={onClose}>Job details</button>
+          : <button type="button" className="qa-close" aria-label="Close quick actions" onClick={onClose}>&times;</button>}
       </div>
       <div className="qa-body">
         <div className="qa-site">
@@ -49,8 +57,22 @@ export default function QuickActionScreen({ open, onClose, job, customerName, vi
           {job.loss_summary && <div className="qa-loss">{job.loss_summary}</div>}
         </div>
         {err && <div className="msg err">{err}</div>}
+        {main.length > 0 && (
+          <div className="qa-row">
+            {main.map((a) => {
+              const Icon = ICONS[a.key];
+              return (
+                <button key={a.key} type="button" className={`qa-icon-btn${a.key === 'chat' ? '' : ' now'}`} disabled={!!busy} onClick={() => go(a)}>
+                  <Icon />
+                  <span>{busy === a.key ? 'Working...' : a.label}</span>
+                  {badges[a.key] > 0 && <i className="qa-badge qa-badge-abs">{badges[a.key] > 99 ? '99+' : badges[a.key]}</i>}
+                </button>
+              );
+            })}
+          </div>
+        )}
         {groups.map(([g, title]) => {
-          const list = actions.filter((a) => a.group === g);
+          const list = rest.filter((a) => a.group === g);
           if (!list.length) return null;
           return (
             <section key={g}>

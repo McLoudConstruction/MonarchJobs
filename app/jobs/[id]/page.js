@@ -140,6 +140,11 @@ function JobInner({ id, staff, token }) {
   const roomTarget = useRef(null);
   const [otwOpen, setOtwOpen] = useState(false);
   const [qaOpen, setQaOpen] = useState(false); // the Quick Action Screen
+  const [qaLanding, setQaLanding] = useState(false); // on a phone it is the landing page of a job, in place of the Overview tab
+  useEffect(() => {
+    const phone = window.matchMedia('(max-width: 899px)').matches;
+    if (phone && !window.location.hash && !new URLSearchParams(window.location.search).get('unit')) { setQaLanding(true); setQaOpen(true); }
+  }, []);
   const [assignOpen, setAssignOpen] = useState(false);
   // one-shot requests from the phone's action button to a tab: { n } objects, cleared by the tab once it has acted
   const [moistCmd, setMoistCmd] = useState(null);
@@ -480,7 +485,7 @@ function JobInner({ id, staff, token }) {
 
       {tab === 'overview' && <button type="button" className="primary qa-open-btn" onClick={() => setQaOpen(true)}>Quick actions</button>}
       <QuickActionScreen
-        open={qaOpen} onClose={() => setQaOpen(false)} job={job} customerName={job.customer.display_name}
+        open={qaOpen} landing={qaLanding} onClose={() => { setQaOpen(false); setQaLanding(false); }} job={job} customerName={job.customer.display_name}
         visitStatus={dockVisit?.status || null} clock={clockMode} service={service} tabs={shownTabs.map(([k]) => k)}
         hasSketch={sketches.length > 0} run={qaRun} badges={{ chat: jobChatUnread }}
       />

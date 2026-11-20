@@ -18,3 +18,11 @@
 .qa-hint{ font-size: 14px; opacity: .8; }
 .qa-badge{ font-style: normal; font-size: 13px; padding: 2px 8px; border-radius: 999px; background: #b9560a; color: #fff; }
 .qa-open-btn{ min-height: 56px; width: 100%; font-size: 19px; }
+.qa-row{ display: flex; gap: 10px; margin-top: 12px; }
+.qa-icon-btn{ position: relative; flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 104px; padding: 10px 4px; border: 1px solid var(--line); border-radius: 16px; background: var(--card-bg); color: var(--ink); font-size: 15px; font-weight: 700; text-align: center; cursor: pointer; }
+.qa-icon-btn.now{ background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.qa-icon-btn:disabled{ opacity: .6; }
+.qa-badge-abs{ position: absolute; top: 6px; right: 8px; }
+.qa-details{ min-height: 48px; padding: 0 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--card-bg); color: var(--ink); font-size: 16px; font-weight: 600; cursor: pointer; }
+/* landing page on phones: fills the screen above the bottom navigation, which stays usable */
+.qa-screen.landing{ z-index: 40; bottom: calc(64px + env(safe-area-inset-bottom)); }
