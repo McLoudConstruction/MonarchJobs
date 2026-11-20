@@ -70,7 +70,7 @@ export default function WeekTimeClock({ staff, refreshKey = 0 }) {
   }
 
   if (state.setup) return null; // the day clock is not set up yet (migration 025)
-  const editForm = (key) => form && form.day === key && (
+  const formEl = form && (
     <form className="wtc-form" onSubmit={send}>
       <strong>{form.label}</strong>
       <label>Start<input type="datetime-local" value={form.started} onChange={(e) => setForm({ ...form, started: e.target.value })} required /></label>
@@ -125,11 +125,12 @@ export default function WeekTimeClock({ staff, refreshKey = 0 }) {
                     {b.ended_at && (pendingFor('break', b.id) ? <span>Change waiting</span> : <button type="button" className="secondary small" onClick={() => ask('break', b, 'Ask to change this break', key)}>Edit Break</button>)}
                   </div>
                 ))}
+                {form && form.day === key && form.target !== 'add' && (form.shift_id === shift.id || bs.some((b) => b.id === form.break_id)) && formEl}
               </div>
             ))}
             {d && d.flags.filter((f) => f.level === 'warn').map((f, i) => <div key={i} className="wtc-flag">{f.text}</div>)}
             {!future && <button type="button" className="secondary wtc-add" onClick={() => ask('add', null, `Ask to add a shift on ${dayName(key)}`, key)}>Add Shift</button>}
-            {editForm(key)}
+            {form && form.day === key && form.target === 'add' && formEl}
           </div>
         );
       })}

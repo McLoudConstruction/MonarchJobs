@@ -4,7 +4,7 @@
 .wtc-range{ flex: 1; display: flex; flex-direction: column; align-items: center; font-size: 17px; }
 .wtc-total{ display: flex; justify-content: space-around; text-align: center; margin-bottom: 12px; }
 .wtc-big{ font-size: 30px; font-weight: 700; line-height: 1.1; }
-.wtc-day{ margin-bottom: 10px; padding: 12px 14px; }
+.wtc-day{ margin-bottom: 10px; padding: 12px 14px; min-width: 0; overflow: hidden; }
 .wtc-day.today{ border-color: var(--accent); border-width: 2px; }
 .wtc-day.future{ opacity: .55; }
 .wtc-dayhead{ display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 17px; }
@@ -16,8 +16,13 @@
 .wtc-line .secondary.small{ min-height: 44px; padding: 0 14px; font-size: 15px; white-space: nowrap; }
 .wtc-flag{ margin-top: 6px; font-size: 14px; color: #b9560a; }
 .wtc-add{ display: block; width: 100%; min-height: 48px; margin-top: 10px; padding: 0 16px; font-size: 16px; font-weight: 600; text-align: center; }
-.wtc-form{ display: grid; gap: 8px; margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
-.wtc-form input, .wtc-form select{ min-height: 44px; }
+.wtc-form{ display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; box-sizing: border-box; width: 100%; min-width: 0; margin-top: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.wtc-form label{ display: grid; gap: 4px; min-width: 0; font-size: 14px; color: var(--muted); }
+.wtc-form input, .wtc-form select{ display: block; box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; margin: 0; text-align: left; -webkit-appearance: none; appearance: none; font-size: 16px; color: var(--ink); }
+.wtc-form select{ background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%); background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%; background-size: 6px 6px; background-repeat: no-repeat; padding-right: 36px; }
+.wtc-form input[type="datetime-local"]{ text-align: left; }
+.wtc-form input[type="datetime-local"]::-webkit-date-and-time-value{ text-align: left; }
+.wtc-form input, .wtc-form select{ min-height: 48px; }
 .wtc-form-buttons{ display: flex; gap: 8px; }
 .wtc-form-buttons button{ flex: 1; min-height: 48px; }
 .wtc-reqs{ padding: 12px 14px; font-size: 15px; }
