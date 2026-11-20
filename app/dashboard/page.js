@@ -57,7 +57,8 @@ function TodayPanel({ staff, activityCount, invoiceFlags }) {
 
   return (
     <div className="dash-today">
-      <ShiftClock staff={staff} />
+      {/* the owner does not use the day clock; office and techs do */}
+      {staff.role !== 'owner' && <ShiftClock staff={staff} />}
       <div className="row dash-book" style={{ justifyContent: 'flex-end', marginBottom: 10 }}>
         <Link href="/book"><button type="button" className="primary">Book a job</button></Link>
       </div>

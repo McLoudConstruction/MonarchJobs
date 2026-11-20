@@ -7,6 +7,8 @@ import { getSupabase } from '@/lib/supabaseClient';
 import { fmtDateTime, LEAD_STATUS, JOB_TYPES, leadDisplayName } from '@/lib/format';
 import { displayPhone, formatPhone, digitsOnly } from '@/lib/phone';
 import { PRIORITIES, RESTORATION_TYPES } from '@/lib/leadIntake';
+import EvalsSection from '@/components/eval/EvalsSection';
+import '@/components/eval/evals.css';
 
 const TABS = [
   ['open', 'Open'],
@@ -15,7 +17,14 @@ const TABS = [
   ['lost', 'Lost'],
 ];
 
-function LeadsInner() {
+function LeadsInner({ staff }) {
+  // Leads | Evals: the Evals side is kept in the address (?view=evals) so a refresh or a shared link lands there
+  const [view, setView] = useState('leads');
+  useEffect(() => { if (new URLSearchParams(window.location.search).get('view') === 'evals') setView('evals'); }, []);
+  const pickView = (v) => {
+    setView(v);
+    window.history.replaceState(null, '', v === 'evals' ? '/leads?view=evals' : '/leads');
+  };
   const [tab, setTab] = useState('open');
   const [q, setQ] = useState('');
   const [rows, setRows] = useState([]);
@@ -47,6 +56,23 @@ function LeadsInner() {
     });
   }, [rows.length]);
 
+  const switcher = (
+    <div className="lv-switch" role="tablist" aria-label="Leads or evals">
+      <button type="button" role="tab" aria-selected={view === 'leads'} className={view === 'leads' ? 'on' : ''} onClick={() => pickView('leads')}>Leads</button>
+      <button type="button" role="tab" aria-selected={view === 'evals'} className={view === 'evals' ? 'on' : ''} onClick={() => pickView('evals')}>Evals</button>
+    </div>
+  );
+
+  if (view === 'evals') {
+    return (
+      <>
+        <div className="row" style={{ justifyContent: 'space-between' }}><h1>Leads</h1></div>
+        {switcher}
+        <EvalsSection staff={staff} />
+      </>
+    );
+  }
+
   return (
     <>
       <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -58,6 +84,7 @@ function LeadsInner() {
       </div>
       <p className="sub">Every job starts as a lead. Add the estimate, get it approved, pick a time, then create the work order.</p>
 
+      {switcher}
       <div className="tabs">
         {TABS.map(([k, label]) => (
           <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
@@ -91,5 +118,5 @@ function LeadsInner() {
 }
 
 export default function LeadsPage() {
-  return <AuthGate officeOnly>{() => <LeadsInner />}</AuthGate>;
+  return <AuthGate officeOnly>{({ staff }) => <LeadsInner staff={staff} />}</AuthGate>;
 }

@@ -1,0 +1,56 @@
+/* Evals tab on the Leads page: the Leads | Evals switch, filters, property groups, and the eval editor's extras. */
+.lv-switch { display: inline-flex; gap: 4px; padding: 4px; margin: 0 0 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card-bg); }
+.lv-switch button { min-height: 44px; min-width: 110px; padding: 8px 18px; border: 0; border-radius: 9px; background: transparent; color: var(--ink-soft); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
+.lv-switch button.on { background: var(--accent); color: var(--accent-ink); }
+
+.ev-section { display: flex; flex-direction: column; gap: 12px; }
+.ev-section > .sub { margin: 0; }
+.ev-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.ev-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 190px)) minmax(0, 1fr); gap: 10px; }
+.ev-filters select, .ev-filters input { width: 100%; min-width: 0; box-sizing: border-box; min-height: 44px; }
+.ev-summary { margin: 0; }
+
+.ev-group { display: flex; flex-direction: column; gap: 4px; padding: 14px; }
+.ev-group-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.ev-group-title h3 { margin: 0; }
+.ev-group-title .meta { display: block; margin-top: 2px; }
+.ev-group-meta { margin: 2px 0 6px; white-space: pre-wrap; }
+.ev-none { margin: 6px 0 0; }
+.ev-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 10px 4px; border: 0; border-top: 1px solid var(--line); background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.ev-row:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.ev-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.ev-row-total { min-width: 76px; text-align: right; }
+.ev-s-todo { background: #9a9488; }
+.ev-s-done { background: #3a6b45; }
+.ev-s-quoted { background: #8a5a3f; }
+.ev-s-converted { background: #49402a; }
+
+.ev-edit .es-wide select { width: 100%; }
+.ev-prop-pick { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ev-prop-pick select { flex: 1 1 220px; min-width: 0; min-height: 44px; }
+.ev-status-pick { display: flex; gap: 8px; flex-wrap: wrap; }
+.ev-status-btn { min-height: 44px; padding: 8px 18px; border: 2px solid var(--line); border-radius: 10px; background: var(--card-bg); color: var(--ink); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
+.ev-status-btn.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--card-bg)); }
+
+.ep-box { margin-bottom: 16px; }
+.ep-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.ep-thumb { aspect-ratio: 1; padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.ep-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.pf-form { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 4px; max-height: 78vh; overflow: auto; }
+.pf-contact { border: 1px solid var(--line); border-radius: 10px; padding: 4px 12px 8px; margin: 6px 0; min-width: 0; }
+.pf-contact legend { padding: 0 6px; font-weight: 600; font-size: 14px; }
+.pf-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 10px; }
+.pf-grid .pf-wide { grid-column: 1 / -1; }
+.pf-form input, .pf-form textarea { width: 100%; box-sizing: border-box; min-width: 0; }
+
+.ev-choose { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 8px; max-height: 70vh; overflow: auto; }
+.ev-choose-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 56px; text-align: left; }
+
+@media (max-width: 899px) {
+  .ev-filters { grid-template-columns: 1fr 1fr; }
+  .ev-filters input { grid-column: 1 / -1; }
+  .lv-switch { display: flex; }
+  .lv-switch button { flex: 1; }
+  .pf-grid { grid-template-columns: minmax(0, 1fr); }
+}
