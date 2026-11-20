@@ -6,6 +6,7 @@ import { apiFetch } from '@/lib/useAuth';
 import { fmtTime, toLocalInput, fromLocalInput } from '@/lib/format';
 import { dayRows, dayKey, hmWords, hmText, addDaysKey } from '@/lib/shiftClock';
 import { ClockInIcon, ClockOutIcon, BreakIcon } from '@/components/job/QuickIcons';
+import ReasonField from '@/components/ReasonField';
 import './shiftclock.css';
 import '@/components/dashboard/dashboardmobile.css';
 
@@ -59,7 +60,7 @@ export default function ShiftClock({ staff, hideWeek = false, onChanged }) {
     const d = dayKey(now);
     setForm({
       target, label, shift_id: target === 'shift' ? row.id : undefined, break_id: target === 'break' ? row.id : undefined,
-      started: toLocalInput(base.started_at || `${addDaysKey(d, -1)}T14:00:00Z`), ended: toLocalInput(base.ended_at || `${addDaysKey(d, -1)}T23:00:00Z`), reason: '',
+      started: toLocalInput(base.started_at || `${addDaysKey(d, -1)}T14:00:00Z`), ended: toLocalInput(base.ended_at || `${addDaysKey(d, -1)}T23:00:00Z`), reason: '', reasonChoice: '',
     });
     setMsg(null);
   }
@@ -67,7 +68,7 @@ export default function ShiftClock({ staff, hideWeek = false, onChanged }) {
     e.preventDefault(); setBusy(true); setMsg(null);
     try {
       await apiFetch('/api/shifts/requests', await token(), { method: 'POST', body: JSON.stringify({ target: form.target, shift_id: form.shift_id, break_id: form.break_id, started_at: fromLocalInput(form.started), ended_at: fromLocalInput(form.ended), reason: form.reason }) });
-      setForm(null); setMsg({ text: 'Sent to the owner. Your times stay as they are until it is approved.' }); await load();
+      setForm(null); setMsg({ text: 'Submitted for review. Your times stay as they are until it is approved.' }); await load();
     } catch (err) { setMsg({ err: true, text: err.message }); }
     setBusy(false);
   }
@@ -100,9 +101,9 @@ export default function ShiftClock({ staff, hideWeek = false, onChanged }) {
           <strong>{form.label}</strong>
           <label>Start<input type="datetime-local" value={form.started} onChange={(e) => setForm({ ...form, started: e.target.value })} required /></label>
           <label>End<input type="datetime-local" value={form.ended} onChange={(e) => setForm({ ...form, ended: e.target.value })} required /></label>
-          <label>Why<input value={form.reason} maxLength={300} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder="Forgot to clock out, phone died..." required /></label>
+          <ReasonField form={form} setForm={setForm} />
           <div className="row" style={{ gap: 8 }}>
-            <button type="submit" className="primary" disabled={busy}>Send to the owner</button>
+            <button type="submit" className="primary" disabled={busy}>Submit for Review</button>
             <button type="button" className="secondary" onClick={() => setForm(null)}>Cancel</button>
           </div>
         </form>
@@ -116,11 +117,11 @@ export default function ShiftClock({ staff, hideWeek = false, onChanged }) {
             {d.shifts.map(({ shift, breaks: bs }) => (
               <div key={shift.id} className="sc-shift">
                 <span>{fmtTime(shift.started_at)} &ndash; {shift.ended_at ? fmtTime(shift.ended_at) : 'now'}{shift.edited_at ? ' (changed)' : ''}</span>
-                {shift.ended_at && (pendingFor('shift', shift.id) ? <span className="muted">Change waiting</span> : <button type="button" className="link" onClick={() => ask('shift', shift, 'Ask to change this shift')}>Request a change</button>)}
+                {shift.ended_at && (pendingFor('shift', shift.id) ? <span className="muted">Change waiting</span> : <button type="button" className="link" onClick={() => ask('shift', shift, 'Ask to change this shift')}>Edit Shift</button>)}
                 {bs.map((b) => (
                   <div key={b.id} className="sc-break muted">
                     Break {fmtTime(b.started_at)} &ndash; {b.ended_at ? fmtTime(b.ended_at) : 'now'}
-                    {b.ended_at && (pendingFor('break', b.id) ? ' (change waiting)' : <> <button type="button" className="link" onClick={() => ask('break', b, 'Ask to change this break')}>Change</button></>)}
+                    {b.ended_at && (pendingFor('break', b.id) ? ' (change waiting)' : <> <button type="button" className="link" onClick={() => ask('break', b, 'Ask to change this break')}>Edit Break</button></>)}
                   </div>
                 ))}
               </div>

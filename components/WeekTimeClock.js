@@ -5,6 +5,7 @@ import { getSupabase } from '@/lib/supabaseClient';
 import { apiFetch } from '@/lib/useAuth';
 import { fmtTime, fromLocalInput, toLocalInput } from '@/lib/format';
 import { dayRows, dayKey, dayStartInstant, addDaysKey, weekStartKey, weekKeys, hmText, hmWords } from '@/lib/shiftClock';
+import ReasonField from '@/components/ReasonField';
 import './weektimeclock.css';
 
 const STATUS = { pending: 'Waiting for the owner', approved: 'Approved', rejected: 'Not approved' };
@@ -54,7 +55,7 @@ export default function WeekTimeClock({ staff, refreshKey = 0 }) {
       target, label, shift_id: target === 'shift' ? row.id : undefined, break_id: target === 'break' ? row.id : undefined,
       started: base.started_at ? toLocalInput(base.started_at) : `${key}T07:00`,
       ended: base.ended_at ? toLocalInput(base.ended_at) : `${key}T16:00`,
-      reason: '', day: key,
+      reason: '', reasonChoice: '', day: key,
     });
     setMsg(null);
   }
@@ -63,7 +64,7 @@ export default function WeekTimeClock({ staff, refreshKey = 0 }) {
     try {
       const token = (await sb.auth.getSession()).data?.session?.access_token;
       await apiFetch('/api/shifts/requests', token, { method: 'POST', body: JSON.stringify({ target: form.target, shift_id: form.shift_id, break_id: form.break_id, started_at: fromLocalInput(form.started), ended_at: fromLocalInput(form.ended), reason: form.reason }) });
-      setForm(null); setMsg({ text: 'Sent to the owner. Your times stay as they are until it is approved.' }); await load();
+      setForm(null); setMsg({ text: 'Submitted for review. Your times stay as they are until it is approved.' }); await load();
     } catch (err) { setMsg({ err: true, text: err.message }); }
     setBusy(false);
   }
@@ -74,9 +75,9 @@ export default function WeekTimeClock({ staff, refreshKey = 0 }) {
       <strong>{form.label}</strong>
       <label>Start<input type="datetime-local" value={form.started} onChange={(e) => setForm({ ...form, started: e.target.value })} required /></label>
       <label>End<input type="datetime-local" value={form.ended} onChange={(e) => setForm({ ...form, ended: e.target.value })} required /></label>
-      <label>Why<input value={form.reason} maxLength={300} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder="Forgot to clock out, phone died..." required /></label>
+      <ReasonField form={form} setForm={setForm} />
       <div className="wtc-form-buttons">
-        <button type="submit" className="primary" disabled={busy}>Send to the owner</button>
+        <button type="submit" className="primary" disabled={busy}>Submit for Review</button>
         <button type="button" className="secondary" onClick={() => setForm(null)}>Cancel</button>
       </div>
     </form>
@@ -116,12 +117,12 @@ export default function WeekTimeClock({ staff, refreshKey = 0 }) {
               <div key={shift.id} className="wtc-shift">
                 <div className="wtc-line">
                   <span>{fmtTime(shift.started_at)} &ndash; {shift.ended_at ? fmtTime(shift.ended_at) : 'now'}{shift.edited_at ? ' (changed)' : ''}</span>
-                  {shift.ended_at && (pendingFor('shift', shift.id) ? <span className="muted">Change waiting</span> : <button type="button" className="secondary small" onClick={() => ask('shift', shift, 'Ask to change this shift', key)}>Change shift</button>)}
+                  {shift.ended_at && (pendingFor('shift', shift.id) ? <span className="muted">Change waiting</span> : <button type="button" className="secondary small" onClick={() => ask('shift', shift, 'Ask to change this shift', key)}>Edit Shift</button>)}
                 </div>
                 {bs.map((b) => (
                   <div key={b.id} className="wtc-line wtc-break muted">
                     <span>Break {fmtTime(b.started_at)} &ndash; {b.ended_at ? fmtTime(b.ended_at) : 'now'}</span>
-                    {b.ended_at && (pendingFor('break', b.id) ? <span>Change waiting</span> : <button type="button" className="secondary small" onClick={() => ask('break', b, 'Ask to change this break', key)}>Change break</button>)}
+                    {b.ended_at && (pendingFor('break', b.id) ? <span>Change waiting</span> : <button type="button" className="secondary small" onClick={() => ask('break', b, 'Ask to change this break', key)}>Edit Break</button>)}
                   </div>
                 ))}
               </div>

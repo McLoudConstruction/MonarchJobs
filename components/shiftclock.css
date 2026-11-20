@@ -20,3 +20,4 @@
 .tc-total{ font-weight: 600; }
 .tc-edit{ display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin: 6px 0; }
 .sc-big{ display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.sc-form select{ min-height: 44px; }
