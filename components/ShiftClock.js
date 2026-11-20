@@ -130,7 +130,7 @@ export default function ShiftClock({ staff, hideWeek = false, onChanged }) {
         ))}
         {days.length === 0 && <p className="muted">No shifts in the last two weeks.</p>}
       </div>}
-      {!hideWeek && <button type="button" className="link sc-forgot" onClick={() => ask('add', null, 'Ask to add a shift you did not clock')}>I forgot to clock a shift</button>}
+      {!hideWeek && <button type="button" className="link sc-forgot" onClick={() => ask('add', null, 'Ask to add a shift you did not clock')}>Add Shift</button>}
 
       {!hideWeek && requests.slice(0, 5).some((r) => r.status !== 'pending') && (
         <div className="sc-reqs">

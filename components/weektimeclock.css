@@ -13,9 +13,9 @@
 .wtc-shift{ margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 .wtc-line{ display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; font-size: 16px; }
 .wtc-break{ margin-top: 4px; padding-left: 12px; font-size: 14px; }
-.wtc-line .secondary.small{ min-height: 40px; }
+.wtc-line .secondary.small{ min-height: 44px; padding: 0 14px; font-size: 15px; white-space: nowrap; }
 .wtc-flag{ margin-top: 6px; font-size: 14px; color: #b9560a; }
-.wtc-add{ display: inline-block; margin-top: 8px; padding: 8px 0; font-size: 15px; }
+.wtc-add{ display: block; width: 100%; min-height: 48px; margin-top: 10px; padding: 0 16px; font-size: 16px; font-weight: 600; text-align: center; }
 .wtc-form{ display: grid; gap: 8px; margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
 .wtc-form input{ min-height: 44px; }
 .wtc-form-buttons{ display: flex; gap: 8px; }

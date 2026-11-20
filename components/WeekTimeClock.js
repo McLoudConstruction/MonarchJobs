@@ -116,18 +116,18 @@ export default function WeekTimeClock({ staff, refreshKey = 0 }) {
               <div key={shift.id} className="wtc-shift">
                 <div className="wtc-line">
                   <span>{fmtTime(shift.started_at)} &ndash; {shift.ended_at ? fmtTime(shift.ended_at) : 'now'}{shift.edited_at ? ' (changed)' : ''}</span>
-                  {shift.ended_at && (pendingFor('shift', shift.id) ? <span className="muted">Change waiting</span> : <button type="button" className="secondary small" onClick={() => ask('shift', shift, 'Ask to change this shift', key)}>Request a change</button>)}
+                  {shift.ended_at && (pendingFor('shift', shift.id) ? <span className="muted">Change waiting</span> : <button type="button" className="secondary small" onClick={() => ask('shift', shift, 'Ask to change this shift', key)}>Change shift</button>)}
                 </div>
                 {bs.map((b) => (
                   <div key={b.id} className="wtc-line wtc-break muted">
                     <span>Break {fmtTime(b.started_at)} &ndash; {b.ended_at ? fmtTime(b.ended_at) : 'now'}</span>
-                    {b.ended_at && (pendingFor('break', b.id) ? <span>Change waiting</span> : <button type="button" className="link" onClick={() => ask('break', b, 'Ask to change this break', key)}>Change</button>)}
+                    {b.ended_at && (pendingFor('break', b.id) ? <span>Change waiting</span> : <button type="button" className="secondary small" onClick={() => ask('break', b, 'Ask to change this break', key)}>Change break</button>)}
                   </div>
                 ))}
               </div>
             ))}
             {d && d.flags.filter((f) => f.level === 'warn').map((f, i) => <div key={i} className="wtc-flag">{f.text}</div>)}
-            {!future && <button type="button" className="link wtc-add" onClick={() => ask('add', null, `Ask to add a shift on ${dayName(key)}`, key)}>{d ? 'Add a missed shift' : 'I worked this day'}</button>}
+            {!future && <button type="button" className="secondary wtc-add" onClick={() => ask('add', null, `Ask to add a shift on ${dayName(key)}`, key)}>Add Shift</button>}
             {editForm(key)}
           </div>
         );
