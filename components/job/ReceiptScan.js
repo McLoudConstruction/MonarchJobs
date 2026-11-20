@@ -7,7 +7,7 @@ import { prepareImage } from '@/lib/photoUpload';
 
 // "Scan receipt": take or choose a photo of a receipt, send it to the AI the owner connected (Settings > Integrations), and hand the
 // details back to fill the purchase form. Nothing is saved here; a person checks the form and presses Add purchase.
-// The picture is shrunk first (about 0.5 MB) and is not kept after the scan.
+// The picture is shrunk first (about 0.5 MB). It is handed back with the result so the purchase can keep it as its receipt photo.
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
@@ -43,7 +43,7 @@ export default function ReceiptScan({ onResult }) {
       const { fullBlob } = await prepareImage(file);
       const image = await blobToBase64(fullBlob);
       const r = await apiFetch('/api/ai/extract', await token(), { method: 'POST', body: JSON.stringify({ kind: 'receipt', media_type: 'image/jpeg', image }) });
-      onResult(r.result);
+      onResult(r.result, fullBlob);
       setMsg(r.result.warnings?.length ? { warn: true, text: r.result.warnings.join(' ') } : { text: 'Read from the receipt. Check it, then add the purchase.' });
     } catch (err) {
       setMsg({ err: true, text: err.message || 'The scan did not work.' });

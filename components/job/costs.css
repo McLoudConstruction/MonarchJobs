@@ -12,3 +12,8 @@
 .cost-void td .muted{ text-decoration: none; }
 .cost-void td:last-child{ opacity: 1; text-decoration: none; }
 .cost-toggle{ display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+
+.cost-receipt-pick{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.cost-receipt-thumb{ width: 56px; height: 56px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); display: block; }
+.cost-receipt-btn{ display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); cursor: pointer; }
+.cost-receipt-link{ font-size: 12px; text-decoration: underline; cursor: pointer; color: var(--ink-soft); }

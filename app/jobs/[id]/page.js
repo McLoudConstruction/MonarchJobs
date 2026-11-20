@@ -674,6 +674,7 @@ function JobInner({ id, staff, token }) {
           rooms={rooms}
           authorName={authorName}
           staffId={staff.id}
+          updates={updates}
           onTakePhoto={() => openCamera()}
           onChanged={reloadPhotos}
           logEvent={logEvent}

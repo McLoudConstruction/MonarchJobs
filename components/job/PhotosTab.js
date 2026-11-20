@@ -9,6 +9,7 @@ import { useWaitingPhotos } from '@/lib/offlineClient';
 import { KindChips, PhotoGrid, UploadStatus } from '@/components/job/PhotoUi';
 import LibraryUploadDialog from '@/components/job/LibraryUploadDialog';
 import WaitingPhotos from '@/components/job/WaitingPhotos';
+import { AddToUpdatePanel, ShareLinkDialog } from '@/components/job/PhotoShare';
 
 const dayKey = (iso) => { const d = new Date(iso); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
 
@@ -17,7 +18,7 @@ const dayKey = (iso) => { const d = new Date(iso); return `${d.getFullYear()}-${
 // to caption, mark up, tag, download or archive.
 export default function PhotosTab({
   photos, isOffice, uploader, onOpen, jobId = null, rooms = [], authorName = () => '', staffId = null,
-  onTakePhoto = () => {}, onChanged = async () => {}, logEvent = async () => {},
+  updates = [], onTakePhoto = () => {}, onChanged = async () => {}, logEvent = async () => {},
 }) {
   const [filter, setFilter] = useState('all');
   const [roomFilter, setRoomFilter] = useState(null);
@@ -30,6 +31,9 @@ export default function PhotosTab({
   const [tagText, setTagText] = useState('');
   const [bulkMsg, setBulkMsg] = useState(null);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [panel, setPanel] = useState(null); // 'update' | 'share' | null
+  const [shareOpen, setShareOpen] = useState(false);
+  const drafts = useMemo(() => updates.filter((u) => u.kind === 'progress' && u.status === 'draft'), [updates]);
   const waiting = useWaitingPhotos(jobId);
 
   const all = useMemo(() => mergeWaiting(photos, waiting), [photos, waiting]);
@@ -127,6 +131,7 @@ export default function PhotosTab({
               {selecting ? 'Done selecting' : 'Select'}
             </button>
           )}
+          {isOffice && !selecting && photos.length > 0 && <button type="button" className="secondary small" onClick={() => setShareOpen(true)}>Customer links</button>}
           {isOffice && archivedCount > 0 && (
             <button type="button" className="secondary small" onClick={() => { setShowArchived(!showArchived); clearFilters(); stopSelecting(); }}>
               {showArchived ? 'Back to photos' : `Archived (${archivedCount})`}
@@ -226,11 +231,17 @@ export default function PhotosTab({
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTagToPicked(); } }}
             />
             <button type="button" className="secondary small" disabled={!picked.size || !tagText.trim() || bulkBusy} onClick={addTagToPicked}>Tag</button>
+            {isOffice && <button type="button" className="secondary small" disabled={!picked.size || bulkBusy} onClick={() => setPanel(panel === 'update' ? null : 'update')}>Add to update</button>}
+            {isOffice && <button type="button" className="secondary small" disabled={!picked.size || bulkBusy} onClick={() => setShareOpen(true)}>Share link</button>}
             <button type="button" className="danger small" disabled={!picked.size || bulkBusy} onClick={archivePicked}>Archive</button>
+            {panel === 'update' && isOffice && picked.size > 0 && (
+              <AddToUpdatePanel jobId={jobId} pickedIds={ids} drafts={drafts} logEvent={logEvent} onCancel={() => setPanel(null)} onDone={async () => { await onChanged(); }} />
+            )}
             {bulkMsg && <span className={`msg ${bulkMsg.err ? 'err' : 'ok'}`} style={{ margin: 0, flexBasis: '100%' }}>{bulkMsg.text}</span>}
           </div>
         )}
       </div>
+      {shareOpen && <ShareLinkDialog jobId={jobId} pickedIds={ids} photos={photos} logEvent={logEvent} onClose={() => setShareOpen(false)} />}
       <LibraryUploadDialog open={library} onClose={() => setLibrary(false)} uploader={uploader} rooms={rooms} />
     </>
   );

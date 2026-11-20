@@ -8,6 +8,9 @@ import { useSignedUrls } from '@/lib/useSignedUrls';
 import { addTag, removeTag, cleanTag, tagCounts, mapsUrl } from '@/lib/photoMeta';
 import { fmtDateTime } from '@/lib/format';
 import PhotoMarkup from '@/components/job/PhotoMarkup';
+import VoiceRecorder from '@/components/chat/VoiceRecorder';
+import { PHOTO_VOICE_BUCKET, photoVoicePath } from '@/lib/photoVoice';
+import { durationText } from '@/lib/chat';
 
 // Full-screen photo viewer with the controls for one photo. list is the photos being browsed,
 // startId the one to open on. Changes are saved straight away and the page is refreshed through
@@ -69,6 +72,34 @@ export default function PhotoViewer({
     if (error) { setErr(error.message); return false; }
     await onChanged();
     return true;
+  }
+
+  // Voice caption: a spoken note on the photo for the team (never on a customer page).
+  const [voiceUrl, setVoiceUrl] = useState('');
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    setVoiceUrl('');
+    if (!photo?.voice_path) return undefined;
+    getSupabase().storage.from(PHOTO_VOICE_BUCKET).createSignedUrl(photo.voice_path, 3600).then(({ data }) => { if (alive && data?.signedUrl) setVoiceUrl(data.signedUrl); }, () => {});
+    return () => { alive = false; };
+  }, [photo?.id, photo?.voice_path]);
+  async function saveVoice({ blob, ext, type, secs }) {
+    if (!blob || voiceBusy) return;
+    setVoiceBusy(true); setErr('');
+    try {
+      const path = photoVoicePath(photo.job_id, `${photo.id}-${Date.now().toString(36)}`, ext);
+      const { error: upErr } = await getSupabase().storage.from(PHOTO_VOICE_BUCKET).upload(path, blob, { contentType: type, upsert: false });
+      if (upErr) throw new Error('The voice note did not upload. Try again.');
+      const ok = await patch({ voice_path: path, voice_secs: secs });
+      if (ok) await logEvent?.('photo_voice', { action: 'recorded' });
+    } catch (e) { setErr(e.message || 'The voice note did not save.'); }
+    setVoiceBusy(false);
+  }
+  async function removeVoice() {
+    if (!window.confirm('Remove this voice caption?')) return;
+    const ok = await patch({ voice_path: null, voice_secs: null });
+    if (ok) await logEvent?.('photo_voice', { action: 'removed' });
   }
 
   async function setRoom(v) {
@@ -158,6 +189,15 @@ export default function PhotoViewer({
           </div>
           <div className="field"><label>Caption</label>
             <input key={photo.id + photo.caption} defaultValue={photo.caption} maxLength={500} placeholder="What this shows" onBlur={(e) => e.target.value !== photo.caption && patch({ caption: e.target.value.trim() })} />
+          </div>
+          <div className="field"><label>Voice caption <span className="muted">(team only)</span></label>
+            {photo.voice_path ? (
+              <div className="pv-voice">
+                {voiceUrl ? <audio controls preload="none" src={voiceUrl} /> : <span className="muted">Loading...</span>}
+                <span className="muted">{durationText(photo.voice_secs)}</span>
+                <button type="button" className="secondary small" onClick={removeVoice}>Remove</button>
+              </div>
+            ) : <VoiceRecorder disabled={voiceBusy} onRecorded={saveVoice} onError={(m) => setErr(m)} />}
           </div>
           <div className="field"><label>Tags</label>
             <div className="pv-tags">

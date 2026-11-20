@@ -10,11 +10,14 @@ import {
 } from '@/lib/jobCost';
 import { staffName } from '@/lib/userDisplay';
 import ReceiptScan from '@/components/job/ReceiptScan';
+import { prepareImage } from '@/lib/photoUpload';
+import { RECEIPT_BUCKET, receiptPathFor, checkReceiptBlob } from '@/lib/receipts';
 import './invoice.css';
 import './costs.css';
 
 const dateText = (d) => (d ? new Date(`${d}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '');
 const todayText = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in the phone's own time zone
+const newUuid = () => (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = (Math.random() * 16) | 0; return (c === 'x' ? r : (r & 3) | 8).toString(16); }));
 const dollars = (c) => (c == null ? '' : (Math.round(c) / 100).toFixed(2));
 
 // Job > Costs: the owner's page. What was bought, hours worked, and equipment run time, against what the job brings in.
@@ -66,13 +69,53 @@ export default function CostsTab({ jobId, sketches, staffList }) {
 
   // ---- purchases
   const [pf, setPf] = useState({ date: todayText(), vendor: '', description: '', category: 'materials', amount: '', note: '' });
+  const [receipt, setReceipt] = useState(null); // { blob, url } the picture that will be kept with the next purchase
+  const [receiptUrls, setReceiptUrls] = useState({}); // path -> signed link
+  useEffect(() => () => { if (receipt?.url) URL.revokeObjectURL(receipt.url); }, [receipt]);
+  const receiptPaths = purchases.map((r) => r.receipt_path).filter(Boolean).join('|');
+  useEffect(() => {
+    const list = receiptPaths ? receiptPaths.split('|') : [];
+    if (!list.length) return;
+    let alive = true;
+    sb.storage.from(RECEIPT_BUCKET).createSignedUrls(list, 3600).then(({ data }) => {
+      if (alive) setReceiptUrls(Object.fromEntries((data || []).filter((d) => d.signedUrl && !d.error).map((d) => [d.path, d.signedUrl])));
+    }, () => {});
+    return () => { alive = false; };
+  }, [receiptPaths, sb]);
+  async function keepReceipt(fileOrBlob) {
+    try {
+      const blob = fileOrBlob.type === 'image/jpeg' && fileOrBlob.__prepared ? fileOrBlob : (await prepareImage(fileOrBlob)).fullBlob;
+      const bad = checkReceiptBlob(blob);
+      if (bad) throw new Error(bad);
+      setReceipt({ blob, url: URL.createObjectURL(blob) });
+    } catch (e) { setMsg({ err: true, text: e.message || 'That picture could not be used.' }); }
+  }
+  async function uploadReceipt(blob) {
+    const path = receiptPathFor(jobId, newUuid());
+    const { error: upErr } = await sb.storage.from(RECEIPT_BUCKET).upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+    if (upErr) throw new Error(`The receipt picture did not upload (${upErr.message}). Nothing was saved. Try again.`);
+    return path;
+  }
+  async function addReceiptTo(row, file) {
+    if (!file) return;
+    await run(`receipt-${row.id}`, async () => {
+      const blob = (await prepareImage(file)).fullBlob;
+      const bad = checkReceiptBlob(blob);
+      if (bad) throw new Error(bad);
+      const path = await uploadReceipt(blob);
+      must(await sb.from('job_purchases').update({ receipt_path: path }).eq('id', row.id));
+    }, 'Receipt added.');
+  }
   async function addPurchase(e) {
     e.preventDefault();
     const cents = parseMoneyToCents(pf.amount);
     if (!pf.description.trim()) { setMsg({ err: true, text: 'Say what was bought.' }); return; }
     if (cents == null || cents < 0) { setMsg({ err: true, text: 'Enter the amount as dollars, for example 25.99.' }); return; }
-    const ok = await run('purchase', async () => must(await sb.from('job_purchases').insert({ job_id: jobId, purchased_on: pf.date || todayText(), vendor: pf.vendor.trim(), description: pf.description.trim(), category: pf.category, amount_cents: cents, note: pf.note.trim() })), 'Purchase added.');
-    if (ok) setPf((f) => ({ ...f, vendor: '', description: '', amount: '', note: '' }));
+    const ok = await run('purchase', async () => {
+      const receipt_path = receipt ? await uploadReceipt(receipt.blob) : null; // the picture goes first: a purchase is never saved with a receipt that is missing
+      must(await sb.from('job_purchases').insert({ job_id: jobId, purchased_on: pf.date || todayText(), vendor: pf.vendor.trim(), description: pf.description.trim(), category: pf.category, amount_cents: cents, note: pf.note.trim(), receipt_path }));
+    }, 'Purchase added.');
+    if (ok) { setPf((f) => ({ ...f, vendor: '', description: '', amount: '', note: '' })); setReceipt(null); }
   }
   async function voidRow(table, row, label) {
     const reason = window.prompt(`Void this ${label}? It stays on the list but no longer counts. Why? (optional)`, '');
@@ -229,14 +272,14 @@ export default function CostsTab({ jobId, sketches, staffList }) {
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Purchases</h3>
-        <ReceiptScan onResult={(r) => setPf((f) => ({
+        <ReceiptScan onResult={(r, blob) => { if (blob) keepReceipt(Object.assign(blob, { __prepared: true })); setPf((f) => ({
           ...f,
           date: r.date || f.date,
           vendor: r.vendor || f.vendor,
           description: r.description || f.description,
           category: r.category || f.category,
           amount: r.amountCents != null ? dollars(r.amountCents) : f.amount,
-        }))} />
+        })); }} />
         <form className="inv-box" onSubmit={addPurchase}>
           <div className="inv-row">
             <label className="field"><span>Date</span><input type="date" value={pf.date} onChange={(e) => setPf({ ...pf, date: e.target.value })} /></label>
@@ -251,6 +294,19 @@ export default function CostsTab({ jobId, sketches, staffList }) {
             <label className="field" style={{ flex: '2 1 200px' }}><span>Note (optional)</span><input value={pf.note} maxLength={500} onChange={(e) => setPf({ ...pf, note: e.target.value })} /></label>
             <button type="submit" className="primary" disabled={busy === 'purchase'}>Add purchase</button>
           </div>
+          <div className="cost-receipt-pick">
+            {receipt ? (
+              <>
+                <a href={receipt.url} target="_blank" rel="noreferrer"><img src={receipt.url} alt="Receipt picture that will be kept with this purchase" className="cost-receipt-thumb" /></a>
+                <span>Receipt picture will be kept with this purchase.</span>
+                <button type="button" className="secondary small" onClick={() => setReceipt(null)}>Remove</button>
+              </>
+            ) : (
+              <label className="secondary small cost-receipt-btn">Attach receipt photo
+                <input type="file" accept="image/*" capture="environment" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) keepReceipt(f); }} />
+              </label>
+            )}
+          </div>
         </form>
         {shownPurchases.length === 0 ? <p className="muted">No purchases logged yet.</p> : (
           <table className="inv-table">
@@ -259,7 +315,9 @@ export default function CostsTab({ jobId, sketches, staffList }) {
               {shownPurchases.map((r) => (
                 <tr key={r.id} className={r.voided_at ? 'cost-void' : ''}>
                   <td>{dateText(r.purchased_on)}</td>
-                  <td>{r.description}{r.vendor && <span className="muted"> · {r.vendor}</span>}{r.note && <div className="muted">{r.note}</div>}{r.voided_at && <div className="muted">Voided{r.void_reason ? `: ${r.void_reason}` : ''}</div>}</td>
+                  <td>{r.description}{r.vendor && <span className="muted"> · {r.vendor}</span>}{r.note && <div className="muted">{r.note}</div>}{r.voided_at && <div className="muted">Voided{r.void_reason ? `: ${r.void_reason}` : ''}</div>}
+                    {r.receipt_path ? (receiptUrls[r.receipt_path] ? <div><a href={receiptUrls[r.receipt_path]} target="_blank" rel="noreferrer">View receipt</a></div> : <div className="muted">Receipt on file</div>)
+                      : <div><label className="cost-receipt-link">{busy === `receipt-${r.id}` ? 'Adding receipt...' : 'Add receipt photo'}<input type="file" accept="image/*" capture="environment" hidden disabled={busy === `receipt-${r.id}`} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; addReceiptTo(r, f); }} /></label></div>}</td>
                   <td>{costCategoryLabel(r.category)}</td>
                   <td className="num">{centsToText(r.amount_cents)}</td>
                   <td className="num">{r.voided_at ? <button type="button" className="secondary small" onClick={() => restoreRow('job_purchases', r)}>Restore</button> : <button type="button" className="secondary small" disabled={busy === `void-${r.id}`} onClick={() => voidRow('job_purchases', r, 'purchase')}>Void</button>}</td>
