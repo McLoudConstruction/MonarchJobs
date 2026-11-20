@@ -34,7 +34,7 @@ test('counts and filters leave archived photos out of the live views', () => {
   assert.equal(c.all, 4);
   assert.equal(c.before, 2);
   assert.equal(c.damage, 0);
-  assert.deepEqual(PHOTO_KIND_KEYS, ['before', 'during', 'after', 'damage', 'other']);
+  assert.deepEqual(PHOTO_KIND_KEYS, ['before', 'during', 'after', 'damage', 'general', 'other']);
   assert.deepEqual(filterPhotos(photos, { kind: 'before' }).map((p) => p.id), [1, 2]);
   assert.deepEqual(filterPhotos(photos, { archived: true }).map((p) => p.id), [4]);
   assert.deepEqual(filterPhotos(photos, { roomKey: 'r1' }).map((p) => p.id), [5]);
