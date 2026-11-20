@@ -49,3 +49,36 @@ export function ChatBubbleIcon(props) {
     </svg>
   );
 }
+
+// A clock face with an arrow going in: clock in.
+export function ClockInIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <circle cx="29" cy="24" r="13" />
+      <path d="M29 16v8l5 3" />
+      <path d="M4 24h15M14 18l6 6-6 6" />
+    </svg>
+  );
+}
+
+// A clock face with an arrow going out: clock out.
+export function ClockOutIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <circle cx="19" cy="24" r="13" />
+      <path d="M19 16v8l5 3" />
+      <path d="M31 24h15M40 18l6 6-6 6" />
+    </svg>
+  );
+}
+
+// A cup with steam: start or end a break.
+export function BreakIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <path d="M10 20h22v10a8 8 0 0 1-8 8h-6a8 8 0 0 1-8-8z" />
+      <path d="M32 23h3a4 4 0 0 1 0 8h-3" />
+      <path d="M16 8c-2 3 2 4 0 7M24 8c-2 3 2 4 0 7" />
+    </svg>
+  );
+}

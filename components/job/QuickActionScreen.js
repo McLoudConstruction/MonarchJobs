@@ -4,10 +4,11 @@ import { useState } from 'react';
 import MapLink from '@/components/MapLink';
 import { displayPhone, telHref } from '@/lib/phone';
 import { quickActions } from '@/lib/quickActions';
-import { CarIcon, StopwatchIcon, FinishFlagIcon, ChatBubbleIcon } from '@/components/job/QuickIcons';
+import { CarIcon, StopwatchIcon, FinishFlagIcon, ChatBubbleIcon, ClockInIcon, ClockOutIcon } from '@/components/job/QuickIcons';
 import './quickactions.css';
 
 const ICONS = { otw: CarIcon, eta: CarIcon, start: StopwatchIcon, finish: FinishFlagIcon, chat: ChatBubbleIcon };
+const GRID_ICONS = { clock_in: ClockInIcon, clock_out: ClockOutIcon }; // icons on the buttons below the row
 const MAIN = ['otw', 'eta', 'start', 'finish', 'chat']; // the icon row; the rest are the buttons below it
 
 // Full-screen list of big buttons for everything the tech can do on this job right now (like Drive Mode in McLoudJobs).
@@ -43,9 +44,7 @@ export default function QuickActionScreen({ open, onClose, landing = false, job,
           <div className="qa-job">Job #{job.job_number}</div>
           <div className="qa-customer">{customerName}</div>
         </div>
-        {landing
-          ? <button type="button" className="qa-details" onClick={onClose}>Job details</button>
-          : <button type="button" className="qa-close" aria-label="Close quick actions" onClick={onClose}>&times;</button>}
+        <button type="button" className="qa-close" aria-label="Close quick actions" onClick={onClose}>&times;</button>
       </div>
       <div className="qa-body">
         <div className="qa-site">
@@ -80,7 +79,7 @@ export default function QuickActionScreen({ open, onClose, landing = false, job,
               <div className="qa-grid">
                 {list.map((a) => (
                   <button key={a.key} type="button" className={`qa-btn${g === 'now' ? ' now' : ''}`} disabled={!!busy} onClick={() => go(a)}>
-                    <span className="qa-label">{busy === a.key ? 'Working...' : a.label}{badges[a.key] > 0 && <i className="qa-badge">{badges[a.key] > 99 ? '99+' : badges[a.key]}</i>}</span>
+                    <span className="qa-label">{GRID_ICONS[a.key] && (() => { const I = GRID_ICONS[a.key]; return <I width={30} height={30} />; })()}{busy === a.key ? 'Working...' : a.label}{badges[a.key] > 0 && <i className="qa-badge">{badges[a.key] > 99 ? '99+' : badges[a.key]}</i>}</span>
                     <span className="qa-hint">{a.hint}</span>
                   </button>
                 ))}

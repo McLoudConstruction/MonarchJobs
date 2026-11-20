@@ -19,6 +19,7 @@ import { startOfDay, addDays, fmtTime, fmtDateTime, fmtDuration, JOB_TYPES, lead
 import { displayPhone } from '@/lib/phone';
 import { doubleBookedIds } from '@/lib/schedule';
 import { displayNameFor } from '@/lib/userDisplay';
+import '@/components/dashboard/dashboardmobile.css';
 
 function TodayPanel({ staff, activityCount, invoiceFlags }) {
   const isOffice = staff.role !== 'tech';
@@ -51,14 +52,17 @@ function TodayPanel({ staff, activityCount, invoiceFlags }) {
     }
   }, [isOffice, staff.id]);
 
+  // the visit to do next: the one under way, otherwise the first one still waiting
+  const nextVisitId = (today.find((v) => v.status === 'started') || today.find((v) => ['scheduled', 'on_the_way'].includes(v.status)))?.id;
+
   return (
-    <>
+    <div className="dash-today">
       <ShiftClock staff={staff} />
-      <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 10 }}>
+      <div className="row dash-book" style={{ justifyContent: 'flex-end', marginBottom: 10 }}>
         <Link href="/book"><button type="button" className="primary">Book a job</button></Link>
       </div>
       <div className="stat-row">
-        <div className="stat-tile"><div className="stat-num">{today.length}</div><div className="stat-label">Visits today</div></div>
+        <div className="stat-tile stat-visits"><div className="stat-num">{today.length}</div><div className="stat-label">Visits today</div></div>
         {isOffice && <Link href="/leads" className="stat-tile"><div className="stat-num">{ready.length}</div><div className="stat-label">Ready to schedule</div></Link>}
         {isOffice && <Link href="/leads" className="stat-tile"><div className="stat-num">{newLeads.length}</div><div className="stat-label">New leads</div></Link>}
         {/* things that need someone: same tiles, in color */}
@@ -88,11 +92,11 @@ function TodayPanel({ staff, activityCount, invoiceFlags }) {
         )}
       </div>
 
-      <div className="dash-section">
-        <h3>Today</h3>
+      <div className="dash-section dash-visits">
+        <h3>Today{today.length > 0 && <span className="dash-count">{today.length}</span>}</h3>
         {today.length === 0 && <p className="muted">Nothing scheduled today.</p>}
         {today.map((v) => (
-          <Link key={v.id} href={`/jobs/${v.job.id}`} className="list-item">
+          <Link key={v.id} href={`/jobs/${v.job.id}`} className={`list-item visit-item${v.id === nextVisitId ? ' next' : ''}${['finished'].includes(v.status) ? ' done' : ''}`}>
             <div className="title">{fmtTime(v.starts_at)} · {fmtDuration(v.duration_minutes)} · #{v.job.job_number} {v.job.customer?.display_name}</div>
             <div className="meta">{JOB_TYPES[v.job.job_type]} · {v.job.address?.street}, {v.job.address?.city}</div>
             {v.job.loss_summary && <div className="meta">{v.job.loss_summary}</div>}
@@ -129,7 +133,7 @@ function TodayPanel({ staff, activityCount, invoiceFlags }) {
           ))}
         </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -177,13 +181,13 @@ function DashboardInner({ staff, token }) {
       <div className="row dash-head" style={{ justifyContent: 'space-between' }}>
         <h1>{isOffice ? 'Dashboard' : 'My day'}</h1>
         {isOffice && tab === 'today' && (
-          <div className="row" style={{ gap: 8 }}>
+          <div className="row dash-actions" style={{ gap: 8 }}>
             <Link href="/leads/new"><button type="button" className="primary">Create Lead</button></Link>
             <Link href="/jobs/new"><button type="button" className="secondary">Book Job</button></Link>
           </div>
         )}
       </div>
-      <p className="sub">Welcome, {displayNameFor(staff.full_name, staff.email)}.</p>
+      <p className="sub dash-welcome">Welcome, {displayNameFor(staff.full_name, staff.email)}.</p>
 
       <div className="tabs dash-tabs" role="tablist" aria-label="Dashboard sections">
         {tabsFor(staff.role).map((t) => {

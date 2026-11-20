@@ -5,6 +5,7 @@ import { getSupabase } from '@/lib/supabaseClient';
 import { apiFetch } from '@/lib/useAuth';
 import { fmtTime, toLocalInput, fromLocalInput } from '@/lib/format';
 import { dayRows, dayKey, hmWords, hmText, addDaysKey } from '@/lib/shiftClock';
+import { ClockInIcon, ClockOutIcon, BreakIcon } from '@/components/job/QuickIcons';
 import './shiftclock.css';
 
 const when = (key) => new Date(`${key}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -17,6 +18,7 @@ export default function ShiftClock({ staff }) {
   const [shifts, setShifts] = useState([]); const [breaks, setBreaks] = useState([]); const [sessions, setSessions] = useState([]); const [requests, setRequests] = useState([]);
   const [now, setNow] = useState(() => new Date());
   const [busy, setBusy] = useState(false); const [msg, setMsg] = useState(null); const [setup, setSetup] = useState(false);
+  const [showWeek, setShowWeek] = useState(false); // phones: the week's shifts stay folded away until asked for
   const [form, setForm] = useState(null); // { target, shift_id?, break_id?, started, ended, reason, label }
 
   const token = async () => (await sb.auth.getSession()).data?.session?.access_token;
@@ -71,11 +73,11 @@ export default function ShiftClock({ staff }) {
   if (setup) return null; // the day clock is not set up yet (migration 025); say nothing rather than show a broken card
   const running = open ? Math.max(0, Math.round((now - new Date(open.started_at)) / 60000)) : 0;
   return (
-    <section className="card shiftclock" aria-label="Day clock">
+    <section className={`card shiftclock${open ? ' running' : ''}${onBreak ? ' on-break' : ''}${showWeek ? ' week-open' : ''}`} aria-label="Day clock">
       <div className="sc-head">
         <div>
           <h2 style={{ margin: 0 }}>Day clock</h2>
-          <div className="muted">
+          <div className="muted sc-status">
             {!open && 'Not clocked in.'}
             {open && !onBreak && `Clocked in at ${fmtTime(open.started_at)} (${hmWords(running)} so far).`}
             {open && onBreak && `On a break since ${fmtTime(onBreak.started_at)}.`}
@@ -83,10 +85,10 @@ export default function ShiftClock({ staff }) {
           </div>
         </div>
         <div className="sc-buttons">
-          {!open && <button type="button" className="primary sc-big" disabled={busy} onClick={() => act('in')}>Clock in</button>}
-          {open && !onBreak && <button type="button" className="secondary sc-big" disabled={busy} onClick={() => act('break_start')}>Start break</button>}
-          {open && onBreak && <button type="button" className="primary sc-big" disabled={busy} onClick={() => act('break_end')}>End break</button>}
-          {open && <button type="button" className="danger sc-big" disabled={busy} onClick={() => { if (window.confirm('Clock out for the day?')) act('out'); }}>Clock out</button>}
+          {!open && <button type="button" className="primary sc-big" disabled={busy} onClick={() => act('in')}>{<ClockInIcon width={28} height={28} />}Clock in</button>}
+          {open && !onBreak && <button type="button" className="secondary sc-big" disabled={busy} onClick={() => act('break_start')}><BreakIcon width={28} height={28} />Start break</button>}
+          {open && onBreak && <button type="button" className="primary sc-big" disabled={busy} onClick={() => act('break_end')}><BreakIcon width={28} height={28} />End break</button>}
+          {open && <button type="button" className="danger sc-big" disabled={busy} onClick={() => { if (window.confirm('Clock out for the day?')) act('out'); }}>{<ClockOutIcon width={28} height={28} />}Clock out</button>}
         </div>
       </div>
       {msg && <div className={`msg${msg.err ? ' err' : ''}`} role={msg.err ? 'alert' : 'status'}>{msg.text}</div>}
@@ -104,6 +106,7 @@ export default function ShiftClock({ staff }) {
         </form>
       )}
 
+      <button type="button" className="secondary sc-week-toggle" aria-expanded={showWeek} onClick={() => setShowWeek(!showWeek)}>{showWeek ? 'Hide this week' : 'This week'}</button>
       <div className="sc-days">
         {days.slice(0, 7).map((d) => (
           <div key={d.date} className="sc-day">
@@ -125,7 +128,7 @@ export default function ShiftClock({ staff }) {
         ))}
         {days.length === 0 && <p className="muted">No shifts in the last two weeks.</p>}
       </div>
-      <button type="button" className="link" onClick={() => ask('add', null, 'Ask to add a shift you did not clock')}>I forgot to clock a shift</button>
+      <button type="button" className="link sc-forgot" onClick={() => ask('add', null, 'Ask to add a shift you did not clock')}>I forgot to clock a shift</button>
 
       {requests.slice(0, 5).some((r) => r.status !== 'pending') && (
         <div className="sc-reqs">
