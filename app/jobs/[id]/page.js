@@ -30,6 +30,7 @@ import { useChatCenter } from '@/lib/useChatInbox';
 import { useChatDock } from '@/components/chat/ChatDockContext';
 import { countForTarget } from '@/lib/chat';
 import JobFab from '@/components/job/JobFab';
+import QuickActionScreen from '@/components/job/QuickActionScreen';
 import PhotoViewer from '@/components/job/PhotoViewer';
 import CameraCapture from '@/components/job/CameraCapture';
 import { useJobRooms } from '@/lib/useJobRooms';
@@ -38,6 +39,7 @@ import { UploadStatus } from '@/components/job/PhotoUi';
 import { usePhotoUploader } from '@/lib/usePhotoUploader';
 import { eventLabel, updateRecipients, INTERNAL_CATEGORIES } from '@/lib/jobDocs';
 import { fabActions, FAB_LABELS, FAB_HIDDEN_TABS } from '@/lib/jobFab';
+import { isTabAction } from '@/lib/quickActions';
 import { reasonText } from '@/lib/visitReasons';
 import { groupVisits } from '@/lib/visitCrew';
 import { getSupabase } from '@/lib/supabaseClient';
@@ -137,6 +139,7 @@ function JobInner({ id, staff, token }) {
   const roomInput = useRef(null);
   const roomTarget = useRef(null);
   const [otwOpen, setOtwOpen] = useState(false);
+  const [qaOpen, setQaOpen] = useState(false); // the Quick Action Screen
   const [assignOpen, setAssignOpen] = useState(false);
   // one-shot requests from the phone's action button to a tab: { n } objects, cleared by the tab once it has acted
   const [moistCmd, setMoistCmd] = useState(null);
@@ -408,10 +411,23 @@ function JobInner({ id, staff, token }) {
     },
     clock_out: async () => { await apiFetch(`/api/jobs/${id}/clock`, token, { method: 'POST', body: JSON.stringify({ action: 'out' }) }); setClockTick((n) => n + 1); },
     clock_in: async () => { await apiFetch(`/api/jobs/${id}/clock`, token, { method: 'POST', body: JSON.stringify({ action: 'in' }) }); setClockTick((n) => n + 1); },
+    finish: async () => {
+      if (!window.confirm('Finish this job?')) return;
+      const r = await sendVisitAction({ visit: dockVisit, action: 'finished', jobId: id });
+      await load();
+      if (!r?.queued) onVisitAction('finished');
+    },
     complete: () => { openTab('updates'); setUpdCmd({ kind: 'internal', category: 'Completed Job', n: Date.now() }); },
     internal: () => { openTab('updates'); setUpdCmd({ kind: 'internal', category: INTERNAL_CATEGORIES[0], n: Date.now() }); },
   };
   const jobChatUnread = countForTarget(chatRows, { jobId: id });
+  // Quick Action Screen: tab actions open that tab; the rest use the same handlers as the phone button
+  const qaRun = (key) => {
+    if (key === 'eta') return fabRun.otw();
+    if (key === 'recheck') return fabRun.recheck();
+    if (isTabAction(key)) { openTab(key); return undefined; }
+    return fabRun[key]?.();
+  };
   const fabItems = fabKeys.map((key) => ({ key, badge: key === 'chat' ? jobChatUnread : 0, label: key === 'otw' && dockVisit?.status === 'on_the_way' ? 'Update ETA' : FAB_LABELS[key], onClick: fabRun[key] }));
   const contactName = [job.customer.first_name, job.customer.last_name].filter(Boolean).join(' ').trim();
   const anyFlag = visits.some((v) => flagged.has(v.id) && v.status !== 'cancelled');
@@ -461,6 +477,13 @@ function JobInner({ id, staff, token }) {
           );
         })}
       </div>
+
+      {tab === 'overview' && <button type="button" className="primary qa-open-btn" onClick={() => setQaOpen(true)}>Quick actions</button>}
+      <QuickActionScreen
+        open={qaOpen} onClose={() => setQaOpen(false)} job={job} customerName={job.customer.display_name}
+        visitStatus={dockVisit?.status || null} clock={clockMode} service={service} tabs={shownTabs.map(([k]) => k)}
+        hasSketch={sketches.length > 0} run={qaRun} badges={{ chat: jobChatUnread }}
+      />
 
       {tab === 'overview' && dockVisit && <VisitDock inline visit={dockVisit} token={token} onOtw={() => setOtwOpen(true)} onDone={load} onAction={onVisitAction} />}
 
