@@ -203,3 +203,12 @@ export function InvoiceIcon(props) {
     </svg>
   );
 }
+
+export function TimeClockIcon(props) {
+  return (
+    <svg {...common} {...props}>
+      <circle cx="10" cy="10" r="7.5" />
+      <path d="M10 5.5V10l3 2" />
+    </svg>
+  );
+}

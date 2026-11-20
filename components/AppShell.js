@@ -8,7 +8,7 @@ import { getSupabase } from '@/lib/supabaseClient';
 import { useTheme } from '@/lib/useTheme';
 import ThemeSwitch from '@/components/ThemeSwitch';
 import { initialsFor, displayNameFor } from '@/lib/userDisplay';
-import { DashboardIcon, SalesIcon, ScheduleIcon, JobDashboardIcon, SettingsIcon, UserIcon, SignOutIcon, MoreIcon, BellIcon, EquipmentIcon } from '@/components/icons';
+import { DashboardIcon, SalesIcon, ScheduleIcon, JobDashboardIcon, SettingsIcon, UserIcon, SignOutIcon, MoreIcon, BellIcon, EquipmentIcon, TimeClockIcon } from '@/components/icons';
 import BottomSheet from '@/components/BottomSheet';
 import JobJumpSearch from '@/components/JobJumpSearch';
 import { logoUrl } from '@/lib/branding';
@@ -30,6 +30,7 @@ const NAV = [
   { href: '/leads', label: 'Leads', icon: SalesIcon, roles: OFFICE, primary: true },
   { href: '/schedule', label: 'Schedule', icon: ScheduleIcon, roles: ALL, primary: true },
   { href: '/jobs', label: 'Jobs', icon: JobDashboardIcon, roles: ALL, primary: true },
+  { href: '/timeclock', label: 'Time clock', icon: TimeClockIcon, roles: ['tech'], primary: true },
   { href: '/customers', label: 'Customers', icon: UserIcon, roles: OFFICE },
   { href: '/equipment', label: 'Equipment', icon: EquipmentIcon, roles: ALL },
   // Activity, Invoices and Owner are tabs on the Dashboard now; their alerts roll up into its badge.

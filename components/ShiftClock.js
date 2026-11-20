@@ -7,13 +7,14 @@ import { fmtTime, toLocalInput, fromLocalInput } from '@/lib/format';
 import { dayRows, dayKey, hmWords, hmText, addDaysKey } from '@/lib/shiftClock';
 import { ClockInIcon, ClockOutIcon, BreakIcon } from '@/components/job/QuickIcons';
 import './shiftclock.css';
+import '@/components/dashboard/dashboardmobile.css';
 
 const when = (key) => new Date(`${key}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 const STATUS = { pending: 'Waiting for the owner', approved: 'Approved', rejected: 'Not approved' };
 
 // The day clock on a person's own dashboard: clock in, start/end a break, clock out, see this week's shifts, and ask for a change
 // the owner has to approve. Separate from the job clock, which times work on one job.
-export default function ShiftClock({ staff }) {
+export default function ShiftClock({ staff, hideWeek = false, onChanged }) {
   const sb = getSupabase();
   const [shifts, setShifts] = useState([]); const [breaks, setBreaks] = useState([]); const [sessions, setSessions] = useState([]); const [requests, setRequests] = useState([]);
   const [now, setNow] = useState(() => new Date());
@@ -48,8 +49,9 @@ export default function ShiftClock({ staff }) {
       const r = await apiFetch('/api/shifts', await token(), { method: 'POST', body: JSON.stringify({ action }) });
       if (r?.discarded) setMsg({ text: `That shift was under ${r.minutes || 5} minutes, so it was not recorded.` });
       await load();
+      onChanged?.();
     }
-    catch (e) { setMsg({ err: true, text: e.message }); await load(); }
+    catch (e) { setMsg({ err: true, text: e.message }); await load(); onChanged?.(); }
     setBusy(false);
   }
   function ask(target, row, label) {
@@ -106,8 +108,8 @@ export default function ShiftClock({ staff }) {
         </form>
       )}
 
-      <button type="button" className="secondary sc-week-toggle" aria-expanded={showWeek} onClick={() => setShowWeek(!showWeek)}>{showWeek ? 'Hide this week' : 'This week'}</button>
-      <div className="sc-days">
+      {!hideWeek && <button type="button" className="secondary sc-week-toggle" aria-expanded={showWeek} onClick={() => setShowWeek(!showWeek)}>{showWeek ? 'Hide this week' : 'This week'}</button>}
+      {!hideWeek && <div className="sc-days">
         {days.slice(0, 7).map((d) => (
           <div key={d.date} className="sc-day">
             <div className="sc-dayhead"><strong>{when(d.date)}</strong><span className="muted">{hmText(d.netMinutes)} worked{d.breakMinutes ? `, ${d.breakMinutes} min break` : ''}</span></div>
@@ -127,10 +129,10 @@ export default function ShiftClock({ staff }) {
           </div>
         ))}
         {days.length === 0 && <p className="muted">No shifts in the last two weeks.</p>}
-      </div>
-      <button type="button" className="link sc-forgot" onClick={() => ask('add', null, 'Ask to add a shift you did not clock')}>I forgot to clock a shift</button>
+      </div>}
+      {!hideWeek && <button type="button" className="link sc-forgot" onClick={() => ask('add', null, 'Ask to add a shift you did not clock')}>I forgot to clock a shift</button>}
 
-      {requests.slice(0, 5).some((r) => r.status !== 'pending') && (
+      {!hideWeek && requests.slice(0, 5).some((r) => r.status !== 'pending') && (
         <div className="sc-reqs">
           {requests.filter((r) => r.status !== 'pending').slice(0, 3).map((r) => (
             <div key={r.id} className="muted">{STATUS[r.status]}: {r.target === 'add' ? 'added shift' : r.target === 'break' ? 'break change' : 'shift change'} on {when(dayKey(r.new_started_at))}{r.decision_note ? `. ${r.decision_note}` : ''}</div>

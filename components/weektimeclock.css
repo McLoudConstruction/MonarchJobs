@@ -1,0 +1,28 @@
+.wtc{ max-width: 760px; margin: 0 auto; }
+.wtc-nav{ display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.wtc-nav .secondary{ min-width: 52px; min-height: 52px; font-size: 26px; line-height: 1; }
+.wtc-range{ flex: 1; display: flex; flex-direction: column; align-items: center; font-size: 17px; }
+.wtc-total{ display: flex; justify-content: space-around; text-align: center; margin-bottom: 12px; }
+.wtc-big{ font-size: 30px; font-weight: 700; line-height: 1.1; }
+.wtc-day{ margin-bottom: 10px; padding: 12px 14px; }
+.wtc-day.today{ border-color: var(--accent); border-width: 2px; }
+.wtc-day.future{ opacity: .55; }
+.wtc-dayhead{ display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 17px; }
+.wtc-daytotal{ font-size: 20px; font-weight: 700; }
+.wtc-sub{ font-size: 14px; margin-top: 2px; }
+.wtc-shift{ margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.wtc-line{ display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; font-size: 16px; }
+.wtc-break{ margin-top: 4px; padding-left: 12px; font-size: 14px; }
+.wtc-line .secondary.small{ min-height: 40px; }
+.wtc-flag{ margin-top: 6px; font-size: 14px; color: #b9560a; }
+.wtc-add{ display: inline-block; margin-top: 8px; padding: 8px 0; font-size: 15px; }
+.wtc-form{ display: grid; gap: 8px; margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.wtc-form input{ min-height: 44px; }
+.wtc-form-buttons{ display: flex; gap: 8px; }
+.wtc-form-buttons button{ flex: 1; min-height: 48px; }
+.wtc-reqs{ padding: 12px 14px; font-size: 15px; }
+.wtc-req{ display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; padding-top: 6px; }
+.wtc-req > .muted{ flex-basis: 100%; }
+.wtc-status.pending{ color: #b9560a; }
+.wtc-status.approved{ color: #1f7a43; }
+.wtc-status.rejected{ color: var(--danger); }
