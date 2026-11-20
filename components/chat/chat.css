@@ -72,3 +72,41 @@
 .chat-panel.fill .chat-list{ height: calc(100dvh - 270px); min-height: 320px; padding: 8px; }
 .chat-panel.fill .chat-composer{ gap: 6px; }
 .chat-page .chat-list{ height: calc(100dvh - 300px); min-height: 320px; }
+
+/* chat extras: pins, reactions, search, voice notes */
+.chat-head-actions{ display: flex; gap: 8px; }
+.chat-minihead{ gap: 12px; flex-wrap: wrap; }
+
+.chat-row.flash .chat-bubble{ box-shadow: 0 0 0 3px #ffe28a; transition: box-shadow .3s; }
+.chat-pinned-tag{ font-weight: 700; color: var(--accent); }
+
+.chat-reacts{ display: flex; flex-wrap: wrap; gap: 4px; margin: 3px 4px 0; }
+.chat-react{ display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 999px; padding: 1px 8px; min-height: 26px; font-size: 12.5px; cursor: pointer; }
+.chat-react.mine{ border-color: var(--accent); background: var(--bg); font-weight: 700; }
+.chat-picker{ display: flex; gap: 2px; margin: 4px 4px 0; padding: 2px 4px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); }
+.chat-picker button{ background: none; border: 0; font-size: 20px; line-height: 1; min-width: 40px; min-height: 40px; border-radius: 999px; cursor: pointer; }
+.chat-picker button:hover{ background: var(--bg); }
+
+.chat-search{ display: flex; flex-direction: column; gap: 6px; }
+.chat-search input{ width: 100%; font-size: 16px; }
+.chat-results, .chat-pins-list{ list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); max-height: 200px; overflow-y: auto; }
+.chat-results li, .chat-pins-list li{ display: flex; align-items: stretch; border-bottom: 1px solid var(--line); }
+.chat-results li:last-child, .chat-pins-list li:last-child{ border-bottom: 0; }
+.chat-results li > button:first-child, .chat-pins-list li > button:first-child{ flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; background: none; border: 0; padding: 8px 10px; min-height: 44px; font: inherit; color: var(--ink); cursor: pointer; }
+.chat-result-meta{ font-size: 11px; color: var(--ink-soft); }
+.chat-result-text{ font-size: 14px; overflow-wrap: anywhere; }
+.chat-result-text mark{ background: #ffe28a; color: #3b2f00; border-radius: 3px; padding: 0 1px; }
+
+.chat-pins{ display: flex; flex-direction: column; gap: 6px; }
+.chat-pins-head{ display: flex; justify-content: space-between; gap: 10px; align-items: center; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 6px 10px; min-height: 40px; font: inherit; font-size: 13px; font-weight: 700; color: var(--ink); cursor: pointer; }
+.chat-pins-latest{ font-weight: 400; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.chat-unpin{ background: none; border: 0; border-left: 1px solid var(--line); padding: 0 12px; font: inherit; font-size: 12px; color: var(--ink-soft); text-decoration: underline; cursor: pointer; }
+
+.chat-voice{ display: block; width: min(260px, 100%); height: 40px; }
+.chat-voice-len{ font-size: 11px; opacity: .8; margin-top: 2px; }
+.chat-recording{ display: flex; align-items: center; gap: 8px; flex: 1; }
+.chat-recording button{ border-radius: 999px; min-height: 32px; padding: 3px 12px; font-size: 13px; }
+.chat-rec-dot{ width: 10px; height: 10px; border-radius: 50%; background: #c0392b; animation: chat-rec 1.2s ease-in-out infinite; }
+.chat-rec-time{ font-variant-numeric: tabular-nums; font-size: 13px; }
+@keyframes chat-rec{ 50%{ opacity: .35; } }
+@media (prefers-reduced-motion: reduce){ .chat-rec-dot{ animation: none; } }

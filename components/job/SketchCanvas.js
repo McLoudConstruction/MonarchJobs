@@ -16,6 +16,7 @@ import { hasFeature, areaKindsFor } from '@/lib/services';
 import RoomBySize from '@/components/job/RoomBySize';
 import EquipmentSizing from '@/components/job/EquipmentSizing';
 import DehuReadings from '@/components/job/DehuReadings';
+import MeterScan from '@/components/job/MeterScan';
 import PullPrompt from '@/components/job/PullPrompt';
 import DayOneList, { useDayOne } from '@/components/job/DayOneList';
 import { drawPlan, areaStyle, WATER_LINE } from '@/lib/sketchDraw';
@@ -2420,6 +2421,11 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                 </div>
               )}
               {rdErr && <div className="msg err" style={{ margin: 0 }}>{rdErr}</div>}
+              <MeterScan wantsMoisture={!isAir} onResult={(res) => {
+                if (!isAir && res.moisture != null) setRd((r) => ({ ...r, val: fmtReading(res.moisture) }));
+                setAir((a) => ({ rh: res.rh != null ? fmtReading(res.rh) : a.rh, temp: res.tempF != null ? fmtReading(res.tempF) : a.temp }));
+                setRdErr('');
+              }} />
               <div className={`sk-pad${creating ? ' solo' : toRead ? ' two' : ''}`} role="group" aria-label="Number pad">
                 {['7', '8', '9'].map((k) => <button key={k} type="button" className="sk-key" onClick={() => padType(k)}>{k}</button>)}
                 {['4', '5', '6'].map((k) => <button key={k} type="button" className="sk-key" onClick={() => padType(k)}>{k}</button>)}

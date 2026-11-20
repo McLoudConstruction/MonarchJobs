@@ -2091,6 +2091,8 @@ html{ touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adju
 /* ---- meter photo on a reading ---- */
 .sk-rd-photo{ display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .sk-rd-photo button{ min-height: 40px; }
+.sk-meterscan{ margin: 2px 0 6px; }
+.sk-meterscan button{ min-height: 44px; }
 
 /* ---- adjuster link (staff panel) and the read-only adjuster page ---- */
 .adj-links{ display: flex; flex-direction: column; gap: 10px; }
@@ -2101,6 +2103,14 @@ html{ touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adju
 .adj-link-list a.small{ display: inline-flex; align-items: center; min-height: 40px; padding: 0 12px; }
 .adj-page h3{ margin: 14px 0 6px; font-size: 15px; }
 .adj-status{ font-weight: 700; margin: 4px 0 8px; }
+.adj-plan-wrap{ border: 1px solid var(--line); border-radius: 10px; background: #fff; overflow-x: auto; }
+.adj-plan-canvas{ display: block; width: 100%; min-width: 520px; height: auto; }
+.adj-day-pick{ display: inline-flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 14px; }
+.adj-legend{ display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.adj-key{ display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
+.adj-dry-bg{ background: #2b8a3e; }
+.adj-wet-bg{ background: #d9480f; }
+@media print{ .adj-plan-wrap{ break-inside: avoid; } }
 .adj-dry{ color: var(--ok); font-weight: 700; }
 .adj-wet{ color: var(--danger); font-weight: 700; }
 .adj-scroll{ overflow-x: auto; -webkit-overflow-scrolling: touch; }

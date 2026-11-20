@@ -132,3 +132,52 @@ test('the key panels exist and the scan kinds are registered', () => {
   assert.match(src, /openai: \{[^}]*public: \['model', 'use_first'\]/s);
   assert.ok(AI_KINDS.receipt.normalize);
 });
+
+// ---- meter screens (Priority 1: meter-photo OCR) ----
+import { normalizeMeter, AI_KINDS as KINDS_FOR_METER, anthropicRequest as anthropicReq, openaiRequest as openaiReq } from '../lib/aiExtract.js';
+
+test('meter: a clean moisture screen reads as numbers', () => {
+  const r = normalizeMeter({ readable: true, meter: 'moisture', moisture: 14.26, moisture_unit: 'wme', rh: null, temp: null, temp_unit: 'unknown', notes: '' });
+  assert.equal(r.moisture, 14.3);
+  assert.equal(r.unit, 'wme');
+  assert.equal(r.rh, null);
+  assert.equal(r.tempF, null);
+  assert.deepEqual(r.warnings, []);
+});
+
+test('meter: Celsius becomes Fahrenheit, humidity and temperature are kept', () => {
+  const r = normalizeMeter({ readable: true, meter: 'air', moisture: null, moisture_unit: 'unknown', rh: '55.5%', temp: 22.5, temp_unit: 'C', notes: '' });
+  assert.equal(r.rh, 55.5);
+  assert.equal(r.tempF, 72.5);
+  assert.equal(r.moisture, null);
+});
+
+test('meter: impossible numbers are dropped with a warning, never guessed', () => {
+  const r = normalizeMeter({ readable: true, meter: 'both', moisture: 450, moisture_unit: 'percent', rh: 130, temp: 900, temp_unit: 'F', notes: '' });
+  assert.equal(r.moisture, null);
+  assert.equal(r.rh, null);
+  assert.equal(r.tempF, null);
+  assert.ok(r.warnings.length >= 3);
+  assert.match(r.warnings[0], /No numbers were found|Type the reading in/);
+});
+
+test('meter: an unreadable picture says so', () => {
+  const r = normalizeMeter({ readable: false, meter: 'other', moisture: null, moisture_unit: 'unknown', rh: null, temp: null, temp_unit: 'unknown', notes: 'Glare' });
+  assert.equal(r.readable, false);
+  assert.match(r.warnings[0], /could not be read as a meter screen/);
+  assert.ok(r.warnings.includes('Glare'));
+  assert.deepEqual(normalizeMeter(null).moisture, null);
+  assert.equal(normalizeMeter({}).meter, 'other');
+});
+
+test('meter: technicians may scan it; receipts stay owner and office', () => {
+  assert.ok(KINDS_FOR_METER.meter.roles.includes('tech'));
+  assert.equal(KINDS_FOR_METER.receipt.roles, undefined);
+  const a = anthropicReq({ kind: 'meter', mediaType: 'image/jpeg', data: 'x' });
+  assert.equal(a.body.tool_choice.name, 'record_meter_reading');
+  const o = openaiReq({ kind: 'meter', mediaType: 'image/jpeg', data: 'x' });
+  assert.equal(o.body.response_format.json_schema.name, 'record_meter_reading');
+  // ChatGPT strict mode needs every property listed as required
+  const sc = KINDS_FOR_METER.meter.schema;
+  assert.deepEqual([...sc.required].sort(), Object.keys(sc.properties).sort());
+});

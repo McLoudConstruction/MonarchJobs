@@ -6,9 +6,10 @@ import { addressLine, JOB_TYPES } from '@/lib/format';
 import { displayPhone } from '@/lib/phone';
 import { logoUrl } from '@/lib/branding';
 import CenterCard from '@/components/CenterCard';
+import AdjusterPlan from '@/components/AdjusterPlan';
 
 // The adjuster's read-only view of the drying. No sign-in; the secret link is the access. Shows readings,
-// equipment and dehumidifier performance, never staff names, notes or photos.
+// equipment and dehumidifier performance and the floor plan, never staff names, notes or photos.
 const STATE = { dry: ['Dry', 'adj-dry'], wet: ['Wet', 'adj-wet'] };
 
 function View() {
@@ -50,6 +51,7 @@ function View() {
               {s.status.allDry ? `All ${s.status.total} points are dry${s.status.dryDay ? `, reached ${s.status.dryDay}` : ''}.` : `${s.status.dry} of ${s.status.total} points dry as of ${s.status.lastDate}; ${s.status.wet} still wet.`}
             </p>
           )}
+          {s.plan && <AdjusterPlan plan={s.plan} />}
           {s.rooms.map((r) => (
             <div key={r.name} className="adj-room">
               <h3>{r.name} <span className="muted">{r.allDry ? `· dry ${r.dryDay}` : `· ${r.dry} of ${r.points} dry`}</span></h3>

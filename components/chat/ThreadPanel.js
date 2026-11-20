@@ -7,10 +7,14 @@ import { segments } from '@/lib/sketchComments';
 import { CameraIcon } from '@/components/job/photoIcons';
 import { prepareImage } from '@/lib/photoUpload';
 import { useChatPhotoUrls } from '@/lib/chatPhotos';
+import { useChatVoiceUrls } from '@/lib/chatVoice';
+import VoiceRecorder from '@/components/chat/VoiceRecorder';
 import { useChatDock } from '@/components/chat/ChatDockContext';
 import {
   CHAT_PHOTO_BUCKET, MAX_BODY, PAGE_SIZE, cleanBody, personName, mentionPeople, mentionIds, groupByDay, mergeMessages, mergeAcks,
   firstUnreadId, ackState, needsMyAck, canEditMessage, canDeleteMessage, quickRepliesFor, photoPathFor, clockTime, tagIsMe,
+  CHAT_VOICE_BUCKET, MAX_PINS, REACTIONS, SEARCH_LIMIT, canPinMessage, isPinned, mergePins, mergeReactions, removeReaction, reactionSummary,
+  canSearch, likePattern, highlightParts, snippet, voicePathFor, durationText, previewText,
 } from '@/lib/chat';
 import './chat.css';
 
@@ -27,6 +31,8 @@ const newUuid = () => (globalThis.crypto?.randomUUID
   : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = (Math.random() * 16) | 0; return (c === 'x' ? r : (r & 3) | 8).toString(16); }));
 const friendly = (e) => (typeof navigator !== 'undefined' && navigator.onLine === false) || /failed to fetch|network|load failed/i.test(e?.message || '')
   ? 'No signal. Your message was not sent.'
+  : /TOO_MANY_PINS/.test(e?.message || '') ? `Up to ${MAX_PINS} messages can be pinned. Unpin one first.`
+  : notInstalled(e) ? 'This needs migration 035 (chat extras) run in Supabase first.'
   : (e?.message || 'Could not send.');
 
 export default function ThreadPanel({ kind, refId, staff, compact = false, active = true, fill = false }) {
@@ -44,6 +50,15 @@ export default function ThreadPanel({ kind, refId, staff, compact = false, activ
   const [busy, setBusy] = useState(false);
   const [ackBusy, setAckBusy] = useState(null);
   const [editing, setEditing] = useState(null); // { id, text }
+  const [reactions, setReactions] = useState([]);
+  const [pinnedRows, setPinnedRows] = useState([]); // pinned messages fetched on opening (may be older than the loaded page)
+  const [pinsOpen, setPinsOpen] = useState(false);
+  const [pickerFor, setPickerFor] = useState(null); // message id whose reaction choices are showing
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState(null); // null: nothing searched yet
+  const [searching, setSearching] = useState(false);
+  const [highlightId, setHighlightId] = useState(null);
 
   const listRef = useRef(null);
   const fileRef = useRef(null);
@@ -76,6 +91,7 @@ export default function ThreadPanel({ kind, refId, staff, compact = false, activ
     let alive = true;
     (async () => {
       setState('loading'); setError(''); setMessages([]); setAcks([]); setThreadId(null);
+      setReactions([]); setPinnedRows([]); setPinsOpen(false); setPickerFor(null); setSearchOpen(false); setQuery(''); setResults(null);
       const sb = getSupabase();
       const [t, ppl] = await Promise.all([
         kind === 'thread' ? Promise.resolve({ data: refId, error: null })
@@ -95,6 +111,14 @@ export default function ThreadPanel({ kind, refId, staff, compact = false, activ
       setThreadId(tid);
       stickRef.current = true;
       setState('ready');
+      // reactions and pins come after the chat is on screen; an older database without migration 035 just has none
+      const [rx, pn] = await Promise.all([
+        sb.from('chat_reactions').select('message_id,thread_id,user_id,emoji,created_at').eq('thread_id', tid),
+        sb.from('chat_messages').select('*').eq('thread_id', tid).not('pinned_at', 'is', null).is('deleted_at', null).order('pinned_at', { ascending: false }).limit(MAX_PINS),
+      ]);
+      if (!alive) return;
+      if (!rx.error) setReactions(rx.data || []);
+      if (!pn.error) setPinnedRows(pn.data || []);
     })();
     return () => { alive = false; };
   }, [kind, refId, staff.id, load]);
@@ -110,9 +134,18 @@ export default function ThreadPanel({ kind, refId, staff, compact = false, activ
           (p) => { if (p.new?.id) setMessages((cur) => mergeMessages(cur, [p.new])); })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_acks' },
           (p) => { if (p.new?.message_id) setAcks((cur) => mergeAcks(cur, [p.new])); })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_reactions', filter: `thread_id=eq.${threadId}` },
+          (p) => {
+            if (p.eventType === 'DELETE') setReactions((cur) => removeReaction(cur, p.old));
+            else if (p.new?.message_id) setReactions((cur) => mergeReactions(cur, [p.new]));
+          })
         .subscribe();
     } catch { /* polling below still works */ }
-    const refresh = () => { if (document.visibilityState === 'visible') load(threadId).catch(() => {}); };
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      load(threadId).catch(() => {});
+      sb.from('chat_reactions').select('message_id,thread_id,user_id,emoji,created_at').eq('thread_id', threadId).then((r) => { if (!r.error) setReactions(r.data || []); }, () => {});
+    };
     const poll = setInterval(refresh, 60000);
     document.addEventListener('visibilitychange', refresh);
     window.addEventListener('focus', refresh);
@@ -162,6 +195,34 @@ export default function ThreadPanel({ kind, refId, staff, compact = false, activ
   const groups = useMemo(() => groupByDay(messages), [messages]);
   const newId = useMemo(() => firstUnreadId(messages, lastRead, staff.id), [messages, lastRead, staff.id]);
   const photoUrls = useChatPhotoUrls(messages.filter((m) => m.photo_path && !m.deleted_at).map((m) => m.photo_path));
+  const voiceUrls = useChatVoiceUrls(messages.filter((m) => m.voice_path && !m.deleted_at).map((m) => m.voice_path));
+  const pins = useMemo(() => mergePins(pinnedRows, messages), [pinnedRows, messages]);
+
+  // search runs on the server (so it reaches messages older than the page on screen), a moment after typing stops
+  useEffect(() => {
+    if (!searchOpen || !threadId) return undefined;
+    if (!canSearch(query)) { setResults(null); setSearching(false); return undefined; }
+    let alive = true;
+    setSearching(true);
+    const t = setTimeout(async () => {
+      const { data, error: err } = await getSupabase().from('chat_messages').select('*')
+        .eq('thread_id', threadId).is('deleted_at', null).neq('kind', 'system').ilike('body', likePattern(query))
+        .order('created_at', { ascending: false }).limit(SEARCH_LIMIT);
+      if (!alive) return;
+      setSearching(false);
+      if (err) { setError(friendly(err)); setResults([]); } else setResults(data || []);
+    }, 300);
+    return () => { alive = false; clearTimeout(t); };
+  }, [query, searchOpen, threadId]);
+
+  // scroll to a message we jumped to and hold a soft highlight on it for a moment
+  useEffect(() => {
+    if (!highlightId) return undefined;
+    const el = listRef.current?.querySelector(`[data-mid="${highlightId}"]`);
+    if (el) { stickRef.current = false; el.scrollIntoView({ block: 'center' }); }
+    const t = setTimeout(() => setHighlightId(null), 2600);
+    return () => clearTimeout(t);
+  }, [highlightId, messages.length]);
 
   // ---- actions --------------------------------------------------------------
   async function post(raw, photoPath = null) {
@@ -197,6 +258,59 @@ export default function ThreadPanel({ kind, refId, staff, compact = false, activ
     } catch (e) { setError(friendly(e)); } finally { setBusy(false); if (fileRef.current) fileRef.current.value = ''; }
   }
 
+  async function sendVoice({ blob, ext, type, secs }) {
+    if (!blob || !threadId || busy) return;
+    setBusy(true); setError('');
+    try {
+      const path = voicePathFor(threadId, newUuid(), ext);
+      const { error: upErr } = await getSupabase().storage.from(CHAT_VOICE_BUCKET).upload(path, blob, { contentType: type, upsert: false });
+      if (upErr) throw upErr;
+      const row = { thread_id: threadId, author_id: staff.id, kind: 'voice', body: '', voice_path: path, voice_secs: secs, mentions: [] };
+      const { data, error: err } = await getSupabase().from('chat_messages').insert(row).select('*').single();
+      if (err) throw err;
+      stickRef.current = true;
+      setMessages((cur) => mergeMessages(cur, [data]));
+      changed();
+    } catch (e) { setError(friendly(e)); } finally { setBusy(false); }
+  }
+
+  async function react(m, emoji) {
+    setPickerFor(null);
+    const mine = { message_id: m.id, thread_id: m.thread_id, user_id: staff.id, emoji };
+    const had = reactions.some((r) => r.message_id === m.id && r.user_id === staff.id && r.emoji === emoji);
+    setReactions((cur) => (had ? removeReaction(cur, mine) : mergeReactions(cur, [{ ...mine, created_at: new Date().toISOString() }])));
+    const { error: err } = await getSupabase().rpc('chat_react', { p_message: m.id, p_emoji: emoji });
+    if (err) {
+      setReactions((cur) => (had ? mergeReactions(cur, [mine]) : removeReaction(cur, mine)));
+      setError(friendly(err));
+    }
+  }
+
+  async function togglePin(m) {
+    const pin = !isPinned(m);
+    setError('');
+    const { error: err } = await getSupabase().rpc('chat_set_pinned', { p_message: m.id, p_pinned: pin });
+    if (err) { setError(friendly(err)); return; }
+    const patch = { id: m.id, pinned_at: pin ? new Date().toISOString() : null, pinned_by: pin ? staff.id : null };
+    setMessages((cur) => mergeMessages(cur, [patch]));
+    setPinnedRows((cur) => (pin ? mergeMessages(cur, [{ ...m, ...patch }]) : cur.filter((x) => x.id !== m.id)));
+  }
+
+  // Go to a message, loading everything from it forward first when it is older than the page on screen.
+  async function jumpTo(m) {
+    setError('');
+    if (!messagesRef.current.some((x) => x.id === m.id)) {
+      const { data, error: err } = await getSupabase().from('chat_messages').select('*')
+        .eq('thread_id', threadId).gte('created_at', m.created_at).order('created_at', { ascending: true }).limit(500);
+      if (err) { setError(friendly(err)); return; }
+      setHasMore(true);
+      setMessages((cur) => mergeMessages(cur, data || []));
+    }
+    setPinsOpen(false); setSearchOpen(false);
+    setHighlightId(null);
+    setTimeout(() => setHighlightId(m.id), 30);
+  }
+
   async function saveEdit() {
     if (!editing) return;
     const body = cleanBody(editing.text);
@@ -215,7 +329,8 @@ export default function ThreadPanel({ kind, refId, staff, compact = false, activ
     setError('');
     const { error: err } = await getSupabase().from('chat_messages').update({ deleted_at: new Date().toISOString() }).eq('id', m.id);
     if (err) { setError(friendly(err)); return; }
-    setMessages((cur) => mergeMessages(cur, [{ id: m.id, deleted_at: new Date().toISOString(), body: '', photo_path: null }]));
+    setMessages((cur) => mergeMessages(cur, [{ id: m.id, deleted_at: new Date().toISOString(), body: '', photo_path: null, voice_path: null, pinned_at: null, pinned_by: null }]));
+    setPinnedRows((cur) => cur.filter((x) => x.id !== m.id));
     changed();
   }
 
@@ -266,6 +381,8 @@ export default function ThreadPanel({ kind, refId, staff, compact = false, activ
     );
   }
 
+  const reactionsFor = (m) => reactionSummary(reactions, m.id, staff.id);
+
   function renderMessage(m) {
     if (m.kind === 'system') return renderSystem(m);
     const mine = m.author_id === staff.id;
@@ -274,7 +391,7 @@ export default function ThreadPanel({ kind, refId, staff, compact = false, activ
     return (
       <Fragment key={m.id}>
         {m.id === newId && <div className="chat-new">New</div>}
-        <div className={`chat-row ${mine ? 'mine' : 'theirs'}`}>
+        <div className={`chat-row ${mine ? 'mine' : 'theirs'}${highlightId === m.id ? ' flash' : ''}`} data-mid={m.id}>
           {!mine && <div className="chat-who">{nameOf(m.author_id)}</div>}
           {editing?.id === m.id ? (
             <div className="chat-edit">
@@ -291,14 +408,36 @@ export default function ThreadPanel({ kind, refId, staff, compact = false, activ
                   {m.photo_path && (url
                     ? <a href={url} target="_blank" rel="noreferrer"><img className="chat-photo" src={url} alt="Picture sent in the chat" /></a>
                     : <div className="chat-note">Loading picture…</div>)}
+                  {m.voice_path && (voiceUrls[m.voice_path]
+                    ? <audio className="chat-voice" controls preload="metadata" src={voiceUrls[m.voice_path]} aria-label={`Voice note, ${durationText(m.voice_secs)}`} />
+                    : <div className="chat-note">Loading voice note…</div>)}
+                  {m.kind === 'voice' && <div className="chat-voice-len">Voice note · {durationText(m.voice_secs)}</div>}
                   {m.body ? <span>{renderBody(m.body)}</span> : null}
                 </>
               )}
             </div>
           )}
+          {!deleted && reactionsFor(m).length > 0 && (
+            <div className="chat-reacts">
+              {reactionsFor(m).map((r) => (
+                <button key={r.emoji} type="button" className={`chat-react${r.mine ? ' mine' : ''}`} onClick={() => react(m, r.emoji)}
+                  title={r.userIds.map((id) => (id === staff.id ? 'You' : nameOf(id))).join(', ')} aria-pressed={r.mine}>
+                  <span aria-hidden="true">{r.emoji}</span> {r.count}
+                </button>
+              ))}
+            </div>
+          )}
+          {pickerFor === m.id && !deleted && (
+            <div className="chat-picker" role="group" aria-label="Add a reaction">
+              {REACTIONS.map((e) => <button key={e} type="button" onClick={() => react(m, e)} aria-label={`React ${e}`}>{e}</button>)}
+            </div>
+          )}
           <div className="chat-meta">
             <time dateTime={m.created_at}>{clockTime(m.created_at)}</time>
+            {isPinned(m) && <span className="chat-pinned-tag">Pinned</span>}
             {m.edited_at && !deleted && <span>edited</span>}
+            {!deleted && editing?.id !== m.id && <button type="button" onClick={() => setPickerFor(pickerFor === m.id ? null : m.id)}>React</button>}
+            {canPinMessage(m) && editing?.id !== m.id && <button type="button" onClick={() => togglePin(m)}>{isPinned(m) ? 'Unpin' : 'Pin'}</button>}
             {canEditMessage(m, staff.id) && editing?.id !== m.id && <button type="button" onClick={() => setEditing({ id: m.id, text: m.body })}>Edit</button>}
             {canDeleteMessage(m, staff.id, staff.role) && editing?.id !== m.id && <button type="button" onClick={() => remove(m)}>Delete</button>}
           </div>
@@ -331,11 +470,58 @@ export default function ThreadPanel({ kind, refId, staff, compact = false, activ
   return (
     <div className={compact ? 'chat-panel compact' : `card chat-panel${fill ? ' fill' : ''}`} id={compact ? undefined : 'thread'}>
       {compact || fill ? (
-        <div className="chat-minihead"><button type="button" onClick={toggleMute} aria-pressed={muted}>{muted ? 'Unmute notifications' : 'Mute notifications'}</button></div>
+        <div className="chat-minihead">
+          <button type="button" onClick={() => setSearchOpen((o) => !o)} aria-pressed={searchOpen}>{searchOpen ? 'Close search' : 'Search this chat'}</button>
+          <button type="button" onClick={toggleMute} aria-pressed={muted}>{muted ? 'Unmute notifications' : 'Mute notifications'}</button>
+        </div>
       ) : (
         <div className="chat-head">
           <h2>Chat</h2>
-          <button type="button" className="secondary small" onClick={toggleMute} aria-pressed={muted}>{muted ? 'Unmute' : 'Mute'}</button>
+          <div className="chat-head-actions">
+            <button type="button" className="secondary small" onClick={() => setSearchOpen((o) => !o)} aria-pressed={searchOpen}>{searchOpen ? 'Close search' : 'Search'}</button>
+            <button type="button" className="secondary small" onClick={toggleMute} aria-pressed={muted}>{muted ? 'Unmute' : 'Mute'}</button>
+          </div>
+        </div>
+      )}
+      {searchOpen && (
+        <div className="chat-search">
+          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search messages in this chat" aria-label="Search messages in this chat" autoFocus maxLength={80} />
+          {searching && <div className="chat-note">Searching…</div>}
+          {!searching && results && results.length === 0 && <div className="chat-note">No messages match.</div>}
+          {!searching && !results && query.trim() && <div className="chat-note">Type at least 2 letters.</div>}
+          {results && results.length > 0 && (
+            <ul className="chat-results">
+              {results.map((m) => (
+                <li key={m.id}>
+                  <button type="button" onClick={() => jumpTo(m)}>
+                    <span className="chat-result-meta">{m.author_id === staff.id ? 'You' : nameOf(m.author_id)} · {new Date(m.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} {clockTime(m.created_at)}</span>
+                    <span className="chat-result-text">{highlightParts(snippet(m.body, query), query).map((p, i) => (p.hit ? <mark key={i}>{p.s}</mark> : <span key={i}>{p.s}</span>))}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {pins.length > 0 && (
+        <div className="chat-pins">
+          <button type="button" className="chat-pins-head" onClick={() => setPinsOpen((o) => !o)} aria-expanded={pinsOpen}>
+            <span>Pinned ({pins.length})</span>
+            <span className="chat-pins-latest">{pinsOpen ? 'Hide' : previewText(pins[0])}</span>
+          </button>
+          {pinsOpen && (
+            <ul className="chat-pins-list">
+              {pins.map((m) => (
+                <li key={m.id}>
+                  <button type="button" onClick={() => jumpTo(m)}>
+                    <span className="chat-result-meta">{m.author_id === staff.id ? 'You' : nameOf(m.author_id)} · {clockTime(m.created_at)}</span>
+                    <span className="chat-result-text">{previewText(m)}</span>
+                  </button>
+                  <button type="button" className="chat-unpin" onClick={() => togglePin(m)} aria-label="Unpin this message">Unpin</button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
       <div className="chat-list" ref={listRef} onScroll={onScroll} aria-live="polite">
@@ -357,6 +543,7 @@ export default function ThreadPanel({ kind, refId, staff, compact = false, activ
         <div className="chat-quick" aria-label="Quick replies">
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => sendPhoto(e.target.files?.[0])} />
           <button type="button" className="secondary chat-quick-photo" aria-label="Send a picture" title="Send a picture" disabled={busy} onClick={() => fileRef.current?.click()}><CameraIcon size={16} /></button>
+          <VoiceRecorder disabled={busy} onRecorded={sendVoice} onError={(msg) => setError(msg)} />
           {quickRepliesFor(staff.role).map((q) => (
             <button key={q} type="button" className="secondary" disabled={busy} onClick={() => send(q)}>{q}</button>
           ))}

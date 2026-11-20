@@ -26,3 +26,28 @@ test('the adjuster view has the drying, equipment and dehumidifier data and no s
   const text = JSON.stringify(v);
   assert.ok(!text.includes('Jordan') && !text.includes('behind fridge') && !text.includes('private note'));
 });
+
+import { adjusterPlan } from '../lib/adjusterView.js';
+import { buildEquipment } from '../lib/equipmentLog.js';
+import { normalizePlan } from '../lib/sketch.js';
+
+test('the adjuster floor plan keeps shapes, readings and the equipment trail, and drops people, notes and comments', () => {
+  const p = emptyPlan();
+  p.rooms = [{ ...newRoom('Kitchen', 0, 0, 12, 10), notes: 'owner is rude' }];
+  p.days = [{ id: 'd1', date: '2026-11-10' }];
+  const m = makeMoisture(3, 3, 1, { surface: 'floor', material: 'hardwood' });
+  m.readings = [{ id: 'r1', day: 'd1', at: '2026-11-10T15:00:00Z', val: 18, rh: null, temp: null, note: 'behind fridge', by: { id: 'u', name: 'Jordan Techman' } }];
+  p.moisture = [m];
+  p.equipment = [makeEquipment('airmover', 1, 5, 5, { day: 'd1', by: { id: 'u', name: 'Jordan Techman' }, note: 'private note' })];
+  p.comments = [{ id: 'c1', x: 1, y: 1, text: 'call Pat 555-1212', by: { id: 'u', name: 'Jordan Techman' }, at: '2026-11-10T15:00:00Z', tags: [], done: false, replies: [], log: [] }];
+  const plan = adjusterPlan(p);
+  const text = JSON.stringify(plan);
+  assert.ok(!text.includes('Jordan') && !text.includes('behind fridge') && !text.includes('private note') && !text.includes('555-1212') && !text.includes('owner is rude'));
+  assert.equal(plan.rooms.length, 1);
+  assert.equal(plan.rooms[0].pts.length, 4);
+  assert.equal(plan.moisture[0].readings[0].val, 18);
+  // the equipment trail survives, so the plan can still be drawn as of a day
+  assert.equal(buildEquipment(normalizePlan(plan)).units.length, 1);
+  assert.deepEqual(plan.comments, []);
+  assert.deepEqual(plan.marks, []);
+});
