@@ -29,7 +29,7 @@ export default function QuickActionScreen({ open, onClose, landing = false, job,
     setBusy(a.key);
     try {
       await run(a.key);
-      if (!(landing && ['otw', 'eta', 'start', 'finish', 'clock_in', 'clock_out'].includes(a.key))) onClose(); // on the landing page these stay put; the buttons update in place
+      if (!(landing && ['otw', 'eta', 'start', 'finish', 'clock_in', 'clock_out', 'photos', 'chat'].includes(a.key))) onClose(); // on the landing page these stay put (camera and chat open on top of it, the buttons update in place)
     } catch (e) {
       setErr(e?.message || 'That did not work. Try again.');
     }

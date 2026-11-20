@@ -153,10 +153,18 @@ function JobInner({ id, staff, token }) {
   const [clockRunning, setClockRunning] = useState(false); // this person's job clock is running now
   const [gobacks, setGobacks] = useState({});            // visit id -> tech id, for visits added as a tech's go-back (office and owner only)
 
+  // Screens opened from the Quick Action Screen exit back to it (back bar, or the phone's back gesture)
+  const qaFromRef = useRef(false);
+  const backToQaRef = useRef(null);
+  const [qaFrom, setQaFrom] = useState(false);
   // keep the open tab across refreshes and back/forward (#overview, #photos, #sketch ...)
   useEffect(() => {
     setTab(tabFromHash());
-    const onHash = () => setTab(tabFromHash());
+    const onHash = () => {
+      // the phone's back gesture from a screen opened on the Quick Action Screen returns to it
+      if (!window.location.hash && qaFromRef.current) { backToQaRef.current?.(); return; }
+      setTab(tabFromHash());
+    };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
@@ -427,10 +435,20 @@ function JobInner({ id, staff, token }) {
   };
   const jobChatUnread = countForTarget(chatRows, { jobId: id });
   // Quick Action Screen: tab actions open that tab; the rest use the same handlers as the phone button
+  const enterFromQa = (tabKey) => { qaFromRef.current = true; setQaFrom(true); window.history.pushState(null, '', `#${tabKey}`); };
+  const backToQa = () => {
+    qaFromRef.current = false;
+    setQaFrom(false);
+    if (window.location.hash) window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    setTab('overview');
+    setQaLanding(window.matchMedia('(max-width: 899px)').matches);
+    setQaOpen(true);
+  };
+  backToQaRef.current = backToQa;
   const qaRun = (key) => {
     if (key === 'eta') return fabRun.otw();
-    if (key === 'recheck') return fabRun.recheck();
-    if (isTabAction(key)) { openTab(key); return undefined; }
+    if (key === 'recheck') { enterFromQa('moisture'); return fabRun.recheck(); }
+    if (isTabAction(key)) { enterFromQa(key); openTab(key); return undefined; }
     return fabRun[key]?.();
   };
   const fabItems = fabKeys.map((key) => ({ key, badge: key === 'chat' ? jobChatUnread : 0, label: key === 'otw' && dockVisit?.status === 'on_the_way' ? 'Update ETA' : FAB_LABELS[key], onClick: fabRun[key] }));
@@ -440,6 +458,7 @@ function JobInner({ id, staff, token }) {
   return (
     <>
       <Breadcrumb items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Jobs', href: '/jobs' }, { label: `Job #${job.job_number}` }]} />
+      {qaFrom && !qaOpen && <button type="button" className="secondary qa-back" onClick={backToQa}>&lsaquo; Quick actions</button>}
       <div className="page-head">
         <h1>Job #{job.job_number} <span className={`badge s-${job.status}`}>{JOB_STATUS[job.status]}</span></h1>
         <div className="row" style={{ gap: 8 }}>

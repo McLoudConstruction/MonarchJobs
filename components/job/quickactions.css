@@ -26,3 +26,4 @@
 .qa-details{ min-height: 48px; padding: 0 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--card-bg); color: var(--ink); font-size: 16px; font-weight: 600; cursor: pointer; }
 /* landing page on phones: fills the screen above the bottom navigation, which stays usable */
 .qa-screen.landing{ z-index: 40; bottom: calc(64px + env(safe-area-inset-bottom)); }
+.qa-back{ min-height: 48px; margin: 0 0 10px; padding: 0 16px; font-size: 17px; font-weight: 600; }
