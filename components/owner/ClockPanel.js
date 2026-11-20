@@ -63,6 +63,7 @@ export default function ClockPanel({ bounds, rangeLabel }) {
   useEffect(() => { load(); }, [load]);
 
   const roll = useMemo(() => efficiencyRollup(jobs), [jobs]);
+  const emailOf = (id) => people.find((x) => x.id === id)?.email || '';
   const name = (id) => { const p = people.find((x) => x.id === id); return p ? staffName(p) : 'Someone'; };
   const worst = useMemo(() => jobs
     .map((j) => { const mins = Object.values(j.byStaff).reduce((a, b) => a + b, 0); return { ...j, mins, ...efficiency({ revenueCents: j.revenueCents, clockedMinutes: mins, allottedMinutes: j.allottedMinutes }) }; })
@@ -121,7 +122,7 @@ export default function ClockPanel({ bounds, rangeLabel }) {
               <thead><tr><th>Tech</th><th className="n">Jobs</th><th className="n">Hours</th><th className="n">Per hour</th></tr></thead>
               <tbody>
                 {roll.byStaff.map((s) => (
-                  <tr key={s.staffId}><td>{name(s.staffId)}</td><td className="n">{s.jobs}</td><td className="n">{(s.minutes / 60).toFixed(1)}</td><td className="n">{s.perHourCents == null ? '—' : dollars(s.perHourCents)}</td></tr>
+                  <tr key={s.staffId}><td>{name(s.staffId)}{emailOf(s.staffId) && <div className="muted" style={{ fontSize: 13 }}>{emailOf(s.staffId)}</div>}</td><td className="n">{s.jobs}</td><td className="n">{(s.minutes / 60).toFixed(1)}</td><td className="n">{s.perHourCents == null ? '—' : dollars(s.perHourCents)}</td></tr>
                 ))}
               </tbody>
             </table>

@@ -126,7 +126,7 @@ export default function TimeClockTab() {
       {people.map((p) => (
         <section key={p.id} className="card tc-person">
           <div className="row" style={{ justifyContent: 'space-between', gap: 8 }}>
-            <h2 style={{ margin: 0 }}><span aria-hidden style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 6, background: colorFor(p.color).hex || '#888', marginRight: 8 }} />{p.name}</h2>
+            <div><h2 style={{ margin: 0 }}><span aria-hidden style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 6, background: colorFor(p.color).hex || '#888', marginRight: 8 }} />{p.name}</h2>{p.email && <div className="muted" style={{ fontSize: 13 }}>{p.email}</div>}</div>
             <div className="muted"><span className="tc-total">{hmText(p.net)}</span> worked &middot; {hmText(p.jobs)} on jobs{p.flags > 0 && <span className="tab-count warn" style={{ marginLeft: 8 }} title="Things that do not add up">{p.flags}</span>}</div>
           </div>
           {p.days.length === 0 && <p className="muted">No shifts this week.</p>}

@@ -29,6 +29,7 @@ export default function GobackPanel({ bounds, rangeLabel }) {
   }, [sb]);
   useEffect(() => { load(); }, [load]);
 
+  const emailOf = (id) => people.find((x) => x.id === id)?.email || '';
   const name = (id) => { const p = people.find((x) => x.id === id); return p ? staffName(p) : 'Someone'; };
   const inRange = useMemo(() => rows.filter((r) => !r.voided_at && inWindow(r.created_at, bounds.from, bounds.to)), [rows, bounds.from, bounds.to]);
   const counts = useMemo(() => gobackCounts(inRange), [inRange]);
@@ -53,7 +54,7 @@ export default function GobackPanel({ bounds, rangeLabel }) {
         <>
           <table className="own-table">
             <thead><tr><th>Tech</th><th className="n">Go-backs</th></tr></thead>
-            <tbody>{counts.map((c) => <tr key={c.techId}><td>{name(c.techId)}</td><td className="n">{c.count}</td></tr>)}</tbody>
+            <tbody>{counts.map((c) => <tr key={c.techId}><td>{name(c.techId)}{emailOf(c.techId) && <div className="muted" style={{ fontSize: 13 }}>{emailOf(c.techId)}</div>}</td><td className="n">{c.count}</td></tr>)}</tbody>
           </table>
           <h4 className="cp-sub">Latest</h4>
           {inRange.slice(0, 8).map((r) => (
