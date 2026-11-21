@@ -1845,6 +1845,17 @@ button.assign-btn:hover{ background: #d90000; border-color: #d90000; box-shadow:
   .sk-topstack > .sketch-over-tr{ flex-direction: row; gap: 6px; }
   .sketch.mode-moisture .sk-topstack > .sketch-over-tl{ right: auto; }
   .sketch.mode-moisture .sk-topstack .sketch-over button.sk-icon{ width: 40px; height: 40px; }
+  /* Moisture on a phone: every row runs the full width of the screen */
+  .sketch.mode-moisture .sk-topstack{ align-items: stretch; }
+  .sketch.mode-moisture .sk-topstack > .sketch-over{ width: 100%; box-sizing: border-box; }
+  .sketch.mode-moisture .sk-topstack .sk-moist-bar{ align-items: stretch; width: 100%; }
+  .sketch.mode-moisture .sk-topstack .sk-bar-row{ width: 100%; }
+  .sketch.mode-moisture .sk-topstack .sk-bar-row > button.sk-day-btn{ flex: 1 1 auto; min-width: 0; }
+  .sketch.mode-moisture .sk-topstack .sk-bar-row > button.sk-dayone-btn{ flex: 0 0 auto; }
+  .sketch.mode-moisture .sk-topstack .sk-work{ display: flex; align-self: stretch; width: 100%; box-sizing: border-box; }
+  .sketch.mode-moisture .sk-topstack .sk-work button{ flex: 1 1 0; justify-content: center; }
+  .sketch.mode-moisture .sk-topstack > .sketch-over-tr{ justify-content: space-between; }
+  .sketch.mode-moisture .sk-topstack > .sketch-over-tr button.sk-icon{ flex: 1 1 0; width: auto; min-width: 0; }
   /* no card around the floorplan: it runs edge to edge */
   .card.moist-card{ background: none; border: 0; border-radius: 0; box-shadow: none; padding: 0; margin: -8px -14px 0; }
   .moist-card .moist-head{ padding: 0 14px; }
