@@ -257,7 +257,6 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   const [sizeOpen, setSizeOpen] = useState(false); // the add-a-room-by-size dialog
   const [eqNote, setEqNote] = useState(''); // "AM 3 placed in Kitchen", for a moment
   const [scanFor, setScanFor] = useState(null); // the unit whose asset tag is being scanned with the camera
-  const [scanOffer, setScanOffer] = useState(null); // the unit just placed: offers the camera for its asset tag for a few seconds
   const [kb, setKb] = useState(0); // how far the phone keyboard covers the bottom of the sketch, in pixels
   const [vvBox, setVvBox] = useState(null); // the part of the screen the phone keyboard leaves free: { top, height }
   const [numField, setNumField] = useState('val'); // which of Reading / RH / Temp the number pad types into
@@ -1468,7 +1467,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     if (!made.length) return;
     commit({ ...pl, equipment: [...pl.equipment, ...made] });
     setSel({ kind: 'equipment', id: made[made.length - 1].id });
-    setScanOffer(made.length === 1 && assets && assets.list.some((a) => a.status === 'available' && a.type === t) ? made[0].id : null); // one unit: offer to scan its tag right away
+    if (made.length === 1) openPopup(0, 0); // one unit: its sheet opens straight away (asset tag scan, model, note), no second tap needed
     setEqNote(made.length === 1 ? `${unitCode(made[0])} placed in ${roomTitle(rm)}` : `${made.length} ${EQUIPMENT_TYPES[t].plural} placed in ${roomTitle(rm)} (${unitCode(made[0])} to ${unitCode(made[made.length - 1])}). Drag any one to move it.`);
     if (eqQtyRef.current > 1) { eqQtyRef.current = 1; setEqQty(1); } // a bigger number is for one placement, so a second tap does not drop five more by accident
   }
@@ -1545,11 +1544,6 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     const t = setTimeout(() => setEqNote(''), 2600);
     return () => clearTimeout(t);
   }, [eqNote]);
-  useEffect(() => { // the camera offer after placing a unit stays a little longer than the note, then goes quietly
-    if (!scanOffer) return undefined;
-    const t = setTimeout(() => setScanOffer(null), 9000);
-    return () => clearTimeout(t);
-  }, [scanOffer]);
   // A scanned label for the unit in hand: link that asset to it (same rules as the picker, plus the type follows the tag)
   function applyScan(text) {
     const id = scanFor;
@@ -1566,7 +1560,6 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     if (!u.label && a.label) patch.label = a.label.slice(0, 40);
     if (!u.ppd && a.ppd) patch.ppd = a.ppd;
     patchEquip(u.id, patch);
-    setScanOffer(null);
     setEqNote(`${a.tag} linked${r.switchType ? ` (now ${EQUIPMENT_TYPES[a.type].label.toLowerCase()})` : ''}`);
   }
 
@@ -1813,7 +1806,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
       {(full || !headSlot) && <div className="sketch-head-inline">{headBtns}</div>}
       {!full && headSlot && createPortal(headBtns, headSlot)}
 
-      <div className="sketch-stage" ref={wrapRef}>
+      <div className={`sketch-stage${mode === 'moisture' && (dayOpen || layersOpen || moistOpen || eqListOpen) ? ' sk-panel-open' : ''}`} ref={wrapRef}>
         <div className={variant === 'moisture' ? 'sk-topstack' : 'sk-topfrag'}>
         <div className="sketch-over sketch-over-tl">
           {mode === 'draw' && (<div className="sketch-tools" role="toolbar" aria-label="Sketch tools">
@@ -2125,10 +2118,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
           : (focusId
             ? !plan.moisture.some((m) => pointInPoly(plan.rooms.find((r) => r.id === focusId)?.pts || [], m.x, m.y)) && <div className="sk-tip">Tap the room to log a reading</div>
             : !plan.moisture.length && <div className="sk-tip">Tap a room to zoom in and log readings</div>))}
-        {eqNote && <div className="sk-tip" role="status" style={{ bottom: scanOffer ? 76 : 70 }}>{eqNote}</div>}
-        {scanOffer && !sheetOpen && !scanFor && (
-          <button type="button" className="sk-scan-offer" onClick={() => setScanFor(scanOffer)}><CameraIcon /> Scan asset tag</button>
-        )}
+        {eqNote && <div className="sk-tip" role="status" style={{ bottom: 70 }}>{eqNote}</div>}
         {rcNote && <div className="sk-tip" role="status" style={{ bottom: 70 }}>{rcNote}</div>}
         {moveEqId && (
           <div className="sk-movebar" role="status">

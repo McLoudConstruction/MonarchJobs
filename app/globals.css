@@ -2432,3 +2432,13 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]){ margin: 0
 .sk-scan-view video{ width: 100%; height: 100%; object-fit: cover; }
 .sk-scan-frame{ position: absolute; inset: 18%; border: 3px solid rgba(255,255,255,0.9); border-radius: 14px; box-shadow: 0 0 0 999px rgba(0,0,0,0.35); pointer-events: none; }
 .sk-scan-err{ margin: 0; font-size: 14px; font-weight: 600; color: #c92a2a; }
+
+
+/* Phone, moisture: option panels (day, layers, new-point settings, equipment list) float over the plan at full width instead of
+   pushing the controls down and squeezing the floorplan. The stage grows while one is open so the panel is never cut off. */
+@media (max-width: 700px){
+  .sketch.mode-moisture .sk-topstack .sk-moist-opts{ position: absolute; left: 0; right: 0; top: 100%; width: auto; margin-top: 6px; max-height: 46dvh; z-index: 6; box-sizing: border-box; }
+  .sketch[data-variant="moisture"]:not(.sketch-full) .sketch-stage.sk-panel-open{ max-height: none; min-height: max(540px, 82dvh); }
+}
+/* the Day 1 checklist uses the width of the screen */
+.sketch-modal-card.sk-dayone{ width: min(640px, calc(100vw - 16px)); box-sizing: border-box; }
