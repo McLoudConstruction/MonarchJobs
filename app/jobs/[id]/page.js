@@ -141,10 +141,24 @@ function JobInner({ id, staff, token }) {
   const [otwOpen, setOtwOpen] = useState(false);
   const [qaOpen, setQaOpen] = useState(false); // the Quick Action Screen
   const [qaLanding, setQaLanding] = useState(false); // on a phone it is the landing page of a job, in place of the Overview tab
+  // Quick Actions mode (phones): the job's home is the Quick Action Screen, and everything else is a screen opened from it. It stays on
+  // across jobs, reloads and the app resuming, until the person taps the X on it. The choice is kept on this phone, per person.
+  const qaModeKey = `mj-qa-mode:${staff?.id || ''}`;
+  const qaModeRef = useRef(false);
+  const setQaMode = (on) => {
+    qaModeRef.current = on;
+    try { window.localStorage.setItem(qaModeKey, on ? 'on' : 'off'); } catch { /* private mode: the choice just is not kept */ }
+  };
+  const isPhone = () => typeof window !== 'undefined' && window.matchMedia('(max-width: 899px)').matches;
   useEffect(() => {
-    const phone = window.matchMedia('(max-width: 899px)').matches;
-    if (phone && !window.location.hash && !new URLSearchParams(window.location.search).get('unit')) { setQaLanding(true); setQaOpen(true); }
-  }, []);
+    let off = false;
+    try { off = window.localStorage.getItem(qaModeKey) === 'off'; } catch { off = false; }
+    if (!isPhone() || off) return;
+    qaModeRef.current = true;
+    const unit = new URLSearchParams(window.location.search).get('unit');
+    if (!window.location.hash && !unit) { setQaLanding(true); setQaOpen(true); }
+    else { qaFromRef.current = true; setQaFrom(true); } // a screen is already open (reload, scanned label): the way back to Quick Actions is there too
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [assignOpen, setAssignOpen] = useState(false);
   // one-shot requests from the phone's action button to a tab: { n } objects, cleared by the tab once it has acted
   const [moistCmd, setMoistCmd] = useState(null);
@@ -168,7 +182,12 @@ function JobInner({ id, staff, token }) {
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
-  const openTab = (k) => { setTab(k); window.history.replaceState(null, '', `#${k}`); };
+  const openTab = (k) => {
+    if (qaModeRef.current && k === 'overview') { backToQaRef.current?.(); return; } // in Quick Actions mode the job's home is the Quick Action Screen
+    if (qaModeRef.current && !qaFromRef.current) { qaFromRef.current = true; setQaFrom(true); } // any screen opened in the mode has the way back
+    setTab(k);
+    window.history.replaceState(null, '', `#${k}`);
+  };
   // a scanned equipment label opens the job with ?unit=<id>: go to the Moisture tab and open that unit, once
   const scanUnit = useRef(typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('unit'));
   useEffect(() => {
@@ -502,9 +521,9 @@ function JobInner({ id, staff, token }) {
         })}
       </div>
 
-      {tab === 'overview' && <button type="button" className="primary qa-open-btn" onClick={() => setQaOpen(true)}>Quick actions</button>}
+      {tab === 'overview' && <button type="button" className="primary qa-open-btn" onClick={() => { if (isPhone()) { setQaMode(true); setQaLanding(true); } setQaOpen(true); }}>Quick actions</button>}
       <QuickActionScreen
-        open={qaOpen} landing={qaLanding} onClose={() => { setQaOpen(false); setQaLanding(false); }} job={job} customerName={job.customer.display_name}
+        open={qaOpen} landing={qaLanding} onClose={() => { setQaOpen(false); setQaLanding(false); }} onExit={() => { setQaMode(false); qaFromRef.current = false; setQaFrom(false); setQaOpen(false); setQaLanding(false); setTab('overview'); if (window.location.hash) window.history.replaceState(null, '', window.location.pathname + window.location.search); }} job={job} customerName={job.customer.display_name}
         visitStatus={dockVisit?.status || null} clock={clockMode} service={service} tabs={shownTabs.map(([k]) => k)}
         hasSketch={sketches.length > 0} run={qaRun} badges={{ chat: jobChatUnread }}
       />
