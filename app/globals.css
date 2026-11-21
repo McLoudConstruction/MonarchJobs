@@ -2152,7 +2152,7 @@ html{ touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adju
 /* ---- Day 1 checklist ---- */
 .sk-dayone-btn{ position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; border: 2px solid var(--accent); border-radius: 22px; color: var(--ink); font-weight: 700; font-size: 13px; overflow: hidden; isolation: isolate; background: linear-gradient(to right, rgba(84,233,222,0.45) var(--p, 0%), var(--card-bg) var(--p, 0%)); }
 .sk-dayone-btn.all{ border-color: #2b8a3e; background: #ebfbee; color: #2b8a3e; }
-.sk-dayone{ display: flex; flex-direction: column; gap: 10px; max-height: 85vh; overflow-y: auto; }
+.sk-dayone{ display: flex; flex-direction: column; gap: 0; max-height: 85vh; max-height: 85dvh; overflow: hidden; padding: 0; }
 .sk-dayone-list{ list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .sk-dayone-list li{ display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
 .sk-dayone-list li.next{ border-color: var(--accent); }
@@ -2443,5 +2443,7 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]){ margin: 0
 /* the Day 1 checklist uses the width of the screen */
 .sketch-modal-card.sk-dayone{ width: min(640px, calc(100vw - 16px)); box-sizing: border-box; }
 
-/* Day 1 checklist: the title and the close button stay put while the list scrolls */
-.sketch-modal-card.sk-dayone .sketch-pop-head{ position: sticky; top: 0; z-index: 2; margin: -14px -14px 0; padding: 14px; background: var(--card-bg); border-bottom: 1px solid var(--line); }
+/* Day 1 checklist: the header stays put; only the list scrolls, and it never scrolls the page behind it */
+.sketch-modal-card.sk-dayone .sketch-pop-head{ flex: 0 0 auto; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.sk-dayone-body{ flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 14px 16px 18px; }
+.sk-modal-lock, .sketch-modal{ overscroll-behavior: contain; }
