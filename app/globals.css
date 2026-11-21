@@ -2363,3 +2363,38 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]){ margin: 0
 .avatar-img{ width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
 .shell-account-btn:has(.avatar-img){ overflow: hidden; }
 .more-sheet-avatar{ width: 40px; height: 40px; flex-shrink: 0; }
+
+/* Push 1A: estimate expiry banner, duplicate check, call script, claim checklist, property rates */
+.linklike{ background: none; border: 0; padding: 0; color: var(--accent-text); cursor: pointer; font: inherit; text-decoration: underline; }
+.banner.info{ background: var(--card-bg); border-color: var(--line); color: var(--ink); font-weight: 500; }
+
+.dup-banner{ background: var(--warn-bg); border: 1px solid var(--warn-line); border-left-width: 4px; color: var(--warn-ink); border-radius: 6px; padding: 10px 14px; margin-bottom: 12px; font-size: 13.5px; }
+.dup-banner ul{ list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 8px; }
+.dup-banner li{ display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; }
+.dup-banner .dup-actions{ display: flex; gap: 12px; align-items: center; }
+.button-like{ display: inline-block; text-decoration: none; padding: 5px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--card-bg); color: var(--ink); font-size: 12.5px; }
+
+.wizard-body.has-script{ display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; align-items: start; }
+.call-script{ position: sticky; top: 0; padding: 0; overflow: hidden; margin: 0; }
+.call-script-head{ width: 100%; display: flex; align-items: center; gap: 8px; background: none; border: 0; padding: 10px 14px; cursor: pointer; font: inherit; color: var(--ink); text-align: left; }
+.call-script-title{ font-weight: 700; flex: 1; }
+.call-script-count{ font-size: 12px; color: var(--muted, #6b7280); }
+.call-script-body{ padding: 2px 14px 12px; max-height: 60vh; overflow-y: auto; }
+.call-script-group{ font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted, #6b7280); margin: 12px 0 4px; }
+.call-script-item{ display: flex; gap: 8px; align-items: flex-start; padding: 5px 0; font-size: 13.5px; line-height: 1.35; cursor: pointer; }
+.call-script-item input{ margin-top: 3px; flex: none; }
+.call-script-item.done span{ color: var(--muted, #6b7280); text-decoration: line-through; }
+@media (max-width: 900px){
+  .wizard-body.has-script{ grid-template-columns: 1fr; }
+  .call-script{ position: static; order: -1; }
+  .call-script-body{ max-height: 40vh; }
+}
+
+.claim-checks{ display: grid; gap: 2px; }
+.claim-check{ display: flex; gap: 10px; align-items: flex-start; padding: 7px 0; font-size: 14px; cursor: pointer; }
+.claim-check input{ margin-top: 3px; flex: none; width: 18px; height: 18px; }
+
+.prop-rates{ display: grid; gap: 6px; max-height: 280px; overflow-y: auto; margin-bottom: 10px; }
+.prop-rate{ display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+.prop-rate-name{ flex: 1; font-size: 13.5px; }
+.prop-rate input{ width: 96px; text-align: right; }

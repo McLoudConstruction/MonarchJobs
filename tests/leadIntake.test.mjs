@@ -83,7 +83,10 @@ test('on-site contact shows name and phone together', () => {
 test('the overview shows only answers that exist', () => {
   assert.deepEqual(intakeHighlights('restoration', { intake: {} }), []);
   const rows = intakeHighlights('restoration', { intake: { loss_type: 'Burst pipe', water_source: 'gray', claim: 'yes', carrier: 'State Farm', claim_number: 'A1' } });
-  assert.deepEqual(rows, [['Loss', 'Burst pipe · Gray (dishwasher, washer, sink)'], ['Claim', 'State Farm · claim A1']]);
+  // a claim also shows how far the "ask the carrier" checklist is (push 1A)
+  assert.deepEqual(rows.map((r) => r[0]), ['Loss', 'Claim', 'Claim checklist']);
+  assert.deepEqual(rows.slice(0, 2), [['Loss', 'Burst pipe · Gray (dishwasher, washer, sink)'], ['Claim', 'State Farm · claim A1']]);
+  assert.match(rows[2][1], /^0 of 8 asked/);
   const carpet = intakeHighlights('carpet', { intake: { clean_items: ['Carpet'], quote_type: 'phone' } });
   assert.deepEqual(carpet, [['Cleaning', 'Carpet'], ['Quote', 'Quick quote by phone']]);
 });

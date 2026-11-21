@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAdmin } from '@/lib/supabaseAdmin';
 import { estimateTotals, estimateSnapshot } from '@/lib/estimate';
 import { effectiveLines, validateChoice } from '@/lib/estimateOptions';
+import { isExpired } from '@/lib/estimateExpiry';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,12 +38,13 @@ export async function POST(request, { params }) {
   const admin = getAdmin();
   const { data: est } = await admin
     .from('estimates')
-    .select('id,job_id,lead_id,status,minimum_charge')
+    .select('id,job_id,lead_id,status,minimum_charge,expires_at')
     .eq('share_token', token)
     .maybeSingle();
   if (!est || est.status === 'draft') return NextResponse.json({ error: 'Not found.' }, { status: 404 });
   if (est.status === 'approved') return NextResponse.json({ error: 'This estimate was already approved.' }, { status: 409 });
   if (est.status !== 'sent') return NextResponse.json({ error: 'This estimate can no longer be approved online. Please contact us.' }, { status: 409 });
+  if (isExpired(est)) return NextResponse.json({ error: 'This estimate has expired. Please contact us and we will be glad to send a new one.' }, { status: 409 });
 
   const { data: lines } = await admin
     .from('estimate_lines')

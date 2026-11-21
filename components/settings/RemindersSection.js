@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
 import { apiFetch } from '@/lib/useAuth';
+import { parseFollowupDays } from '@/lib/estimateFollowup';
 
-const FIELDS = 'ontheway_auto,aftercare_auto,aftercare_default,rebook_enabled,rebook_months,rebook_message,plan_offer_enabled,plan_offer_days,plan_offer_message,plan_remind_enabled,plan_remind_days,plan_remind_message';
+const FIELDS = 'ontheway_auto,aftercare_auto,aftercare_default,rebook_enabled,rebook_months,rebook_message,plan_offer_enabled,plan_offer_days,plan_offer_message,plan_remind_enabled,plan_remind_days,plan_remind_message,estimate_followup_enabled,estimate_followup_days,estimate_followup_unopened,estimate_followup_opened,estimate_expiry_enabled,estimate_valid_days';
 
 // Owner: after-job care instructions, and reminders to past customers (rebooking, plan offers, plan reminders).
 // A collapsed row: click the title to open its settings. The status on the right follows the checkbox inside.
@@ -33,11 +34,11 @@ export default function RemindersSection({ token }) {
   useEffect(() => {
     getSupabase().from('settings').select(FIELDS).eq('id', 1).maybeSingle().then(({ data, error }) => {
       if (error) { setMissing(true); return; }
-      setF({ ...data, rebook_months: (data.rebook_months || []).join(', ') });
+      setF({ ...data, rebook_months: (data.rebook_months || []).join(', '), estimate_followup_days: (data.estimate_followup_days || []).join(', ') });
     });
   }, []);
 
-  if (missing) return <div className="card"><p className="muted">This needs database update 015. Run it in Supabase, then reload.</p></div>;
+  if (missing) return <div className="card"><p className="muted">This needs the latest database updates (015 and 040). Run them in Supabase, then reload.</p></div>;
   if (!f) return <div className="card"><p className="muted">Loading...</p></div>;
   const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
 
@@ -45,7 +46,12 @@ export default function RemindersSection({ token }) {
     e.preventDefault();
     const months = [...new Set(String(f.rebook_months).split(/[,\s]+/).map(Number).filter((m) => Number.isInteger(m) && m >= 1 && m <= 60))].sort((a, b) => a - b);
     if (f.rebook_enabled && !months.length) { setMsg({ err: true, text: 'Enter the months for rebooking reminders, for example 3, 6, 12.' }); return; }
+    const followDays = parseFollowupDays(f.estimate_followup_days);
+    if (f.estimate_followup_enabled && !followDays.length) { setMsg({ err: true, text: 'Enter the days for estimate follow-ups, for example 2, 5, 10.' }); return; }
     const row = {
+      estimate_followup_enabled: !!f.estimate_followup_enabled, estimate_followup_days: followDays.length ? followDays : [2, 5, 10],
+      estimate_followup_unopened: f.estimate_followup_unopened.trim(), estimate_followup_opened: f.estimate_followup_opened.trim(),
+      estimate_expiry_enabled: !!f.estimate_expiry_enabled, estimate_valid_days: Math.min(365, Math.max(1, Number(f.estimate_valid_days) || 30)),
       ontheway_auto: !!f.ontheway_auto, aftercare_auto: !!f.aftercare_auto, aftercare_default: f.aftercare_default.trim(),
       rebook_enabled: !!f.rebook_enabled, rebook_months: months, rebook_message: f.rebook_message.trim(),
       plan_offer_enabled: !!f.plan_offer_enabled, plan_offer_days: Math.min(365, Math.max(7, Number(f.plan_offer_days) || 75)), plan_offer_message: f.plan_offer_message.trim(),
@@ -53,7 +59,7 @@ export default function RemindersSection({ token }) {
     };
     const { error } = await getSupabase().from('settings').update(row).eq('id', 1);
     if (error) { setMsg({ err: true, text: error.message }); return; }
-    setF({ ...f, ...row, rebook_months: months.join(', ') });
+    setF({ ...f, ...row, rebook_months: months.join(', '), estimate_followup_days: row.estimate_followup_days.join(', ') });
     setMsg({ text: 'Saved.' });
   }
 
@@ -124,6 +130,24 @@ export default function RemindersSection({ token }) {
       <div className="field" style={{ maxWidth: 300 }}><label>Days before it is due</label><input type="number" min="1" max="60" value={f.plan_remind_days} onChange={set('plan_remind_days')} /></div>
       {wording('plan_remind_message', 'Wording (optional)')}
 
+      </OutreachSection>
+      <OutreachSection title="Estimate follow-up" enabled={!!f.estimate_followup_enabled} open={openSec === 'estfollow'} onToggle={tog('estfollow')}>
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+        <input type="checkbox" checked={f.estimate_followup_enabled} onChange={set('estimate_followup_enabled')} />
+        Follow up on estimates that were sent and have not been approved
+      </label>
+      <div className="field" style={{ maxWidth: 300 }}><label>Days after the estimate was sent</label><input value={f.estimate_followup_days} onChange={set('estimate_followup_days')} placeholder="2, 5, 10" /></div>
+      {wording('estimate_followup_unopened', 'Wording when they have not opened it (optional)')}
+      {wording('estimate_followup_opened', 'Wording when they opened it but have not answered (optional)')}
+      <p className="hint">One text and email on each of those days, using the customer's phone and email on the estimate. It stops by itself when the customer approves or declines, when the estimate expires, after the last day, or if the customer taps "Stop reminders about this estimate". Sending the estimate again starts the count over. Anyone who already got another message today is skipped, so nobody gets two.</p>
+      </OutreachSection>
+      <OutreachSection title="Estimate expiry (restoration)" enabled={!!f.estimate_expiry_enabled} open={openSec === 'estexpiry'} onToggle={tog('estexpiry')}>
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+        <input type="checkbox" checked={f.estimate_expiry_enabled} onChange={set('estimate_expiry_enabled')} />
+        Restoration estimates are valid for a set number of days
+      </label>
+      <div className="field" style={{ maxWidth: 300 }}><label>Valid for (days)</label><input type="number" min="1" max="365" value={f.estimate_valid_days} onChange={set('estimate_valid_days')} /></div>
+      <p className="hint">The count starts when the estimate is sent, and the estimate is good through the whole last day. The customer's page shows the date; after it, the page says the estimate expired and cannot be approved online. Only estimates sent after you turn this on get a date. The owner can extend a sent estimate from the estimate on the lead or job. Carpet estimates never expire.</p>
       </OutreachSection>
       <div className="row" style={{ marginTop: 14 }}>
         <button className="primary">Save</button>

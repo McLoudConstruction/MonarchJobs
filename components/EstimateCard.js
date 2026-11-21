@@ -7,6 +7,8 @@ import { lineCents, estimateSnapshot, sameSnapshot, ESTIMATE_STATUS } from '@/li
 import { money, fmtDateTime, UNIT_LABELS } from '@/lib/format';
 import { displayPhone, toE164 } from '@/lib/phone';
 import { hasFeature } from '@/lib/services';
+import { rateMap, priceFor, rateChanges } from '@/lib/propertyRates';
+import { expiryNote } from '@/lib/estimateExpiry';
 import { LINE_KINDS, lineKind, kindFields, lineKindLabel, hasTiers, tiersPresent, tierTotals, currentTotals, effectiveLines, choiceFromEstimate, TIER_LABELS } from '@/lib/estimateOptions';
 
 const BLANK_CUSTOM = { description: '', quantity: '1', unit: 'flat', unit_price: '', kind: 'included' };
@@ -35,6 +37,10 @@ export default function EstimateCard({ service = '', scope, open, staff, token, 
   const [signature, setSignature] = useState(null);
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState(null);
+  const [properties, setProperties] = useState([]);
+  const [rates, setRates] = useState(() => new Map());
+  const [followupsSent, setFollowupsSent] = useState(0);
+  const [tz, setTz] = useState('America/Chicago');
 
   const load = useCallback(async () => {
     const sb = getSupabase();
@@ -51,6 +57,22 @@ export default function EstimateCard({ service = '', scope, open, staff, token, 
     }
     const { data: p } = await sb.from('price_items').select('*').eq('active', true).order('sort_order').order('name');
     setItems(p || []);
+    // Per-property rates, follow-ups sent and the time zone for the valid-through date. Each is optional: if migration 040
+    // has not been run, these just come back empty.
+    const [{ data: props }, { data: st }] = await Promise.all([
+      sb.from('properties').select('id,name').order('name'),
+      sb.from('settings').select('timezone').eq('id', 1).maybeSingle(),
+    ]);
+    setProperties(props || []);
+    setTz(st?.timezone || 'America/Chicago');
+    if (e?.property_id) {
+      const { data: r } = await sb.from('property_rates').select('price_item_id,unit_price').eq('property_id', e.property_id);
+      setRates(rateMap(r || []));
+    } else setRates(new Map());
+    if (e && e.status !== 'draft') {
+      const { count } = await sb.from('estimate_followups').select('id', { count: 'exact', head: true }).eq('estimate_id', e.id);
+      setFollowupsSent(count || 0);
+    } else setFollowupsSent(0);
   }, [scopeCol, scopeId]);
 
   useEffect(() => { load(); }, [load]);
@@ -76,7 +98,7 @@ export default function EstimateCard({ service = '', scope, open, staff, token, 
     setMsg(null);
     const { error } = await getSupabase().from('estimate_lines').insert({
       estimate_id: est.id, price_item_id: item.id, description: item.name, unit: item.unit,
-      quantity: qty, unit_price: item.price, is_custom: false, sort_order: lines.length, created_by: staff.id,
+      quantity: qty, unit_price: priceFor(item, rates), is_custom: false, sort_order: lines.length, created_by: staff.id,
       ...kindFields(kind),
     });
     if (error) return fail(error);
@@ -136,6 +158,29 @@ export default function EstimateCard({ service = '', scope, open, staff, token, 
     changed();
   }
 
+  // Tie the estimate to a property so its saved rates are used. Lines already on the estimate keep their prices until
+  // "Apply property rates" is tapped.
+  async function pickProperty(id) {
+    await updateEstimate({ property_id: id || null });
+  }
+
+  async function applyRates() {
+    const changes = rateChanges(lines, rates);
+    setMsg(null);
+    for (const c of changes) {
+      const { error } = await getSupabase().from('estimate_lines').update({ unit_price: c.to }).eq('id', c.id);
+      if (error) return fail(error);
+    }
+    changed();
+  }
+
+  async function extend(days) {
+    setMsg(null);
+    const { error } = await getSupabase().rpc('extend_estimate_expiry', { p_estimate: est.id, p_days: days });
+    if (error) { setMsg({ err: true, text: /NOT_ALLOWED/.test(error.message) ? 'Only the owner can extend an estimate.' : error.message }); return; }
+    changed();
+  }
+
   async function send() {
     setSending(true);
     setMsg(null);
@@ -169,6 +214,9 @@ export default function EstimateCard({ service = '', scope, open, staff, token, 
   const perTier = tierTotals(lines, est.minimum_charge);
   const addonItems = items.filter((i) => i.is_addon);
   const link = typeof window !== 'undefined' ? `${window.location.origin}/e/${est.share_token}` : '';
+  const expiry = expiryNote(est, new Date(), tz);
+  const pending = rateChanges(lines, rates);
+  const property = properties.find((p) => p.id === est.property_id);
 
   return (
     <div className="card">
@@ -177,6 +225,17 @@ export default function EstimateCard({ service = '', scope, open, staff, token, 
         <span className={`badge ${est.status === 'approved' ? 's-completed' : est.status === 'declined' ? 's-cancelled' : est.status === 'sent' ? 's-quoted' : 'off'}`}>{ESTIMATE_STATUS[est.status]}</span>
       </div>
       {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
+      {expiry && (
+        <div className={`banner ${expiry[1] === 'flag' ? 'flag' : 'info'}`} style={{ marginBottom: 10 }}>
+          {expiry[0]}
+          {staff.role === 'owner' && (
+            <span style={{ marginLeft: 10, whiteSpace: 'nowrap' }}>
+              Extend: {[7, 14, 30].map((d) => <button key={d} type="button" className="secondary small" style={{ marginLeft: 4 }} onClick={() => extend(d)}>{d} days</button>)}
+            </span>
+          )}
+        </div>
+      )}
+      {property && <p className="hint" style={{ margin: '0 0 8px' }}>Priced with the rates for {property.name}{rates.size === 0 ? ' (it has no saved rates yet, so standard prices apply)' : ''}.</p>}
 
       <table className="table">
         <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th style={{ textAlign: 'right' }}>Amount</th><th></th></tr></thead>
@@ -234,7 +293,7 @@ export default function EstimateCard({ service = '', scope, open, staff, token, 
               <label>Add from price list</label>
               <select value={pickId} onChange={(e) => setPickId(e.target.value)}>
                 <option value="">Choose a service...</option>
-                {items.map((i) => <option key={i.id} value={i.id}>{i.name} ({money(i.price)} {UNIT_LABELS[i.unit]})</option>)}
+                {items.map((i) => <option key={i.id} value={i.id}>{i.name} ({money(priceFor(i, rates))} {UNIT_LABELS[i.unit]})</option>)}
               </select>
             </div>
             <div className="field" style={{ width: 110, marginBottom: 0 }}><label>Qty</label><input type="number" step="0.001" min="0" value={pickQty} onChange={(e) => setPickQty(e.target.value)} /></div>
@@ -249,7 +308,7 @@ export default function EstimateCard({ service = '', scope, open, staff, token, 
           {showOptions && addonItems.length > 0 && (
             <div className="row" style={{ marginTop: 10, gap: 6, flexWrap: 'wrap' }}>
               <span className="muted">Add-ons:</span>
-              {addonItems.map((i) => <button key={i.id} type="button" className="secondary small" onClick={() => addAddon(i)}>+ {i.name} ({money(i.price)})</button>)}
+              {addonItems.map((i) => <button key={i.id} type="button" className="secondary small" onClick={() => addAddon(i)}>+ {i.name} ({money(priceFor(i, rates))})</button>)}
             </div>
           )}
           {showOptions && <p className="hint" style={{ marginTop: 8 }}>Good, Better and Best options let the customer pick one when they approve. Optional add-ons are ticked by the customer.</p>}
@@ -281,6 +340,18 @@ export default function EstimateCard({ service = '', scope, open, staff, token, 
 
       {isOffice && (
         <div style={{ marginTop: 18, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+          {properties.length > 0 && est.status !== 'approved' && (
+            <div className="row" style={{ alignItems: 'flex-end', marginBottom: 12 }}>
+              <div className="field" style={{ marginBottom: 0, minWidth: 220 }}>
+                <label>Property rates (optional)</label>
+                <select value={est.property_id || ''} onChange={(e) => pickProperty(e.target.value)}>
+                  <option value="">Standard prices</option>
+                  {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              {open && pending.length > 0 && <button type="button" className="secondary" onClick={applyRates}>Apply property rates to {pending.length} {pending.length === 1 ? 'line' : 'lines'}</button>}
+            </div>
+          )}
           <form className="row" style={{ alignItems: 'flex-end', marginBottom: 12 }} onSubmit={(e) => { e.preventDefault(); updateEstimate({ minimum_charge: Number(minimum) || 0 }); }}>
             <div className="field" style={{ marginBottom: 0 }}><label>Minimum charge for this job</label><input type="number" min="0" step="0.01" value={minimum} onChange={(e) => setMinimum(e.target.value)} /></div>
             <button className="secondary">Save minimum</button>
@@ -350,6 +421,12 @@ export default function EstimateCard({ service = '', scope, open, staff, token, 
                 <div className="copybox">{link}</div>
               </div>
               <button type="button" className="secondary small" onClick={() => navigator.clipboard?.writeText(link)}>Copy link</button>
+              {est.status === 'sent' && (
+                <p className="muted" style={{ marginTop: 8 }}>
+                  {est.followups_paused ? 'Follow-up reminders are stopped for this estimate.' : followupsSent > 0 ? `${followupsSent} follow-up ${followupsSent === 1 ? 'reminder' : 'reminders'} sent.` : 'No follow-up reminders sent yet.'}{' '}
+                  <button type="button" className="linklike" onClick={() => updateEstimate({ followups_paused: !est.followups_paused })}>{est.followups_paused ? 'Turn reminders back on' : 'Stop reminders'}</button>
+                </p>
+              )}
               <p className="muted" style={{ marginTop: 8 }}>
                 {est.view_count > 0 ? `Customer last viewed this ${fmtDateTime(est.last_viewed_at)} (${est.view_count} ${est.view_count === 1 ? 'view' : 'views'}).` : 'Not viewed by the customer yet.'}
               </p>

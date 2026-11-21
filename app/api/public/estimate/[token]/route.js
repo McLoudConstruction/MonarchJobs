@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAdmin } from '@/lib/supabaseAdmin';
+import { isExpired, validThrough } from '@/lib/estimateExpiry';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +15,7 @@ export async function GET(request, { params }) {
   const admin = getAdmin();
   const { data: est } = await admin
     .from('estimates')
-    .select('id,job_id,lead_id,status,minimum_charge,chosen_tier,sent_at,first_viewed_at,view_count')
+    .select('id,job_id,lead_id,status,minimum_charge,chosen_tier,sent_at,first_viewed_at,view_count,expires_at,followups_paused')
     .eq('share_token', token)
     .maybeSingle();
   if (!est || est.status === 'draft') return NextResponse.json({ error: 'Not found.' }, { status: 404 });
@@ -60,9 +61,16 @@ export async function GET(request, { params }) {
     appointment = visit?.[0] || null;
   }
 
+  // A restoration estimate can carry a "valid through" date (Settings > Outreach). Past it, it can no longer be approved online.
+  const tz = settings?.timezone || 'America/Chicago';
+  const expired = isExpired(est);
   return NextResponse.json({
     status: est.status,
-    can_accept: est.status === 'sent',
+    can_accept: est.status === 'sent' && !expired,
+    expired,
+    valid_through: est.status === 'sent' ? validThrough(est.expires_at, tz) : null,
+    reminders_stopped: !!est.followups_paused,
+    can_stop_reminders: est.status === 'sent' && !est.followups_paused,
     self_schedule: selfSchedule,
     can_schedule: selfSchedule && est.status === 'approved' && found.status === 'accepted',
     appointment,

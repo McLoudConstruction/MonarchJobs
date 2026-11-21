@@ -5,6 +5,7 @@ import PopupModal from '@/components/PopupModal';
 import { getSupabase } from '@/lib/supabaseClient';
 import { cleanProperty, blankProperty } from '@/lib/evals';
 import { formatPhone } from '@/lib/phone';
+import PropertyRates from '@/components/eval/PropertyRates';
 
 // Add or edit a property: its name and address, the property manager and the maintenance supervisor (who get the signed-eval receipt later).
 // `property` is an existing row to edit, or null for a new one. onSaved(row) gets the saved row.
@@ -51,6 +52,7 @@ export default function PropertyForm({ open, property, onClose, onSaved }) {
         {contact('manager', 'Property manager')}
         {contact('maint', 'Maintenance supervisor')}
         <div className="field"><label>Notes</label><textarea rows={2} value={form.notes} onChange={set('notes')} maxLength={600} /></div>
+        {property?.id && <PropertyRates propertyId={property.id} />}
         {err && <div className="banner flag">{err}</div>}
         <div className="row" style={{ justifyContent: 'flex-end' }}>
           <button type="button" className="secondary" onClick={onClose}>Cancel</button>

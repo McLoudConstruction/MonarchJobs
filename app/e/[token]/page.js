@@ -11,6 +11,7 @@ import { logoUrl } from '@/lib/branding';
 import CenterCard from '@/components/CenterCard';
 import AfterSignScheduler from '@/components/booking/AfterSignScheduler';
 import { fmtSlotFull } from '@/lib/booking';
+import { prettyDay } from '@/lib/estimateExpiry';
 
 // Customer-facing estimate page. No sign-in; the secret link is the access. Stands alone, without the
 // app shell. The customer can review the estimate, approve it and sign. Approving tells the office
@@ -61,6 +62,25 @@ function Approve({ token, total, business, choice, selfSchedule, onDone }) {
       {err && <div className="msg err">{err}</div>}
       <button className="primary big" style={{ width: '100%' }} disabled={busy}>{busy ? 'Submitting...' : `Approve and sign (${total})`}</button>
     </form>
+  );
+}
+
+// Small, quiet link under the estimate: stops the follow-up texts and emails about this estimate (the estimate stays open).
+function StopReminders({ token, onDone }) {
+  const [state, setState] = useState('idle'); // idle | busy | error
+  async function stop() {
+    setState('busy');
+    try {
+      const res = await fetch(`/api/public/estimate/${token}/stop-reminders`, { method: 'POST' });
+      if (!res.ok) throw new Error('failed');
+      onDone?.();
+    } catch { setState('error'); }
+  }
+  return (
+    <p className="hint" style={{ textAlign: 'center' }}>
+      <button type="button" className="linklike" disabled={state === 'busy'} onClick={stop}>Stop reminders about this estimate</button>
+      {state === 'error' && <span> Something went wrong. Please try again.</span>}
+    </p>
   );
 }
 
@@ -156,7 +176,16 @@ function EstimateView() {
         </table>
         {data.job?.customer_notes && <p><strong>Notes:</strong> {data.job.customer_notes}</p>}
         {data.status === 'declined' && <div className="msg err">This estimate was declined. Please contact us if you would like a new one.</div>}
+        {data.status === 'sent' && data.valid_through && !data.expired && <p className="hint" style={{ marginBottom: 0 }}>This estimate is valid through {prettyDay(data.valid_through)}.</p>}
       </div>
+
+      {data.expired && (
+        <div className="card">
+          <div className="msg err" style={{ margin: 0 }}>
+            This estimate expired{data.valid_through ? ` after ${prettyDay(data.valid_through)}` : ''}. Prices and availability may have changed, so please contact us and we will be glad to send you a new one{contact ? `: ${contact}` : ''}.
+          </div>
+        </div>
+      )}
 
       {data.status === 'approved' && (
         <div className="card">
@@ -186,6 +215,8 @@ function EstimateView() {
       {data.can_accept && preview && (
         <div className="card"><p className="hint" style={{ margin: 0 }}>Preview: customers see an approve-and-sign form here.</p></div>
       )}
+      {data.can_stop_reminders && !preview && <StopReminders token={token} onDone={() => load(true)} />}
+      {data.status === 'sent' && data.reminders_stopped && !preview && <p className="hint" style={{ textAlign: 'center' }}>Okay. We will not send more reminders about this estimate.</p>}
     </div>
   );
 }

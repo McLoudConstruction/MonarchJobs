@@ -12,6 +12,7 @@ import RemindersSection from '@/components/settings/RemindersSection';
 import EquipmentSection from '@/components/settings/EquipmentSection';
 import InvoicingSection from '@/components/settings/InvoicingSection';
 import BookingSection from '@/components/settings/BookingSection';
+import CallScriptSection from '@/components/settings/CallScriptSection';
 import '@/components/booking/booking.css';
 import { PlansDue, MailingList } from '@/components/customer/OutreachPanels';
 
@@ -73,6 +74,7 @@ export default function SettingsPage() {
             {tab === 'business' && (
               <>
                 <BusinessSection />
+                <CallScriptSection />
                 <BrandingSection token={token} />
                 <PhotoSection />
               </>

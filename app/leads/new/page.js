@@ -10,6 +10,7 @@ import { defaultAppointment } from '@/components/AppointmentPicker';
 import { getSupabase } from '@/lib/supabaseClient';
 import { fromLocalInput } from '@/lib/format';
 import { JOB_TYPE_FOR_KIND, RESTORATION_TYPES, finishLead } from '@/lib/leadIntake';
+import { scriptFor } from '@/lib/callScript';
 
 const BOOK_ERRORS = {
   TECH_DOUBLE_BOOKED: 'That tech is already booked then. Tick "Book anyway" or pick another time or tech.',
@@ -50,6 +51,7 @@ function NewLead({ staff }) {
   const [conflicts, setConflicts] = useState([]);
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [script, setScript] = useState([]);
 
   // Starting from an existing customer (from their page, or picked from the match hint) fills in who
   // they are and their most recent address.
@@ -72,6 +74,13 @@ function NewLead({ staff }) {
   }, []);
 
   useEffect(() => { if (customerId) loadCustomer(customerId); }, [customerId, loadCustomer]);
+
+  // the call script the owner wrote in Settings, for this kind of lead (nothing shows until one is written)
+  useEffect(() => {
+    if (!kind) { setScript([]); return; }
+    getSupabase().from('settings').select('call_script_carpet,call_script_restoration').eq('id', 1).maybeSingle()
+      .then(({ data, error }) => setScript(error ? [] : scriptFor(data, kind)));
+  }, [kind]);
 
   // techs for the schedule step
   useEffect(() => {
@@ -180,6 +189,7 @@ function NewLead({ staff }) {
       onUseCustomer={(id) => { setCustomerId(id); rememberChoice(kind, form.restoration_type, id); }}
       onRestart={restart}
       onSwitchToRestoration={switchToRestoration}
+      script={script}
     />
   );
 }

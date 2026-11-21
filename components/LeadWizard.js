@@ -7,6 +7,8 @@ import {
   RestorationLoss, RestorationSafety, RestorationInsurance, CarpetService, CarpetCondition, CarpetTiming,
 } from '@/components/LeadIntake';
 import AppointmentPicker from '@/components/AppointmentPicker';
+import DuplicateBanner from '@/components/DuplicateBanner';
+import CallScriptPanel from '@/components/CallScriptPanel';
 import { fmtDateTime, fmtDuration, leadDisplayName } from '@/lib/format';
 import { displayPhone } from '@/lib/phone';
 import { KINDS, RESTORATION_TYPES, STEPS } from '@/lib/leadIntake';
@@ -20,7 +22,7 @@ import { KINDS, RESTORATION_TYPES, STEPS } from '@/lib/leadIntake';
 //   onSaveAndBook()  saves the lead and creates the work order from the appointment chosen
 export default function LeadWizard({
   kind, value, onChange, subtitle, appt, onApptChange, staffList, conflicts, onConflicts, onSave, onSaveAndBook,
-  busy, setMsg, msg, onEnterSchedule, linkedCustomerId, onUseCustomer, onRestart, onSwitchToRestoration,
+  busy, setMsg, msg, onEnterSchedule, linkedCustomerId, onUseCustomer, onRestart, onSwitchToRestoration, script = [],
 }) {
   const steps = STEPS[kind];
   const last = steps.length - 1;
@@ -78,9 +80,11 @@ export default function LeadWizard({
         </div>
       )}
 
-      <div className="wizard-body">
+      <div className={`wizard-body${script.length ? ' has-script' : ''}`}>
+       <div className="wizard-main">
         {step === 0 && (
           <>
+            <DuplicateBanner value={value} linkedCustomerId={linkedCustomerId} onUseCustomer={onUseCustomer} />
             <div className="wizard-two lead-form">
               <ContactSection {...common} autoFocusName extra={<ContactExtra kind={kind} {...common} />}
                 linkedId={linkedCustomerId} onUseCustomer={onUseCustomer} />
@@ -112,6 +116,8 @@ export default function LeadWizard({
             <AppointmentPicker split value={appt} onChange={onApptChange} staffList={staffList} onConflicts={onConflicts} />
           </div>
         )}
+       </div>
+       {script.length > 0 && <CallScriptPanel items={script} />}
       </div>
 
       <div className="wizard-actions">

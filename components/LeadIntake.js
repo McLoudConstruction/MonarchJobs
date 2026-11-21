@@ -196,6 +196,7 @@ export function RestorationInsurance({ value, onChange }) {
               <Pick label="Claim reported?" value={i.claim_reported} onChange={(v) => set({ claim_reported: v })} options={L.YES_NO} />
               <Text label="Adjuster name" value={i.adjuster_name} onChange={(v) => set({ adjuster_name: v })} />
               <div className="field"><label>Adjuster phone</label><PhoneInput value={i.adjuster_phone || ''} onChange={(e) => set({ adjuster_phone: e.target.value })} /></div>
+              <Text label="Adjuster email" type="email" value={i.adjuster_email} onChange={(v) => set({ adjuster_email: v })} />
               <Text label="Deductible, if known" value={i.deductible} onChange={(v) => set({ deductible: v })} placeholder="$1,000" />
               <Pick label="Program" value={i.claim_program} onChange={(v) => set({ claim_program: v })} options={L.CLAIM_PROGRAM} />
               <Pick label="Carrier requires a preferred contractor?" value={i.preferred_contractor} onChange={(v) => set({ preferred_contractor: v })} options={L.YES_NO_UNSURE} />
@@ -204,8 +205,30 @@ export function RestorationInsurance({ value, onChange }) {
           )}
         </div>
       </div>
+      {claim && <ClaimChecklist intake={i} set={set} />}
       <NotesCard kind="restoration" value={value} onChange={onChange} />
     </>
+  );
+}
+
+// What to ask the carrier or adjuster. Tick each one once it is asked and answered; the lead shows how many are done.
+export function ClaimChecklist({ intake, set }) {
+  const ticked = new Set(intake.claim_checks || []);
+  const progress = L.claimProgress(intake);
+  const toggle = (v) => set({ claim_checks: L.CLAIM_CHECKLIST.map((o) => o.value).filter((k) => (k === v ? !ticked.has(k) : ticked.has(k))) });
+  return (
+    <div className="card">
+      <h2>Ask the carrier or adjuster</h2>
+      <p className="hint">Tick each one as you ask it. {progress && `${progress.done} of ${progress.total} done.`}</p>
+      <div className="claim-checks">
+        {L.CLAIM_CHECKLIST.map((o) => (
+          <label key={o.value} className="claim-check">
+            <input type="checkbox" checked={ticked.has(o.value)} onChange={() => toggle(o.value)} />
+            <span>{o.label}</span>
+          </label>
+        ))}
+      </div>
+    </div>
   );
 }
 
