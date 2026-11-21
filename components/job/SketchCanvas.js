@@ -152,14 +152,6 @@ const FitIcon = () => <Ico><rect x="3.5" y="3.5" width="9" height="9" rx="1" /><
 // The drawing board. Works in feet. The parent owns saving: onChange gets the whole new plan after
 // each finished change. The plan prop is read once (the parent remounts this with a new key to
 // switch sketches).
-function GearIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-      <path d="M4 7h10M18 7h2M4 17h2M10 17h10" /><circle cx="16" cy="7" r="2" /><circle cx="8" cy="17" r="2" />
-    </svg>
-  );
-}
-
 function CameraIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" aria-hidden="true" style={{ verticalAlign: '-4px' }}>
@@ -214,7 +206,10 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   const [surfaces, setSurfaces] = useState(['floor']); // surfaces for the next thing drawn
   const [wallHeight, setWallHeight] = useState(2);
   const [surfaceView, setSurfaceView] = useState('all'); // which surface to show: all, floor, wall, ceiling
-  const [moist, setMoist] = useState({ surface: 'floor', material: 'drywall', type: 'mc' }); // what the next moisture point is
+  const [moist, setMoist] = useState(() => { // what the next moisture point is: like the last point placed, or edited, on this plan
+    const last = [...((initialPlan && initialPlan.moisture) || [])].reverse().find((m) => m.kind !== 'air' && m.kind !== 'standard' && m.surface && m.material && m.type);
+    return last ? { surface: last.surface, material: last.material, type: last.type } : { surface: 'floor', material: 'drywall', type: 'mc' };
+  });
   const [moistLabels, setMoistLabels] = useState(true); // show the reading beside each moisture pin
   const [rd, setRd] = useState({ val: '', note: '' }); // the reading being typed
   const [air, setAir] = useState({ rh: '', temp: '' }); // humidity and temperature carry over to the next reading: the air is the same
@@ -239,7 +234,6 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   const [showEquip, setShowEquip] = useState(true);
   const layerRef = useRef({ hidden: new Set(), pins: true, equip: true });
   layerRef.current = { hidden, pins: showPins, equip: showEquip };
-  const [moistOpen, setMoistOpen] = useState(false); // the options for the next point are unfolded
   const [moveId, setMoveId] = useState(null); // a moisture point waiting to be put somewhere else
   const [work, setWork] = useState('readings'); // moisture floorplan: what a tap does: log a reading, or place equipment
   const workRef = useRef('readings');
@@ -1320,7 +1314,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     setDayId(r.id);
     setRecheck(r.id);
     setRecheckDone(null);
-    setDayOpen(false); setLayersOpen(false); setMoistOpen(false);
+    setDayOpen(false); setLayersOpen(false);
     setSel(null);
   }
   function finishRecheck() {
@@ -1451,7 +1445,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     if (w === workRef.current) return;
     setWork(w);
     setSel(null); setPopup(null); setMoveId(null); setMoveEqId(null);
-    setDayOpen(false); setLayersOpen(false); setMoistOpen(false); setEqListOpen(false);
+    setDayOpen(false); setLayersOpen(false); setEqListOpen(false);
     schedule();
   }
   function placeEquipment(pl0, x, y, rm) {
@@ -1806,7 +1800,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
       {(full || !headSlot) && <div className="sketch-head-inline">{headBtns}</div>}
       {!full && headSlot && createPortal(headBtns, headSlot)}
 
-      <div className={`sketch-stage${mode === 'moisture' && (dayOpen || layersOpen || moistOpen || eqListOpen) ? ' sk-panel-open' : ''}`} ref={wrapRef}>
+      <div className={`sketch-stage${mode === 'moisture' && (dayOpen || layersOpen || eqListOpen) ? ' sk-panel-open' : ''}`} ref={wrapRef}>
         <div className={variant === 'moisture' ? 'sk-topstack' : 'sk-topfrag'}>
         <div className="sketch-over sketch-over-tl">
           {mode === 'draw' && (<div className="sketch-tools" role="toolbar" aria-label="Sketch tools">
@@ -1873,13 +1867,10 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                 </div>
               )}
               <div className="sk-bar-row">
-                <button type="button" className="sk-day-btn" aria-expanded={dayOpen} onClick={() => { setDayOpen(!dayOpen); setLayersOpen(false); setMoistOpen(false); }}>
+                <button type="button" className="sk-day-btn" aria-expanded={dayOpen} onClick={() => { setDayOpen(!dayOpen); setLayersOpen(false); }}>
                   {curDay ? `${dayName(days, curDay.id)} \u00b7 ${dateText(curDay.date)}` : 'Initial loss \u00b7 today'}<span className="sk-caret" aria-hidden="true" />
                 </button>
-                <button type="button" className="sk-iconbtn" style={work === 'equipment' ? { display: 'none' } : undefined} aria-label="New point settings" aria-expanded={moistOpen} title={`New points: ${MOISTURE_SURFACES[moist.surface]} \u00b7 ${MOISTURE_MATERIALS[moist.material]} \u00b7 ${MOISTURE_TYPES[moist.type].short.trim()}`} onClick={() => { setMoistOpen(!moistOpen); setLayersOpen(false); setDayOpen(false); }}>
-                  <GearIcon />
-                </button>
-                <button type="button" className={`sk-dayone-btn${dayOne.total > 0 && dayOne.done >= dayOne.total ? ' all' : ''}`} aria-label={`Day 1 checklist, ${dayOne.done} of ${dayOne.total} done`} title="Day 1 checklist" style={{ '--p': `${dayOne.total ? Math.round((dayOne.done / dayOne.total) * 100) : 0}%` }} onClick={() => { setDayOneOpen(true); setDayOpen(false); setLayersOpen(false); setMoistOpen(false); }}>
+                <button type="button" className={`sk-dayone-btn${dayOne.total > 0 && dayOne.done >= dayOne.total ? ' all' : ''}`} aria-label={`Day 1 checklist, ${dayOne.done} of ${dayOne.total} done`} title="Day 1 checklist" style={{ '--p': `${dayOne.total ? Math.round((dayOne.done / dayOne.total) * 100) : 0}%` }} onClick={() => { setDayOneOpen(true); setDayOpen(false); setLayersOpen(false); }}>
                   <ChecklistIcon /><span>{dayOne.done}/{dayOne.total}</span>
                 </button>
               </div>
@@ -2015,32 +2006,13 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                   <label className="sk-layer"><input type="checkbox" checked={showPins} onChange={() => setShowPins(!showPins)} /><span className="sk-sw pin" /><span className="sk-layer-name">Moisture points<small>{plan.moisture.length} point{plan.moisture.length === 1 ? '' : 's'}</small></span></label>
                   <label className="sk-layer"><input type="checkbox" checked={showEquip} onChange={() => setShowEquip(!showEquip)} /><span className="sk-sw tag" /><span className="sk-layer-name">Equipment<small>{eqCounts.total} on site{plan.equipment.length > eqCounts.total ? `, ${plan.equipment.length - eqCounts.total} not on this day` : ''}</small></span></label>
                   {!layerList.length && <div className="muted" style={{ fontSize: 13 }}>Affected areas drawn on the Sketch tab show up here as layers.</div>}
-                  <div className="chips"><button type="button" onClick={() => setHidden(new Set())}>Show all</button><button type="button" onClick={() => setHidden(new Set(layerList.map((l) => l.id)))}>Hide areas</button></div>
-                </div>
-              )}
-              {moistOpen && (
-                <div className="sk-moist-opts">
-                  <div className="sk-opt-label">New points: {MOISTURE_SURFACES[moist.surface]} \u00b7 {MOISTURE_MATERIALS[moist.material]} \u00b7 {MOISTURE_TYPES[moist.type].short.trim()}</div>
-                  <SurfacePick value={moist.surface} onChange={(v) => setMoist({ ...moist, surface: v })} />
-                  <label className="sk-opt">Material
-                    <select value={moist.material} onChange={(e) => setMoist({ ...moist, material: e.target.value })}>
-                      {Object.entries(MOISTURE_MATERIALS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-                    </select>
-                  </label>
-                  <label className="sk-opt">Reading type
-                    <select value={moist.type} onChange={(e) => setMoist({ ...moist, type: e.target.value })}>
-                      {Object.entries(MOISTURE_TYPES).map(([k, t]) => <option key={k} value={k}>{t.label}</option>)}
-                    </select>
-                  </label>
-                  <label className="sk-opt">Show
+                  <label className="sk-layer"><input type="checkbox" checked={moistLabels} onChange={() => setMoistLabels(!moistLabels)} /><span className="sk-sw" style={{ background: '#868e96' }} /><span className="sk-layer-name">Readings on map<small>show each point's number on the plan</small></span></label>
+                  <label className="sk-opt">Show readings on
                     <select value={surfaceView} onChange={(e) => { setSurfaceView(e.target.value); if (e.target.value !== 'all') setMoist((m) => ({ ...m, surface: e.target.value })); }}>
                       {SURFACE_VIEWS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
                     </select>
                   </label>
-                  <div className="chips" role="group" aria-label="Moisture options">
-                    <button type="button" className={moistLabels ? 'on' : ''} aria-pressed={moistLabels} onClick={() => setMoistLabels(!moistLabels)}>Readings on map</button>
-                    <button type="button" onClick={() => { setStdOpen(true); setMoistOpen(false); }}>Dry standards</button>
-                  </div>
+                  <div className="chips"><button type="button" onClick={() => setHidden(new Set())}>Show all</button><button type="button" onClick={() => setHidden(new Set(layerList.map((l) => l.id)))}>Hide areas</button><button type="button" onClick={() => { setStdOpen(true); setLayersOpen(false); }}>Dry standards</button></div>
                 </div>
               )}
             </div>
@@ -2092,7 +2064,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
           <button type="button" className="sk-icon" onClick={() => zoomCenter(1 / 1.3)} aria-label="Zoom out" title="Zoom out"><MinusIcon /></button>
           <button type="button" className="sk-icon" onClick={fit} aria-label="Fit to screen" title="Fit to screen"><FitIcon /></button>
           {mode === 'moisture' && (
-            <button type="button" className="sk-icon sk-layers-tool" aria-label="Layers" aria-expanded={layersOpen} title={hidden.size ? `Layers (${layerList.length - hidden.size} of ${layerList.length} areas shown)` : 'Layers'} onClick={() => { setLayersOpen(!layersOpen); setMoistOpen(false); setDayOpen(false); setEqListOpen(false); }}>
+            <button type="button" className="sk-icon sk-layers-tool" aria-label="Layers" aria-expanded={layersOpen} title={hidden.size ? `Layers (${layerList.length - hidden.size} of ${layerList.length} areas shown)` : 'Layers'} onClick={() => { setLayersOpen(!layersOpen); setDayOpen(false); setEqListOpen(false); }}>
               <LayersIcon />{hidden.size > 0 && <span className="sk-dotmark" aria-hidden="true" />}
             </button>
           )}

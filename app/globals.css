@@ -2438,7 +2438,7 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]){ margin: 0
    pushing the controls down and squeezing the floorplan. The stage grows while one is open so the panel is never cut off. */
 @media (max-width: 700px){
   .sketch.mode-moisture .sk-topstack .sk-moist-opts{ position: absolute; left: 0; right: 0; top: 100%; width: auto; margin-top: 6px; max-height: 46dvh; z-index: 6; box-sizing: border-box; }
-  .sketch[data-variant="moisture"]:not(.sketch-full) .sketch-stage.sk-panel-open{ max-height: none; min-height: max(540px, 82dvh); }
+  .sketch[data-variant="moisture"]:not(.sketch-full) .sketch-stage.sk-panel-open{ overflow: visible; } /* the panel floats over the page; nothing moves and the stage keeps its height */
 }
 /* the Day 1 checklist uses the width of the screen */
 .sketch-modal-card.sk-dayone{ width: min(640px, calc(100vw - 16px)); box-sizing: border-box; }
