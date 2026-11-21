@@ -2442,3 +2442,6 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]){ margin: 0
 }
 /* the Day 1 checklist uses the width of the screen */
 .sketch-modal-card.sk-dayone{ width: min(640px, calc(100vw - 16px)); box-sizing: border-box; }
+
+/* Day 1 checklist: the title and the close button stay put while the list scrolls */
+.sketch-modal-card.sk-dayone .sketch-pop-head{ position: sticky; top: 0; z-index: 2; margin: -14px -14px 0; padding: 14px; background: var(--card-bg); border-bottom: 1px solid var(--line); }
