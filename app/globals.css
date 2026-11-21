@@ -2139,7 +2139,8 @@ html{ touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adju
 .sk-chamber-rooms{ display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto; }
 
 /* ---- Day 1 checklist ---- */
-.sk-dayone-btn{ min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card-bg); font-weight: 600; font-size: 13px; }
+.sk-dayone-btn{ position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; border: 2px solid var(--accent); border-radius: 22px; color: var(--ink); font-weight: 700; font-size: 13px; overflow: hidden; isolation: isolate; background: linear-gradient(to right, rgba(84,233,222,0.45) var(--p, 0%), var(--card-bg) var(--p, 0%)); }
+.sk-dayone-btn.all{ border-color: #2b8a3e; background: #ebfbee; color: #2b8a3e; }
 .sk-dayone{ display: flex; flex-direction: column; gap: 10px; max-height: 85vh; overflow-y: auto; }
 .sk-dayone-list{ list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .sk-dayone-list li{ display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
@@ -2398,3 +2399,25 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]){ margin: 0
 .prop-rate{ display: flex; gap: 10px; align-items: center; justify-content: space-between; }
 .prop-rate-name{ flex: 1; font-size: 13.5px; }
 .prop-rate input{ width: 96px; text-align: right; }
+
+
+/* Placing equipment: one calm row (type dropdown + quantity), camera button for the asset tag */
+.sk-eq-pick{ display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; }
+.sketch-over .sk-eq-select{ position: relative; display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0; min-height: 48px; padding: 4px 8px 4px 5px; border: 2px solid var(--eq, #1c7ed6); border-radius: 12px; background: rgba(255,255,255,0.95); color: var(--ink); }
+[data-theme="dark"] .sketch-over .sk-eq-select{ background: rgba(30,36,42,0.95); }
+.sketch-over .sk-eq-select b{ display: inline-block; flex: 0 0 auto; min-width: 30px; padding: 5px 6px; border-radius: 7px; background: var(--eq, #1c7ed6); color: #fff; font-size: 12px; font-weight: 800; text-align: center; }
+.sketch-over .sk-eq-select select{ flex: 1 1 auto; min-width: 0; min-height: 40px; border: 0; background: transparent; color: inherit; font-size: 15px; font-weight: 700; }
+.sketch-over .sk-eq-pick .sk-eq-qty{ flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; padding: 0; }
+.sketch-over .sk-eq-pick .sk-eq-qty button{ min-width: 40px; min-height: 48px; }
+.sketch-over .sk-eq-pick .sk-eq-qty input{ width: 44px; min-height: 48px; }
+.sk-eq-hint{ padding: 0 4px; font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+.sk-icon.sk-layers-tool{ position: relative; }
+.sk-icon.sk-layers-tool .sk-dotmark{ top: 4px; right: 4px; }
+.sketch-over .sk-scan-btn, .sk-sheet .sk-scan-btn{ display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 52px; border: 0; border-radius: 12px; background: var(--accent); color: var(--accent-ink); font-size: 16px; font-weight: 700; }
+.sk-eq-fields .sk-scan-btn.full{ grid-column: 1 / -1; }
+.sk-scan-offer{ position: absolute; left: 50%; bottom: 14px; z-index: 4; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 8px; min-height: 52px; padding: 0 22px; border: 0; border-radius: 26px; background: var(--accent); color: var(--accent-ink); font-size: 16px; font-weight: 700; box-shadow: 0 6px 18px rgba(0,0,0,0.3); }
+.sk-scan{ display: flex; flex-direction: column; gap: 10px; width: min(420px, 94vw); }
+.sk-scan-view{ position: relative; aspect-ratio: 1 / 1; border-radius: 12px; overflow: hidden; background: #111; }
+.sk-scan-view video{ width: 100%; height: 100%; object-fit: cover; }
+.sk-scan-frame{ position: absolute; inset: 18%; border: 3px solid rgba(255,255,255,0.9); border-radius: 14px; box-shadow: 0 0 0 999px rgba(0,0,0,0.35); pointer-events: none; }
+.sk-scan-err{ margin: 0; font-size: 14px; font-weight: 600; color: #c92a2a; }

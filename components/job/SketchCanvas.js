@@ -17,6 +17,8 @@ import RoomBySize from '@/components/job/RoomBySize';
 import EquipmentSizing from '@/components/job/EquipmentSizing';
 import DehuReadings from '@/components/job/DehuReadings';
 import MeterScan from '@/components/job/MeterScan';
+import AssetScan from '@/components/job/AssetScan';
+import { checkScannedAsset } from '@/lib/assetScan';
 import PullPrompt from '@/components/job/PullPrompt';
 import DayOneList, { useDayOne } from '@/components/job/DayOneList';
 import { drawPlan, areaStyle, WATER_LINE } from '@/lib/sketchDraw';
@@ -158,6 +160,22 @@ function GearIcon() {
   );
 }
 
+function CameraIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" aria-hidden="true" style={{ verticalAlign: '-4px' }}>
+      <path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" /><circle cx="12" cy="13" r="3.5" />
+    </svg>
+  );
+}
+
+function ChecklistIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
+      <path d="M3 6l1.8 1.8L8 4.5M3 12.5l1.8 1.8L8 11M3 19l1.8 1.8L8 17.5" /><path d="M12 6h9M12 12.5h9M12 19h9" />
+    </svg>
+  );
+}
+
 function LayersIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" aria-hidden="true" style={{ verticalAlign: '-3px' }}>
@@ -238,6 +256,8 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   const [eqListOpen, setEqListOpen] = useState(false); // the list of what is on site
   const [sizeOpen, setSizeOpen] = useState(false); // the add-a-room-by-size dialog
   const [eqNote, setEqNote] = useState(''); // "AM 3 placed in Kitchen", for a moment
+  const [scanFor, setScanFor] = useState(null); // the unit whose asset tag is being scanned with the camera
+  const [scanOffer, setScanOffer] = useState(null); // the unit just placed: offers the camera for its asset tag for a few seconds
   const [kb, setKb] = useState(0); // how far the phone keyboard covers the bottom of the sketch, in pixels
   const [vvBox, setVvBox] = useState(null); // the part of the screen the phone keyboard leaves free: { top, height }
   const [numField, setNumField] = useState('val'); // which of Reading / RH / Temp the number pad types into
@@ -1448,6 +1468,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     if (!made.length) return;
     commit({ ...pl, equipment: [...pl.equipment, ...made] });
     setSel({ kind: 'equipment', id: made[made.length - 1].id });
+    setScanOffer(made.length === 1 && assets && assets.list.some((a) => a.status === 'available' && a.type === t) ? made[0].id : null); // one unit: offer to scan its tag right away
     setEqNote(made.length === 1 ? `${unitCode(made[0])} placed in ${roomTitle(rm)}` : `${made.length} ${EQUIPMENT_TYPES[t].plural} placed in ${roomTitle(rm)} (${unitCode(made[0])} to ${unitCode(made[made.length - 1])}). Drag any one to move it.`);
     if (eqQtyRef.current > 1) { eqQtyRef.current = 1; setEqQty(1); } // a bigger number is for one placement, so a second tap does not drop five more by accident
   }
@@ -1524,6 +1545,30 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     const t = setTimeout(() => setEqNote(''), 2600);
     return () => clearTimeout(t);
   }, [eqNote]);
+  useEffect(() => { // the camera offer after placing a unit stays a little longer than the note, then goes quietly
+    if (!scanOffer) return undefined;
+    const t = setTimeout(() => setScanOffer(null), 9000);
+    return () => clearTimeout(t);
+  }, [scanOffer]);
+  // A scanned label for the unit in hand: link that asset to it (same rules as the picker, plus the type follows the tag)
+  function applyScan(text) {
+    const id = scanFor;
+    setScanFor(null);
+    if (!id || !assets) return;
+    const pl = planRef.current;
+    const u = pl.equipment.find((x) => x.id === id);
+    if (!u) return;
+    const r = checkScannedAsset(text, assets.list, u);
+    if (!r.ok) { setEqNote(r.text); return; }
+    const a = r.asset;
+    const patch = { asset: a.id };
+    if (r.switchType) { patch.t = a.type; patch.n = nextEquipNumber(pl.equipment.filter((x) => x.id !== u.id), a.type); }
+    if (!u.label && a.label) patch.label = a.label.slice(0, 40);
+    if (!u.ppd && a.ppd) patch.ppd = a.ppd;
+    patchEquip(u.id, patch);
+    setScanOffer(null);
+    setEqNote(`${a.tag} linked${r.switchType ? ` (now ${EQUIPMENT_TYPES[a.type].label.toLowerCase()})` : ''}`);
+  }
 
   // ---- export ------------------------------------------------------------
   function renderExport() {
@@ -1838,13 +1883,12 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                 <button type="button" className="sk-day-btn" aria-expanded={dayOpen} onClick={() => { setDayOpen(!dayOpen); setLayersOpen(false); setMoistOpen(false); }}>
                   {curDay ? `${dayName(days, curDay.id)} \u00b7 ${dateText(curDay.date)}` : 'Initial loss \u00b7 today'}<span className="sk-caret" aria-hidden="true" />
                 </button>
-                <button type="button" className="sk-iconbtn" aria-label="Layers" aria-expanded={layersOpen} title={hidden.size ? `Layers (${layerList.length - hidden.size} of ${layerList.length} areas shown)` : 'Layers'} onClick={() => { setLayersOpen(!layersOpen); setMoistOpen(false); setDayOpen(false); }}>
-                  <LayersIcon />{hidden.size > 0 && <span className="sk-dotmark" aria-hidden="true" />}
-                </button>
                 <button type="button" className="sk-iconbtn" style={work === 'equipment' ? { display: 'none' } : undefined} aria-label="New point settings" aria-expanded={moistOpen} title={`New points: ${MOISTURE_SURFACES[moist.surface]} \u00b7 ${MOISTURE_MATERIALS[moist.material]} \u00b7 ${MOISTURE_TYPES[moist.type].short.trim()}`} onClick={() => { setMoistOpen(!moistOpen); setLayersOpen(false); setDayOpen(false); }}>
                   <GearIcon />
                 </button>
-                <button type="button" className="sk-dayone-btn" aria-label="Day 1 checklist" onClick={() => { setDayOneOpen(true); setDayOpen(false); setLayersOpen(false); setMoistOpen(false); }}>Day 1 {dayOne.done}/{dayOne.total}</button>
+                <button type="button" className={`sk-dayone-btn${dayOne.total > 0 && dayOne.done >= dayOne.total ? ' all' : ''}`} aria-label={`Day 1 checklist, ${dayOne.done} of ${dayOne.total} done`} title="Day 1 checklist" style={{ '--p': `${dayOne.total ? Math.round((dayOne.done / dayOne.total) * 100) : 0}%` }} onClick={() => { setDayOneOpen(true); setDayOpen(false); setLayersOpen(false); setMoistOpen(false); }}>
+                  <ChecklistIcon /><span>{dayOne.done}/{dayOne.total}</span>
+                </button>
               </div>
               <div className="sk-work" role="group" aria-label="What a tap does">
                 <button type="button" className={work === 'readings' ? 'on' : ''} aria-pressed={work === 'readings'} onClick={() => switchWork('readings')}>Readings</button>
@@ -1852,23 +1896,24 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
               </div>
               {work === 'equipment' && (
                 <div className="sk-eq-bar">
-                  <div className="sk-eq-types" role="radiogroup" aria-label="Equipment to place">
-                    {EQUIPMENT_ORDER.map((t) => {
-                      const ty = EQUIPMENT_TYPES[t];
-                      return (
-                        <button key={t} type="button" role="radio" aria-checked={eqType === t} className={`sk-eq-chip${eqType === t ? ' on' : ''}`} style={{ '--eq': ty.color }} onClick={() => setEqType(t)}>
-                          <b>{ty.code}</b><span>{ty.label}</span>
-                        </button>
-                      );
-                    })}
+                  <div className="sk-eq-pick">
+                    <label className="sk-eq-select" style={{ '--eq': EQUIPMENT_TYPES[eqType].color }}>
+                      <b>{EQUIPMENT_TYPES[eqType].code}</b>
+                      <select value={eqType} aria-label="Equipment to place" onChange={(e) => setEqType(e.target.value)}>
+                        {EQUIPMENT_GROUPS.map((g) => (
+                          <optgroup key={g} label={g}>
+                            {EQUIPMENT_ORDER.filter((k) => EQUIPMENT_TYPES[k].group === g).map((k) => <option key={k} value={k}>{EQUIPMENT_TYPES[k].label}</option>)}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="sk-eq-qty" role="group" aria-label="How many to place with one tap">
+                      <button type="button" aria-label="One fewer" disabled={eqQty <= 1} onClick={() => setEqQty((q) => Math.max(1, q - 1))}>{'\u2212'}</button>
+                      <input inputMode="numeric" aria-label="Quantity to place" value={eqQty} onChange={(e) => { const v = parseInt(e.target.value.replace(/\D/g, ''), 10); setEqQty(Number.isFinite(v) ? Math.min(MAX_PLACE_AT_ONCE, Math.max(1, v)) : 1); }} onFocus={(e) => e.target.select()} />
+                      <button type="button" aria-label="One more" disabled={eqQty >= MAX_PLACE_AT_ONCE} onClick={() => setEqQty((q) => Math.min(MAX_PLACE_AT_ONCE, q + 1))}>+</button>
+                    </div>
                   </div>
-                  <div className="sk-eq-qty" role="group" aria-label="How many to place with one tap">
-                    <span>How many</span>
-                    <button type="button" aria-label="One fewer" disabled={eqQty <= 1} onClick={() => setEqQty((q) => Math.max(1, q - 1))}>{'\u2212'}</button>
-                    <input inputMode="numeric" aria-label="Quantity to place" value={eqQty} onChange={(e) => { const v = parseInt(e.target.value.replace(/\D/g, ''), 10); setEqQty(Number.isFinite(v) ? Math.min(MAX_PLACE_AT_ONCE, Math.max(1, v)) : 1); }} onFocus={(e) => e.target.select()} />
-                    <button type="button" aria-label="One more" disabled={eqQty >= MAX_PLACE_AT_ONCE} onClick={() => setEqQty((q) => Math.min(MAX_PLACE_AT_ONCE, q + 1))}>+</button>
-                    <span className="muted">{eqQty > 1 ? `Next tap places ${eqQty} ${EQUIPMENT_TYPES[eqType].plural}` : 'Next tap places one'}</span>
-                  </div>
+                  {eqQty > 1 && <div className="sk-eq-hint">Next tap places {eqQty} {EQUIPMENT_TYPES[eqType].plural}</div>}
                   {days.length > 1 && curDay && curDay.date !== todayKey() && <div className="sk-pastday" role="note">Logging on {dayName(days, curDay.id)} ({dateText(curDay.date)}), not today. Use the Day button to change it.</div>}
                   <button type="button" className="sk-eq-sum" aria-expanded={eqListOpen} onClick={() => { setEqListOpen(!eqListOpen); setDayOpen(false); setLayersOpen(false); }}>
                     <span>{eqCounts.total ? countText(eqCounts) : 'No equipment on site yet'}</span><span className="sk-caret" aria-hidden="true" />
@@ -2053,6 +2098,11 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
           <button type="button" className="sk-icon" onClick={() => zoomCenter(1.3)} aria-label="Zoom in" title="Zoom in"><PlusIcon /></button>
           <button type="button" className="sk-icon" onClick={() => zoomCenter(1 / 1.3)} aria-label="Zoom out" title="Zoom out"><MinusIcon /></button>
           <button type="button" className="sk-icon" onClick={fit} aria-label="Fit to screen" title="Fit to screen"><FitIcon /></button>
+          {mode === 'moisture' && (
+            <button type="button" className="sk-icon sk-layers-tool" aria-label="Layers" aria-expanded={layersOpen} title={hidden.size ? `Layers (${layerList.length - hidden.size} of ${layerList.length} areas shown)` : 'Layers'} onClick={() => { setLayersOpen(!layersOpen); setMoistOpen(false); setDayOpen(false); setEqListOpen(false); }}>
+              <LayersIcon />{hidden.size > 0 && <span className="sk-dotmark" aria-hidden="true" />}
+            </button>
+          )}
         </div>
         </div>
 
@@ -2075,7 +2125,10 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
           : (focusId
             ? !plan.moisture.some((m) => pointInPoly(plan.rooms.find((r) => r.id === focusId)?.pts || [], m.x, m.y)) && <div className="sk-tip">Tap the room to log a reading</div>
             : !plan.moisture.length && <div className="sk-tip">Tap a room to zoom in and log readings</div>))}
-        {eqNote && <div className="sk-tip" role="status" style={{ bottom: 70 }}>{eqNote}</div>}
+        {eqNote && <div className="sk-tip" role="status" style={{ bottom: scanOffer ? 76 : 70 }}>{eqNote}</div>}
+        {scanOffer && !sheetOpen && !scanFor && (
+          <button type="button" className="sk-scan-offer" onClick={() => setScanFor(scanOffer)}><CameraIcon /> Scan asset tag</button>
+        )}
         {rcNote && <div className="sk-tip" role="status" style={{ bottom: 70 }}>{rcNote}</div>}
         {moveEqId && (
           <div className="sk-movebar" role="status">
@@ -2575,7 +2628,10 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                   </select>
                 </label>
                 {assets && (
-                  <label className="sk-field">Asset tag (company inventory)
+                  <button type="button" className="sk-scan-btn full" onClick={() => setScanFor(eq.id)}><CameraIcon /> {eq.asset ? 'Scan a different asset tag' : 'Scan asset tag'}</button>
+                )}
+                {assets && (
+                  <label className="sk-field full">Asset tag (company inventory)
                     <select value={eq.asset || ''} onChange={(e) => {
                       const a = assets.list.find((x) => x.id === e.target.value);
                       if (!a) { patchEquip(eq.id, { asset: undefined }); return; }
@@ -2626,6 +2682,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
         })()}
       </div>
 
+      {scanFor && <AssetScan onScan={applyScan} onClose={() => setScanFor(null)} />}
       {dayOneOpen && <DayOneList items={dayOne.items} onClose={() => setDayOneOpen(false)} />}
       <RoomBySize open={sizeOpen} onClose={() => setSizeOpen(false)} rooms={plan.rooms} selectedId={sel && sel.kind === 'room' ? sel.id : null} onAdd={addRoomBySize} />
 
