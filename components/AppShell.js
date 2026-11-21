@@ -12,6 +12,8 @@ import { DashboardIcon, SalesIcon, ScheduleIcon, JobDashboardIcon, SettingsIcon,
 import BottomSheet from '@/components/BottomSheet';
 import JobJumpSearch from '@/components/JobJumpSearch';
 import { logoUrl } from '@/lib/branding';
+import ProfilePhotoControl, { AvatarCircle } from '@/components/ProfilePhoto';
+import { useAvatarUrl } from '@/lib/avatarClient';
 import { NotificationsProvider, useNotificationCenter } from '@/lib/useNotifications';
 import { ChatDockProvider } from '@/components/chat/ChatDock';
 import { ChatInboxProvider, useChatCenter } from '@/lib/useChatInbox';
@@ -122,6 +124,12 @@ function AppShellInner({ staff, signOut, children }) {
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef(null);
   const brand = useBrandLogo();
+  // my profile picture: read on its own, so a database without migration 039 still signs in
+  const [avatarPath, setAvatarPath] = useState(null);
+  useEffect(() => {
+    getSupabase().from('staff_users').select('avatar_path').eq('id', staff.id).maybeSingle().then(({ data }) => setAvatarPath(data?.avatar_path || null), () => {});
+  }, [staff.id]);
+  const avatarUrl = useAvatarUrl(avatarPath);
 
   const nav = NAV.filter((n) => n.roles.includes(staff.role));
   const initials = initialsFor(staff.full_name, staff.email);
@@ -193,7 +201,7 @@ function AppShellInner({ staff, signOut, children }) {
         <div className="side-spacer" />
         <div ref={accountRef} className="shell-account side-account">
           <button type="button" className="side-account-toggle" aria-haspopup="menu" aria-expanded={accountOpen} aria-label={`Account menu for ${name}`} onClick={() => setAccountOpen((o) => !o)}>
-            <span className="shell-account-btn side-avatar">{initials}</span>
+            <AvatarCircle className="shell-account-btn side-avatar" url={avatarUrl} initials={initials} />
             <span className="side-who">{name}<small>{roleLabel}</small></span>
           </button>
           {accountOpen && (
@@ -202,6 +210,8 @@ function AppShellInner({ staff, signOut, children }) {
                 <div className="shell-account-name">{name || 'Signed in'}</div>
                 <div className="shell-account-sub">{roleLabel}</div>
               </div>
+              <div className="shell-account-divider" />
+              <ProfilePhotoControl hasPhoto={!!avatarPath} onChanged={setAvatarPath} />
               <div className="shell-account-divider" />
               <ThemeSwitch theme={theme} setTheme={setTheme} />
               <div className="shell-account-divider" />
@@ -247,9 +257,10 @@ function AppShellInner({ staff, signOut, children }) {
 
         <BottomSheet open={moreOpen} onClose={() => setMoreOpen(false)} title="More">
           <div className="more-sheet-who">
-            <UserIcon className="more-sheet-icon" />
+            {avatarUrl ? <img src={avatarUrl} alt="" className="avatar-img more-sheet-avatar" /> : <UserIcon className="more-sheet-icon" />}
             <span>{name}<small>{roleLabel}</small></span>
           </div>
+          <ProfilePhotoControl hasPhoto={!!avatarPath} onChanged={setAvatarPath} itemClass="more-sheet-link" />
           {moreItems.map((n) => (
             <Link key={n.href} href={n.href} className={`more-sheet-link ${isActive(n, pathname) ? 'active' : ''}`} onClick={() => setMoreOpen(false)}>
               <n.icon className="more-sheet-icon" />

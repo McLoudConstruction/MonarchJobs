@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
 import { apiFetch } from '@/lib/useAuth';
 
-const FIELDS = 'aftercare_auto,aftercare_default,rebook_enabled,rebook_months,rebook_message,plan_offer_enabled,plan_offer_days,plan_offer_message,plan_remind_enabled,plan_remind_days,plan_remind_message';
+const FIELDS = 'ontheway_auto,aftercare_auto,aftercare_default,rebook_enabled,rebook_months,rebook_message,plan_offer_enabled,plan_offer_days,plan_offer_message,plan_remind_enabled,plan_remind_days,plan_remind_message';
 
 // Owner: after-job care instructions, and reminders to past customers (rebooking, plan offers, plan reminders).
 // A collapsed row: click the title to open its settings. The status on the right follows the checkbox inside.
@@ -46,7 +46,7 @@ export default function RemindersSection({ token }) {
     const months = [...new Set(String(f.rebook_months).split(/[,\s]+/).map(Number).filter((m) => Number.isInteger(m) && m >= 1 && m <= 60))].sort((a, b) => a - b);
     if (f.rebook_enabled && !months.length) { setMsg({ err: true, text: 'Enter the months for rebooking reminders, for example 3, 6, 12.' }); return; }
     const row = {
-      aftercare_auto: !!f.aftercare_auto, aftercare_default: f.aftercare_default.trim(),
+      ontheway_auto: !!f.ontheway_auto, aftercare_auto: !!f.aftercare_auto, aftercare_default: f.aftercare_default.trim(),
       rebook_enabled: !!f.rebook_enabled, rebook_months: months, rebook_message: f.rebook_message.trim(),
       plan_offer_enabled: !!f.plan_offer_enabled, plan_offer_days: Math.min(365, Math.max(7, Number(f.plan_offer_days) || 75)), plan_offer_message: f.plan_offer_message.trim(),
       plan_remind_enabled: !!f.plan_remind_enabled, plan_remind_days: Math.min(60, Math.max(1, Number(f.plan_remind_days) || 14)), plan_remind_message: f.plan_remind_message.trim(),
@@ -80,6 +80,13 @@ export default function RemindersSection({ token }) {
       <p className="hint">Messages go by text and email to customers who have a phone or email on file. Every message has a way to stop reminders, and customers who stop are never contacted or mailed. Texting must be set up in Integrations.</p>
       {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
 
+      <OutreachSection title="On the way" enabled={!!f.ontheway_auto} open={openSec === 'otw'} onToggle={tog('otw')}>
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+        <input type="checkbox" checked={f.ontheway_auto} onChange={set('ontheway_auto')} />
+        Text and email the customer when the team taps On the way
+      </label>
+      <p className="hint">The message gives the minutes and a link to a page that shows the visit status and your phone number. It never names a team member. Running late sends the new time. A tap saved on a phone with no signal is not sent if it is more than 30 minutes old.</p>
+      </OutreachSection>
       <OutreachSection title="After a job" enabled={!!f.aftercare_auto} open={openSec === 'after'} onToggle={tog('after')}>
       <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
         <input type="checkbox" checked={f.aftercare_auto} onChange={set('aftercare_auto')} />

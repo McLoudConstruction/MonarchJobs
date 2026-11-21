@@ -7,6 +7,8 @@ import { sendAftercare } from '@/lib/aftercareServer';
 import { advancePlan } from '@/lib/outreach';
 import { applyClockForVisit } from '@/lib/clockServer';
 import { isReturnVisit } from '@/lib/visitCrew';
+import { sendSms, sendEmail } from '@/lib/notify';
+import { shouldNotify, buildOnTheWayMessages, arrivalAt, timeText } from '@/lib/onTheWay';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,6 +87,23 @@ export async function POST(request, { params }) {
     kind: plan.eventKind,
     details: opId ? { ...plan.eventDetails, op_id: opId, at: when.toISOString() } : plan.eventDetails,
   });
+
+  // On the way: text and email the customer the time and a link to their visit page. A problem here never fails the tap.
+  try {
+    const { data: st } = await admin.from('settings').select('business_name,timezone,ontheway_auto').eq('id', 1).maybeSingle();
+    if (shouldNotify({ action: body.action, enabled: st?.ontheway_auto, when })) {
+      const { data: cj } = await admin.from('jobs').select('customer:customers(display_name,phone,email)').eq('id', job.id).maybeSingle();
+      const who = cj?.customer || {};
+      const link = `${siteUrl(request)}/v/${updated.share_token}`;
+      const arrive = timeText(arrivalAt(updated.on_the_way_at, updated.minutes_out), st?.timezone || undefined);
+      const msgs = buildOnTheWayMessages({ business: st?.business_name, customerName: who.display_name, minutes: updated.minutes_out, arrive, link, late: visit.status === 'on_the_way' });
+      const [sms, email] = await Promise.all([
+        who.phone ? sendSms({ to: who.phone, body: msgs.sms }) : { status: 'skipped', detail: 'No phone number on file.' },
+        who.email ? sendEmail({ to: who.email, subject: msgs.subject, html: msgs.html, text: msgs.text }) : { status: 'skipped', detail: 'No email on file.' },
+      ]);
+      await admin.from('job_events').insert({ job_id: job.id, actor_id: auth.staff.id, actor_email: auth.staff.email, kind: 'on_the_way_sent', details: { visit_id: visit.id, sms: { status: sms.status, detail: sms.detail }, email: { status: email.status, detail: email.detail } } });
+    }
+  } catch (e) { console.error('on the way message:', e.message); }
 
   // The job is complete: crew mates who never started are not coming, so their waiting visit is cancelled rather than left on their schedule.
   if (plan.jobPatch.status === 'completed' && visit.crew_id) {
