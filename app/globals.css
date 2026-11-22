@@ -2472,3 +2472,51 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]){ margin: 0
 .page .job-head h1{ margin: 0; }
 .page .job-head .job-head-main .sub{ margin: 0; }
 .floors-bar{ margin-bottom: 6px; }
+
+/* ---- sketch on phones: finger-sized dock and sheets (floats over the plan, never shifts it) ---- */
+.sk-dock{ position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 7; display: flex; gap: 6px; padding: 6px; background: var(--card-bg); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 6px 22px rgba(0,0,0,0.22); }
+.sk-dock button{ flex: 1 1 0; min-width: 0; min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 2px; border: 0; border-radius: 10px; background: transparent; color: var(--ink); font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.sk-dock button span{ max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sk-dock button.on{ background: var(--accent); color: var(--accent-ink); }
+.sk-dock button.sk-dock-add{ background: var(--accent); color: var(--accent-ink); }
+.sk-dock button:disabled{ opacity: 0.35; }
+.sk-sheet{ position: absolute; left: 8px; right: 8px; bottom: 76px; z-index: 8; max-height: calc(100% - 96px); overflow: auto; padding: 10px 12px 12px; background: var(--card-bg); color: var(--ink); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.28); box-sizing: border-box; }
+.sk-sheet-head{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.sk-sheet .sk-x{ min-width: 44px; min-height: 44px; font-size: 24px; }
+.sk-tiles{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
+.sk-tiles button{ min-height: 56px; padding: 6px 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--card-bg); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; line-height: 1.2; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; text-align: center; }
+.sk-tiles button.on{ background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.sk-sheet .sk-obj-head{ margin: 6px 0 4px; }
+.sk-sheet .sk-opt{ display: block; margin-top: 6px; font-size: 13px; }
+.sk-sheet .sketch-view{ width: 100%; min-height: 44px; font-size: 15px; margin-top: 4px; }
+.sk-wall-big input{ min-height: 52px; font-size: 22px; font-weight: 700; text-align: center; }
+.sketch-pop .sk-wall-big label{ font-size: 13px; }
+.sketch-pop .row button{ min-height: 46px; padding: 0 16px; }
+
+/* ---- measuring: trace a room, checks, tablets ---- */
+.rbs .chips button{ min-height: 48px; padding: 0 16px; font-size: 15px; }
+.rtr{ display: flex; flex-direction: column; gap: 10px; }
+.rtr-prev{ height: 140px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); }
+.rtr-prev svg{ width: 100%; height: 100%; display: block; }
+.rtr-pad{ display: grid; grid-template-columns: repeat(3, 1fr); grid-template-areas: ". n ." "w . e" ". s ."; gap: 6px; max-width: 260px; margin: 0 auto; width: 100%; }
+.rtr-pad button{ min-height: 56px; font-size: 26px; border-radius: 12px; border: 1px solid var(--line); background: var(--card-bg); color: var(--ink); cursor: pointer; }
+.rtr-n{ grid-area: n; } .rtr-w{ grid-area: w; } .rtr-e{ grid-area: e; } .rtr-s{ grid-area: s; }
+.rtr-list{ display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.rtr-chip{ padding: 6px 10px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-weight: 600; font-size: 14px; }
+.rtr-gap{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; font-size: 14px; }
+.rtr-gap.ok{ color: var(--accent); font-weight: 600; }
+.rtr input, .rtr select{ min-height: 48px; font-size: 18px; }
+.rtr .row button{ min-height: 48px; }
+.sk-meas{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.sk-meas-badge{ font-size: 12.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: rgba(224,160,0,0.18); color: #8a6100; }
+.sk-meas-badge.ok{ background: rgba(11,122,115,0.15); color: var(--accent); }
+.sk-nudge{ display: flex; gap: 4px; align-items: center; }
+.sk-nudge input{ flex: 1 1 auto; min-width: 0; }
+.sk-nudge button{ min-width: 40px; min-height: 40px; }
+.sk-objnav button{ flex: 1; min-height: 44px; }
+.sk-checks{ padding: 8px 10px; border-radius: 8px; background: rgba(224,160,0,0.14); font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+@media (pointer: coarse){
+  .sketch-over .sketch-tools button, .sketch-over .sketch-view{ min-height: 44px; padding: 6px 12px; font-size: 14px; }
+  .sketch-over button.sk-icon, .sketch-head-tools button{ width: 44px; height: 44px; }
+  .sketch-pop input, .sketch-pop select{ min-height: 44px; font-size: 16px; }
+}

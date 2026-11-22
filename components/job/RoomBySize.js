@@ -6,7 +6,7 @@ import { SHAPES, SHAPE_ORDER, SIDES, parseSize, roomFromSize, shapePts, turnPts 
 
 // Add a room by typing its size: "12 x 14", a shape (rectangle, L, T or U), and which wall of an existing room it sits against.
 // onAdd(room) puts it on the plan and returns true when it was added.
-export default function RoomBySize({ open, onClose, rooms, selectedId, onAdd, full }) {
+export default function RoomBySize({ open, onClose, rooms, selectedId, onAdd, onTrace, full }) {
   const [shape, setShape] = useState('rect');
   const [size, setSize] = useState('');
   const [cut, setCut] = useState('');
@@ -135,6 +135,7 @@ export default function RoomBySize({ open, onClose, rooms, selectedId, onAdd, fu
         {err && <div className="msg err" style={{ margin: 0 }}>{err}</div>}
         <div className="row">
           <button className="primary" type="submit">Add room</button>
+          {onTrace && <button type="button" className="secondary" onClick={onTrace}>Trace walls instead</button>}
           <button type="button" className="secondary" onClick={() => submit(true)}>Add and keep going</button>
           {added > 0 && <span className="muted">{added} added</span>}
         </div>
