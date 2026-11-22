@@ -144,19 +144,13 @@ function JobInner({ id, staff, token }) {
   const [otwOpen, setOtwOpen] = useState(false);
   const [qaOpen, setQaOpen] = useState(false); // the Quick Action Screen
   const [qaLanding, setQaLanding] = useState(false); // on a phone it is the landing page of a job, in place of the Overview tab
-  // Quick Actions mode (phones): the job's home is the Quick Action Screen, and everything else is a screen opened from it. It stays on
-  // across jobs, reloads and the app resuming, until the person taps the X on it. The choice is kept on this phone, per person.
-  const qaModeKey = `mj-qa-mode:${staff?.id || ''}`;
+  // Quick Actions mode (phones): the job's home is the Quick Action Screen, and everything else is a screen opened from it.
+  // Tapping the X on it turns the mode off for this visit to the job only; opening any job again lands on it.
   const qaModeRef = useRef(false);
-  const setQaMode = (on) => {
-    qaModeRef.current = on;
-    try { window.localStorage.setItem(qaModeKey, on ? 'on' : 'off'); } catch { /* private mode: the choice just is not kept */ }
-  };
+  const setQaMode = (on) => { qaModeRef.current = on; };
   const isPhone = () => typeof window !== 'undefined' && window.matchMedia('(max-width: 899px)').matches;
   useEffect(() => {
-    let off = false;
-    try { off = window.localStorage.getItem(qaModeKey) === 'off'; } catch { off = false; }
-    if (!isPhone() || off) return;
+    if (!isPhone()) return;
     qaModeRef.current = true;
     const unit = new URLSearchParams(window.location.search).get('unit');
     if (!window.location.hash && !unit) { setQaLanding(true); setQaOpen(true); }
