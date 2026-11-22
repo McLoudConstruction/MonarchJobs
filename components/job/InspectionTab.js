@@ -17,7 +17,7 @@ const SAVE_DELAY_MS = 900;
 // Before and after cleaning record, signed by the customer on this phone. The simple record is how many rooms and photos;
 // the tech can also call out specific rooms (Pre: fiber, traffic, spot test and spots noted. Post: the same rooms with a result
 // for every spot), then add drying time and a walk-through. A signed record can never change; a new one starts from the old.
-function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, photos, uploader, onOpenPhotos, launch }) {
+function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, photos, uploader, onOpenPhotos, launch, customerName = '' }) {
   const signed = latestSigned(rows, kind);
   const draft = rows.filter((r) => r.kind === kind && !r.signed_at).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0] || null;
   const [data, setData] = useState(null);
@@ -27,7 +27,7 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, pho
   const [comments, setComments] = useState('');
   const [msg, setMsg] = useState(null);
   const [open, setOpen] = useState(false); // the record fills the screen while it is being filled in
-  const [step, setStep] = useState('edit'); // 'edit' | 'sign': the signature is its own step, behind the Signature button
+  const [step, setStep] = useState('edit'); // 'edit' | 'name' | 'sign': the Signature button leads to who is signing (name, filled in from the job), then the landscape signing page
   const timer = useRef(null);
   const draftId = draft?.id;
   const lastLaunch = useRef(null);
@@ -120,7 +120,8 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, pho
     const full = { ...data, ...(kind === 'post' ? { comments } : {}) };
     const missing = missingBeforeSigning(kind, full);
     if (missing.length) { setMsg({ err: true, text: missing[0] }); return; }
-    setStep('sign');
+    if (!name.trim()) setName(customerName); // the name on the job; change it if someone else is signing
+    setStep('name');
   }
 
   const room = (i) => data.rooms[i];
@@ -167,7 +168,7 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, pho
           <header className="insp-bar">
             <strong>{KINDS[kind]}</strong>
             <span className="muted">{saveText}</span>
-            <button type="button" className="secondary small" style={{ marginLeft: 'auto' }} onClick={() => (step === 'sign' ? setStep('edit') : setOpen(false))}>{step === 'sign' ? 'Back' : 'Close'}</button>
+            <button type="button" className="secondary small" style={{ marginLeft: 'auto' }} onClick={() => (step === 'sign' ? setStep('name') : step === 'name' ? setStep('edit') : setOpen(false))}>{step === 'edit' ? 'Close' : 'Back'}</button>
           </header>
           <div className="insp-body">
             {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
@@ -269,14 +270,24 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, pho
           )}
 
               </>
+            ) : step === 'name' ? (
+              <div style={{ maxWidth: 520, margin: '0 auto' }}>
+                <p className="hint">Hand the phone to the customer. Signing locks this record.</p>
+                <div className="field">
+                  <label htmlFor="insp-signer">Who is signing?</label>
+                  <input id="insp-signer" value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" placeholder="Full name" />
+                  <p className="hint" style={{ margin: '6px 0 0' }}>This is the name on the job. Change it if someone else is signing, like a spouse who is home.</p>
+                </div>
+                <button type="button" className="primary big" style={{ width: '100%' }} disabled={name.trim().length < 2} onClick={() => { setMsg(null); setStep('sign'); }}>Continue to signature</button>
+                <button type="button" className="secondary big" style={{ width: '100%', marginTop: 10 }} onClick={markAbsent}>Customer not present</button>
+              </div>
             ) : (
-              // the signing page: landscape, with the customer's name and the pad together (turned on its side where the phone cannot rotate itself)
+              // the signing page: landscape (turned on its side where the phone cannot rotate itself), the pad only
               <SignOverlay
-                nameField={{ label: 'Customer’s full name', value: name, onChange: setName }}
+                title={`${name.trim()}, sign below`}
                 doneLabel="Sign and lock"
                 error={msg?.err ? msg.text : ''}
-                extra={<button type="button" className="secondary" onClick={markAbsent}>Customer not present</button>}
-                onCancel={() => { setMsg(null); setStep('edit'); }}
+                onCancel={() => { setMsg(null); setStep('name'); }}
                 onDone={(url) => { setSig(url); sign(url); }}
               />
             )}
@@ -296,7 +307,7 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, pho
   );
 }
 
-export default function InspectionTab({ jobId, staff, sketches = [], canEdit = true, photos = [], uploader = null, onOpenPhotos = null, launch = null }) {
+export default function InspectionTab({ jobId, staff, sketches = [], canEdit = true, photos = [], uploader = null, onOpenPhotos = null, launch = null, customerName = '' }) {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
   const [plans, setPlans] = useState([]);
@@ -319,8 +330,8 @@ export default function InspectionTab({ jobId, staff, sketches = [], canEdit = t
   return (
     <>
       <p className="hint">Walk the rooms with the customer before you start, and again when you finish. The customer signs on this phone. They can see the signed records on their care page.</p>
-      <Panel kind="pre" jobId={jobId} rows={rows} sketches={plans.length ? plans : sketches} pre={pre} canEdit={canEdit} onReload={load} staff={staff} photos={photos} uploader={uploader} onOpenPhotos={onOpenPhotos} launch={launch?.kind === 'pre' ? launch.n : null} />
-      <Panel kind="post" jobId={jobId} rows={rows} sketches={plans.length ? plans : sketches} pre={pre} canEdit={canEdit} onReload={load} staff={staff} photos={photos} uploader={uploader} onOpenPhotos={onOpenPhotos} launch={launch?.kind === 'post' ? launch.n : null} />
+      <Panel kind="pre" jobId={jobId} rows={rows} sketches={plans.length ? plans : sketches} pre={pre} canEdit={canEdit} onReload={load} staff={staff} photos={photos} uploader={uploader} onOpenPhotos={onOpenPhotos} customerName={customerName} launch={launch?.kind === 'pre' ? launch.n : null} />
+      <Panel kind="post" jobId={jobId} rows={rows} sketches={plans.length ? plans : sketches} pre={pre} canEdit={canEdit} onReload={load} staff={staff} photos={photos} uploader={uploader} onOpenPhotos={onOpenPhotos} customerName={customerName} launch={launch?.kind === 'post' ? launch.n : null} />
     </>
   );
 }

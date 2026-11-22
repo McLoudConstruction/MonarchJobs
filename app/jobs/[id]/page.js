@@ -768,7 +768,7 @@ function JobInner({ id, staff, token }) {
       )}
 
       {tab === 'inspection' && (
-        <InspectionTab jobId={id} staff={staff} sketches={sketches} photos={photos} uploader={uploader} onOpenPhotos={openViewer} canEdit={!['closed', 'cancelled'].includes(job.status)} launch={inspLaunch} />
+        <InspectionTab customerName={contactName || job.customer.display_name} jobId={id} staff={staff} sketches={sketches} photos={photos} uploader={uploader} onOpenPhotos={openViewer} canEdit={!['closed', 'cancelled'].includes(job.status)} launch={inspLaunch} />
       )}
 
       {tab === 'evalsheet' && (

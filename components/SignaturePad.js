@@ -10,7 +10,7 @@ import { createPortal } from 'react-dom';
 
 // Optional extras: nameField { label, value, onChange } puts a name box above the pad (Done then also needs a name),
 // doneLabel renames Done, extra is a node shown beside the name box, error is a line of text shown under the bar.
-export function SignOverlay({ onDone, onCancel, nameField = null, doneLabel = 'Done', extra = null, error = '' }) {
+export function SignOverlay({ onDone, onCancel, nameField = null, doneLabel = 'Done', extra = null, error = '', title = 'Sign below' }) {
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
   const drawing = useRef(false);
@@ -136,7 +136,7 @@ export function SignOverlay({ onDone, onCancel, nameField = null, doneLabel = 'D
     <div className="sig-full" role="dialog" aria-modal="true" aria-label="Signature">
       <div className="sig-stage" style={stage}>
         <div className="sig-bar">
-          <strong>Sign below</strong>
+          <strong>{title}</strong>
           {portrait && <span className="sig-turn">Turn your phone sideways to sign</span>}
           <span style={{ flex: 1 }} />
           <button type="button" className="secondary" onClick={clear} disabled={!has}>Clear</button>
