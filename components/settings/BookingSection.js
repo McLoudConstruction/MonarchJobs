@@ -112,8 +112,8 @@ export default function BookingSection() {
         </div>
 
         <div className="grid2">
-          <div className="field"><label>First appointment starts</label><input type="time" value={f.booking_day_start} onChange={set('booking_day_start')} /></div>
-          <div className="field"><label>Last appointment must end by</label><input type="time" value={f.booking_day_end} onChange={set('booking_day_end')} /></div>
+          <div className="field"><label>First appointment starts</label><input type="time" step="900" value={f.booking_day_start} onChange={set('booking_day_start')} /></div>
+          <div className="field"><label>Last appointment must end by</label><input type="time" step="900" value={f.booking_day_end} onChange={set('booking_day_end')} /></div>
           <div className="field"><label>Appointment length (minutes)</label><input type="number" min="30" max="480" step="15" value={f.booking_slot_minutes} onChange={set('booking_slot_minutes')} /></div>
           <div className="field"><label>Gap between appointments (minutes)</label><input type="number" min="0" max="240" step="15" value={f.booking_gap_minutes} onChange={set('booking_gap_minutes')} /></div>
           <div className="field"><label>Jobs at the same time</label><input type="number" min="1" max="50" value={f.booking_crews} onChange={set('booking_crews')} /><div className="note">How many crews you can send at once. Each time slot closes once this many visits overlap it, whoever booked them.</div></div>

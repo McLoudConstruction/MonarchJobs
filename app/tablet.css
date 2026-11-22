@@ -96,6 +96,8 @@
 
   /* ===== Job page ===== */
   .job-overview { grid-template-columns: 1fr 1fr; gap: 16px; }
+  .job-overview .ov-top, .job-overview .ov-side { gap: 16px; }
+  .also-notify-row { font-size: 15px; margin-bottom: 10px; }
   .job-overview .card { padding: 18px 22px; }
   .job-overview .card h2 { font-size: 13px; margin-bottom: 8px; }
   .job-overview .meta-line { font-size: 16px; margin-top: 6px; }

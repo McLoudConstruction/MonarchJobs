@@ -35,6 +35,7 @@ import QuickActionScreen from '@/components/job/QuickActionScreen';
 import PhotoViewer from '@/components/job/PhotoViewer';
 import CameraCapture from '@/components/job/CameraCapture';
 import { useJobRooms } from '@/lib/useJobRooms';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { useSignedUrls } from '@/lib/useSignedUrls';
 import { UploadStatus } from '@/components/job/PhotoUi';
 import { usePhotoUploader } from '@/lib/usePhotoUploader';
@@ -114,6 +115,7 @@ function JobInner({ id, staff, token }) {
   const isOffice = staff.role !== 'tech';
   const chatRows = useChatCenter().rows;
   const chatDock = useChatDock();
+  const mobile = useIsMobile(); // Quick Actions are for phone-sized screens only (under 900px, same as the bottom navigation)
   const [job, setJob] = useState(null);
   const [visits, setVisitsRaw] = useState([]);
   const [waitingOps, setWaitingOps] = useState([]);
@@ -122,7 +124,7 @@ function JobInner({ id, staff, token }) {
   const [contacts, setContacts] = useState([]);
   const [jobContactIds, setJobContactIds] = useState([]);
   const [inspLaunch, setInspLaunch] = useState(null); // { kind: 'pre' | 'post', n }: opens that inspection record by itself
-  const [newContact, setNewContact] = useState(null); // inline 'add a contact' form on the Also notify card
+  const [newContact, setNewContact] = useState(null); // inline 'add a contact' form on the Customer card
   const [events, setEvents] = useState([]);
   const [staffList, setStaffList] = useState([]);
   const [msg, setMsg] = useState(null);
@@ -161,6 +163,8 @@ function JobInner({ id, staff, token }) {
     else { qaFromRef.current = true; setQaFrom(true); } // a screen is already open (reload, scanned label): the way back to Quick Actions is there too
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [assignOpen, setAssignOpen] = useState(false);
+  // widening a window past the phone breakpoint leaves Quick Actions behind
+  useEffect(() => { if (!mobile) { setQaOpen(false); setQaLanding(false); } }, [mobile]);
   // one-shot requests from the phone's action button to a tab: { n } objects, cleared by the tab once it has acted
   const [moistCmd, setMoistCmd] = useState(null);
   const [updCmd, setUpdCmd] = useState(null);
@@ -421,7 +425,9 @@ function JobInner({ id, staff, token }) {
   // job clock for the phone button: Clock Out while this person's clock runs, Clock In when their visit is under way and it is stopped
   const myVisitStarted = visitsShown.some((v) => v.status === 'started' && v.tech_id === staff.id);
   const clockMode = ['closed', 'cancelled'].includes(job.status) ? null : clockRunning ? 'out' : myVisitStarted ? 'in' : null;
-  const fabKeys = FAB_HIDDEN_TABS.includes(tab) ? [] : fabActions({ hasSketch: sketches.length > 0, visitStatus: dockVisit?.status || null, docsMissing, recheck: hasFeature(service, 'recheck'), chat: true, clock: clockMode }).filter((k) => !(UPDATES_SHELVED && (k === 'complete' || k === 'internal'))); // those two write an Updates note
+  // Start job is only for the team member the visit is assigned to (office and owner can still send On the way)
+  const canStart = !!dockVisit && dockVisit.tech_id === staff.id;
+  const fabKeys = FAB_HIDDEN_TABS.includes(tab) ? [] : fabActions({ hasSketch: sketches.length > 0, visitStatus: dockVisit?.status || null, docsMissing, recheck: hasFeature(service, 'recheck'), chat: true, clock: clockMode, canStart }).filter((k) => !(UPDATES_SHELVED && (k === 'complete' || k === 'internal'))); // those two write an Updates note
   // Carpet jobs: Start opens the before-cleaning record, Finish opens the after-cleaning record.
   const canDoc = hasFeature(service, 'inspectionTab') && !['closed', 'cancelled'].includes(job.status);
   const onVisitAction = (action) => {
@@ -478,7 +484,7 @@ function JobInner({ id, staff, token }) {
   return (
     <>
       <Breadcrumb items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Jobs', href: '/jobs' }, { label: `Job #${job.job_number}` }]} />
-      {qaFrom && !qaOpen && <button type="button" className="secondary qa-back" onClick={backToQa}>&lsaquo; Quick actions</button>}
+      {mobile && qaFrom && !qaOpen && <button type="button" className="secondary qa-back" onClick={backToQa}>&lsaquo; Quick actions</button>}
       <div className="page-head">
         <h1>Job #{job.job_number} <span className={`badge s-${job.status}`}>{JOB_STATUS[job.status]}</span></h1>
         <div className="row" style={{ gap: 8 }}>
@@ -493,6 +499,7 @@ function JobInner({ id, staff, token }) {
         {' · '}{serviceTitle(service) || JOB_TYPES[job.job_type]}
         {isOffice && job.lead_id && <>{' · '}<Link href={`/leads/${job.lead_id}`}>From lead</Link></>}
       </p>
+      {!isOffice && !visits.some((v) => v.tech_id === staff.id) && <p className="hint" style={{ marginTop: 0 }}>This job is not on your schedule. It is open to you from the Jobs list in case you need it.</p>}
 
       {warnings.map((w, i) => <div key={i} className="banner">Warning: {w}</div>)}
       {anyFlag && <div className="banner flag">Double-booked: one of this job's visits overlaps another visit for the same tech. Move one of them.</div>}
@@ -522,66 +529,81 @@ function JobInner({ id, staff, token }) {
         })}
       </div>
 
-      {tab === 'overview' && <button type="button" className="primary qa-open-btn" onClick={() => { if (isPhone()) { setQaMode(true); setQaLanding(true); } setQaOpen(true); }}>Quick actions</button>}
-      <QuickActionScreen
+      {mobile && tab === 'overview' && <button type="button" className="primary qa-open-btn" onClick={() => { setQaMode(true); setQaLanding(true); setQaOpen(true); }}>Quick actions</button>}
+      {mobile && <QuickActionScreen
         open={qaOpen} landing={qaLanding} onClose={() => { setQaOpen(false); setQaLanding(false); }} onExit={() => { setQaMode(false); qaFromRef.current = false; setQaFrom(false); setQaOpen(false); setQaLanding(false); setTab('overview'); if (window.location.hash) window.history.replaceState(null, '', window.location.pathname + window.location.search); }} job={job} customerName={job.customer.display_name}
-        visitStatus={dockVisit?.status || null} clock={clockMode} service={service} tabs={shownTabs.map(([k]) => k)}
+        visitStatus={dockVisit?.status || null} canStart={canStart} clock={clockMode} service={service} tabs={shownTabs.map(([k]) => k)}
         hasSketch={sketches.length > 0} run={qaRun} badges={{ chat: jobChatUnread }}
-      />
+      />}
 
-      {tab === 'overview' && dockVisit && <VisitDock inline visit={dockVisit} token={token} onOtw={() => setOtwOpen(true)} onDone={load} onAction={onVisitAction} />}
+      {tab === 'overview' && dockVisit && <VisitDock inline visit={dockVisit} staffId={staff.id} token={token} onOtw={() => setOtwOpen(true)} onDone={load} onAction={onVisitAction} />}
 
       {tab === 'overview' && (
         <div className="job-overview">
-          <div className="card">
-            <h2>Customer</h2>
-            <div className="title">{isOffice ? <Link href={`/customers/${job.customer.id}`}>{job.customer.display_name}</Link> : job.customer.display_name}</div>
-            {contactName && contactName !== job.customer.display_name && <div>{contactName}</div>}
-            <div className="contact-chips">
-              {job.customer.phone && <a className="chip-link" href={telHref(job.customer.phone)}>Call {displayPhone(job.customer.phone)}</a>}
-              {job.customer.email && <a className="chip-link" href={`mailto:${job.customer.email}`}>{job.customer.email}</a>}
-              {!job.customer.phone && !job.customer.email && <span className="muted">No phone or email on file.</span>}
-            </div>
-            {isOffice && (
-              <div className="customer-contacts">
-                {!newContact && <button type="button" className="secondary small" onClick={() => setNewContact({ name: '', role: '', phone: '', email: '' })}>Add contact</button>}
-                {newContact && (
-                  <form onSubmit={addContact} style={{ marginTop: 10 }}>
-                    <div className="grid2">
-                      <div className="field"><label>Name</label><input required autoFocus value={newContact.name} onChange={(e) => setNewContact({ ...newContact, name: e.target.value })} /></div>
-                      <div className="field"><label>Role</label><input placeholder="Adjuster, manager, tenant..." value={newContact.role} onChange={(e) => setNewContact({ ...newContact, role: e.target.value })} /></div>
-                      <div className="field"><label>Phone</label><PhoneInput value={newContact.phone} onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })} /></div>
-                      <div className="field"><label>Email</label><input type="email" value={newContact.email} onChange={(e) => setNewContact({ ...newContact, email: e.target.value })} /></div>
-                    </div>
-                    <div className="row">
-                      <button className="primary">Add and notify</button>
-                      <button type="button" className="secondary" onClick={() => setNewContact(null)}>Cancel</button>
-                    </div>
-                  </form>
-                )}
+          <div className="ov-top">
+            <div className="card ov-customer">
+              <div className="card-head">
+                <h2>Customer</h2>
+                {isOffice && !newContact && <button type="button" className="secondary small" onClick={() => setNewContact({ name: '', role: '', phone: '', email: '' })}>Add contact</button>}
               </div>
-            )}
-          </div>
-
-          <div className="card">
-            <h2>Site</h2>
-            <div className="title"><MapLink address={job.address} /></div>
-            {job.address.gate_code &&<div>Gate code: <strong>{job.address.gate_code}</strong></div>}
-            {job.address.warnings && <div>Pets: <strong>{job.address.warnings}</strong></div>}
-            {job.address.access_notes && <div className="meta">{job.address.access_notes}</div>}
-          </div>
-
-          {job.loss_summary && (
-            <div className="card wide">
-              <h2>Loss summary</h2>
-              <div>{job.loss_summary}</div>
+              <div className="title">{isOffice ? <Link href={`/customers/${job.customer.id}`}>{job.customer.display_name}</Link> : job.customer.display_name}</div>
+              {contactName && contactName !== job.customer.display_name && <div>{contactName}</div>}
+              <div className="contact-chips">
+                {job.customer.phone && <a className="chip-link" href={telHref(job.customer.phone)}>Call {displayPhone(job.customer.phone)}</a>}
+                {job.customer.email && <a className="chip-link" href={`mailto:${job.customer.email}`}>{job.customer.email}</a>}
+                {!job.customer.phone && !job.customer.email && <span className="muted">No phone or email on file.</span>}
+              </div>
+              {isOffice && newContact && (
+                <form onSubmit={addContact} className="customer-contacts" style={{ marginTop: 10 }}>
+                  <div className="grid2">
+                    <div className="field"><label>Name</label><input required autoFocus value={newContact.name} onChange={(e) => setNewContact({ ...newContact, name: e.target.value })} /></div>
+                    <div className="field"><label>Role</label><input placeholder="Adjuster, manager, tenant..." value={newContact.role} onChange={(e) => setNewContact({ ...newContact, role: e.target.value })} /></div>
+                    <div className="field"><label>Phone</label><PhoneInput value={newContact.phone} onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })} /></div>
+                    <div className="field"><label>Email</label><input type="email" value={newContact.email} onChange={(e) => setNewContact({ ...newContact, email: e.target.value })} /></div>
+                  </div>
+                  <div className="row">
+                    <button className="primary">Add and notify</button>
+                    <button type="button" className="secondary" onClick={() => setNewContact(null)}>Cancel</button>
+                  </div>
+                </form>
+              )}
+              {isOffice && (
+                <div className="also-notify">
+                  <h3>Also notify</h3>
+                  {contacts.length > 0 && <p className="hint">Ticked contacts get this job's progress updates.</p>}
+                  {contacts.map((c) => (
+                    <label key={c.id} className="also-notify-row">
+                      <input type="checkbox" checked={jobContactIds.includes(c.id)} onChange={() => toggleContact(c.id)} />
+                      <span>{c.name} {c.role && <span className="badge off">{c.role}</span>} <span className="muted">{[displayPhone(c.phone), c.email].filter(Boolean).join(' · ')}</span></span>
+                    </label>
+                  ))}
+                  {contacts.length === 0 && <p className="muted" style={{ margin: 0 }}>No extra contacts yet.</p>}
+                </div>
+              )}
             </div>
-          )}
+
+            <div className="ov-side">
+              <div className="card">
+                <h2>Site</h2>
+                <div className="title"><MapLink address={job.address} /></div>
+                {job.address.gate_code &&<div>Gate code: <strong>{job.address.gate_code}</strong></div>}
+                {job.address.warnings && <div>Pets: <strong>{job.address.warnings}</strong></div>}
+                {job.address.access_notes && <div className="meta">{job.address.access_notes}</div>}
+              </div>
+
+              {job.loss_summary && (
+                <div className="card">
+                  <h2>Loss summary</h2>
+                  <div>{job.loss_summary}</div>
+                </div>
+              )}
+            </div>
+          </div>
 
           <ClockCard jobId={id} staff={staff} staffList={staffList} token={token} service={service} jobStatus={job.status} refreshKey={`${visitStatusKey}|${clockTick}`} onChanged={() => setClockTick((n) => n + 1)} />
 
           <div className="card wide">
-            <div className="row" style={{ justifyContent: 'space-between' }}>
+            <div className="row" style={{ justifyContent: 'space-between', marginBottom: 10 }}>
               <h2>Visits</h2>
               {isOffice && <button className="secondary small" onClick={() => setVisitEdit({})}>Add visit</button>}
             </div>
@@ -603,13 +625,13 @@ function JobInner({ id, staff, token }) {
                         <div key={m.id} className="visit-member">
                           <span>{name(m.tech_id)}{m.minutes_out ? ` · ${m.minutes_out} min out` : ''}</span>
                           <span className="badge off">{VISIT_STATUS[m.status]}</span>
-                          {(isOffice || m.tech_id === staff.id) && <VisitActions visit={m} token={token} onDone={load} onAction={onVisitAction} />}
+                          {(isOffice || m.tech_id === staff.id) && <VisitActions visit={m} staffId={staff.id} token={token} onDone={load} onAction={onVisitAction} />}
                         </div>
                       ))}
                     {reasonText(v) && <div className="meta">Reason: {reasonText(v)}{isOffice && gobacks[v.id] && <> <span className="badge warn">Go-back: {name(gobacks[v.id])}</span></>}</div>}
                   </div>
                   <div className="visit-buttons">
-                    {g.solo && (isOffice || v.tech_id === staff.id) && <VisitActions visit={v} token={token} onDone={load} onAction={onVisitAction} />}
+                    {g.solo && (isOffice || v.tech_id === staff.id) && <VisitActions visit={v} staffId={staff.id} token={token} onDone={load} onAction={onVisitAction} />}
                     {canEditGroup && (
                       <>
                         <button className="secondary small" onClick={() => setVisitEdit(editRow)}>Reschedule</button>
@@ -623,19 +645,6 @@ function JobInner({ id, staff, token }) {
             {visitsShown.length === 0 && <p className="muted">No visits scheduled.</p>}
           </div>
 
-          {isOffice && (
-            <div className="card wide">
-              <h2>Also notify</h2>
-              <p className="hint">Extra contacts receive this job's progress updates (and its other notifications once messaging is switched on). Add a new contact from the Customer card above; it is also saved on the customer.</p>
-              {contacts.map((c) => (
-                <label key={c.id} className="row" style={{ marginBottom: 8 }}>
-                  <input type="checkbox" checked={jobContactIds.includes(c.id)} onChange={() => toggleContact(c.id)} />
-                  {c.name} {c.role && <span className="badge off">{c.role}</span>} <span className="muted">{[displayPhone(c.phone), c.email].filter(Boolean).join(' · ')}</span>
-                </label>
-              ))}
-              {contacts.length === 0 && <p className="muted">No extra contacts yet.</p>}
-            </div>
-          )}
           {isOffice && hasFeature(service, 'customerPage') && <CustomerPageCard jobId={id} token={token} staff={staff} jobStatus={job.status} />}
           {staff.role === 'owner' && <DeleteJobCard jobId={id} job={job} token={token} />}
         </div>
@@ -847,7 +856,7 @@ function JobInner({ id, staff, token }) {
         )}
       </PopupModal>
 
-      <JobFab items={fabItems} />
+      {!qaOpen && <JobFab items={fabItems} />}
 
       <input
         ref={roomInput}

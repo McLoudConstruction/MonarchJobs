@@ -52,3 +52,9 @@ test('the clock buttons come with the chat on top and without the photo tables',
   assert.deepEqual(fabActions({ hasSketch: false, visitStatus: 'started', chat: true, clock: 'out' }), ['chat', 'photos', 'sketch', 'complete', 'clock_out', 'internal']);
   assert.deepEqual(fabActions({ docsMissing: true, visitStatus: 'started', clock: 'out' }), ['clock_out']);
 });
+
+test('Start Job is left off for anyone the visit is not assigned to', () => {
+  assert.deepEqual(fabActions({ hasSketch: true, visitStatus: 'scheduled', canStart: false }), ['photos', 'recheck', 'otw', 'internal']);
+  assert.deepEqual(fabActions({ hasSketch: true, visitStatus: 'on_the_way', canStart: false }), ['photos', 'recheck', 'otw', 'internal']);
+  assert.deepEqual(fabActions({ hasSketch: true, visitStatus: 'started', canStart: false }), ['photos', 'recheck', 'complete', 'internal']);
+});

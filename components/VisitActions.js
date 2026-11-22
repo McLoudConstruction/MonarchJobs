@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { sendVisitAction } from '@/lib/offlineActions';
 
 // Compact Start / Finish buttons on a visit row, for desktop. Phones use the action bar at the bottom of
-// the screen instead (VisitDock). "On the way" is the popup on the job header. The server checks the tech owns the visit.
-export default function VisitActions({ visit, token, onDone, onAction }) {
+// the screen instead (VisitDock). "On the way" is the popup on the job header. Start job shows only for the team member the
+// visit is assigned to (staffId); the server checks it too.
+export default function VisitActions({ visit, token, onDone, onAction, staffId }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
 
@@ -27,7 +28,7 @@ export default function VisitActions({ visit, token, onDone, onAction }) {
   return (
     <span className="visit-actions desktop-only">
       {msg && <span className="msg err" style={{ margin: 0, padding: '4px 8px' }}>{msg}</span>}
-      {(visit.status === 'scheduled' || visit.status === 'on_the_way') && (
+      {(visit.status === 'scheduled' || visit.status === 'on_the_way') && visit.tech_id === staffId && (
         <button type="button" className="primary small" disabled={busy} onClick={() => act('started')}>Start job</button>
       )}
       {visit.status === 'started' && (

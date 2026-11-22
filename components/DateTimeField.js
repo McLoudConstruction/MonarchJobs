@@ -13,9 +13,11 @@ const HOURS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const MINUTES = [0, 15, 30, 45];
 const same = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
+// Times are always on a quarter hour: a time that is not (an older visit, say) opens on the nearest one.
+const snap15 = (d) => { const n = new Date(d); n.setMinutes(Math.round(n.getMinutes() / 15) * 15, 0, 0); return n; };
 function startingDate(value) {
   const d = value ? new Date(value) : null;
-  if (d && !Number.isNaN(d.getTime())) return d;
+  if (d && !Number.isNaN(d.getTime())) return snap15(d);
   const n = new Date();
   n.setMinutes(Math.ceil(n.getMinutes() / 15) * 15, 0, 0);
   return n;

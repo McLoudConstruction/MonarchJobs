@@ -174,3 +174,11 @@ test('a group tag is for you when you are in the group', () => {
   assert.equal(tagIsMe('role:owner', { id: 'o1', role: 'owner' }), true);
   assert.equal(tagIsMe('role:office', null), false);
 });
+
+test('an assignment line stands on its own, without "<who> " in front', async () => {
+  const { isBareSystemLine } = await import('../lib/chat.js');
+  assert.equal(isBareSystemLine('Dana Smith has now been assigned'), true);
+  assert.equal(isBareSystemLine('moved Dana\'s visit to Tue 9:00 AM (was Mon 9:00 AM)'), false);
+  assert.equal(isBareSystemLine(''), false);
+  assert.equal(isBareSystemLine(null), false);
+});

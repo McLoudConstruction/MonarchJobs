@@ -1644,6 +1644,18 @@ select.prio-business_hours{ border-color: #b8741f; }
 .job-overview .card .hint{ margin-bottom: 8px; }
 .job-overview .meta-line{ font-size: 13.5px; margin-top: 2px; }
 @media (max-width: 760px){ .job-overview{ grid-template-columns: 1fr; } }
+/* overview: a tall Customer card on the left; Site and a half-width Loss summary stacked on the right */
+.job-overview .ov-top{ grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: stretch; }
+.job-overview .ov-side{ display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.job-overview .ov-customer{ min-width: 0; }
+.job-overview .card-head{ display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.job-overview .card-head h2{ margin: 0; }
+.job-overview .also-notify{ margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
+.job-overview .also-notify h3{ margin: 0 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+.job-overview .also-notify .hint{ margin: 0 0 6px; font-size: 12.5px; }
+.also-notify-row{ display: flex; align-items: flex-start; gap: 8px; margin: 0 0 6px; font-size: 13.5px; cursor: pointer; }
+.also-notify-row input{ margin-top: 3px; flex: none; }
+@media (max-width: 760px){ .job-overview .ov-top{ grid-template-columns: 1fr; } }
 .visit-row{ display: flex; align-items: center; justify-content: space-between; gap: 8px 14px; flex-wrap: wrap; padding: 8px 0; border-top: 1px solid var(--line); }
 .visit-row:first-of-type{ border-top: 0; }
 .visit-main{ min-width: 0; }

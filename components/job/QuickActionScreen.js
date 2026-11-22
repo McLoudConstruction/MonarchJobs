@@ -14,12 +14,12 @@ const MAIN = ['otw', 'eta', 'start', 'finish', 'chat']; // the icon row; the res
 // Full-screen list of big buttons for everything the tech can do on this job right now (like Drive Mode in McLoudJobs).
 // Shows the customer, a tappable address (opens the maps app) and phone, then the actions for this kind of job and where the job is.
 // `run(key)` does the action (it may throw; the message shows here). The screen closes after an action that moves to another screen.
-export default function QuickActionScreen({ open, onClose, onExit, landing = false, job, customerName, visitStatus, clock, service, tabs, hasSketch, run, badges = {} }) {
+export default function QuickActionScreen({ open, onClose, onExit, landing = false, job, customerName, visitStatus, canStart = true, clock, service, tabs, hasSketch, run, badges = {} }) {
   const [busy, setBusy] = useState('');
   const [err, setErr] = useState('');
   if (!open) return null;
 
-  const actions = quickActions({ service, visitStatus, jobStatus: job.status, clock, tabs, hasSketch });
+  const actions = quickActions({ service, visitStatus, jobStatus: job.status, clock, tabs, hasSketch, canStart });
   const main = actions.filter((a) => MAIN.includes(a.key));
   const rest = actions.filter((a) => !MAIN.includes(a.key));
   const groups = [['now', 'Next'], ['work', 'On the job'], ['job', 'Job']];

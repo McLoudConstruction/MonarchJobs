@@ -14,7 +14,7 @@ import {
   CHAT_PHOTO_BUCKET, MAX_BODY, PAGE_SIZE, cleanBody, personName, mentionPeople, mentionIds, groupByDay, mergeMessages, mergeAcks,
   firstUnreadId, ackState, needsMyAck, canEditMessage, canDeleteMessage, quickRepliesFor, photoPathFor, clockTime, tagIsMe,
   CHAT_VOICE_BUCKET, MAX_PINS, REACTIONS, SEARCH_LIMIT, canPinMessage, isPinned, mergePins, mergeReactions, removeReaction, reactionSummary,
-  canSearch, likePattern, highlightParts, snippet, voicePathFor, durationText, previewText,
+  canSearch, likePattern, highlightParts, snippet, voicePathFor, durationText, previewText, isBareSystemLine,
 } from '@/lib/chat';
 import './chat.css';
 
@@ -369,7 +369,7 @@ export default function ThreadPanel({ kind, refId, staff, compact = false, activ
     const who = m.author_id === staff.id ? 'You' : nameOf(m.author_id);
     return (
       <div key={m.id} className={`chat-sys ${mineWaiting ? 'ask' : ''}`}>
-        <span>{who} {m.body}</span><time dateTime={m.created_at}>{clockTime(m.created_at)}</time>
+        <span>{isBareSystemLine(m.body) ? m.body : `${who} ${m.body}`}</span><time dateTime={m.created_at}>{clockTime(m.created_at)}</time>
         {asks && (
           <div className="chat-ack">
             {mineWaiting && <button type="button" disabled={ackBusy === m.id} onClick={() => gotIt(m)}>Got it</button>}

@@ -7,7 +7,7 @@ import { fmtTime } from '@/lib/format';
 // The phone's action bar: one big button for the next step of the visit, pinned above the bottom
 // navigation where a thumb reaches it (inline: sits in the page, under the tab bar). On the way opens the minutes popup (onOtw); Start and Finish
 // go straight to the server. Shown on phones only; desktops use the buttons in the page.
-export default function VisitDock({ visit, token, onOtw, onDone, onAction, inline = false }) {
+export default function VisitDock({ visit, token, onOtw, onDone, onAction, staffId, inline = false }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
 
@@ -24,6 +24,8 @@ export default function VisitDock({ visit, token, onOtw, onDone, onAction, inlin
     setBusy(false);
   }
 
+  const canStart = visit.tech_id === staffId; // Start job is for the team member the visit is assigned to
+
   const status = {
     scheduled: `Scheduled for ${fmtTime(visit.starts_at)}`,
     on_the_way: `On the way, ${visit.minutes_out} min out`,
@@ -39,13 +41,13 @@ export default function VisitDock({ visit, token, onOtw, onDone, onAction, inlin
         {visit.status === 'scheduled' && (
           <>
             <button type="button" className="primary big" disabled={busy} onClick={onOtw}>On the way</button>
-            <button type="button" className="secondary big" disabled={busy} onClick={() => act('started')}>Start job</button>
+            {canStart && <button type="button" className="secondary big" disabled={busy} onClick={() => act('started')}>Start job</button>}
           </>
         )}
         {visit.status === 'on_the_way' && (
           <>
-            <button type="button" className="primary big" disabled={busy} onClick={() => act('started')}>Start job</button>
-            <button type="button" className="secondary big" disabled={busy} onClick={onOtw}>Update ETA</button>
+            {canStart && <button type="button" className="primary big" disabled={busy} onClick={() => act('started')}>Start job</button>}
+            <button type="button" className={`${canStart ? 'secondary' : 'primary'} big`} disabled={busy} onClick={onOtw}>Update ETA</button>
           </>
         )}
         {visit.status === 'started' && (

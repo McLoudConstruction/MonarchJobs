@@ -18,7 +18,7 @@ const ALREADY_PAST = { on_the_way: ['started', 'finished'], started: ['started',
 // Body: { action: 'on_the_way' | 'started' | 'finished', minutes?: 10..60, at?: ISO time, op_id?: uuid, replay?: true }
 // A tap made with no signal is sent later with `at` (when it really happened) and `op_id`, so a retry is applied once.
 // With `replay`, a step the visit has already moved past answers 409 { code: 'STALE' } instead of an error.
-// Techs may only act on their own visits. Office and owner may act on any visit.
+// Techs may only act on their own visits. Office and owner may send On the way or Finish on any visit, but only the assigned team member can start it.
 // Uses the service role so a tech never needs write access to visits or jobs.
 export async function POST(request, { params }) {
   const auth = await requireStaff(request);
@@ -36,6 +36,10 @@ export async function POST(request, { params }) {
   if (!visit) return NextResponse.json({ error: 'Visit not found.' }, { status: 404 });
   if (auth.staff.role === 'tech' && visit.tech_id !== auth.staff.id) {
     return NextResponse.json({ error: 'This visit is not assigned to you.' }, { status: 403 });
+  }
+  // Start job is for the team member the visit is assigned to; office and owner can still send On the way and Finish
+  if (body.action === 'started' && visit.tech_id !== auth.staff.id) {
+    return NextResponse.json({ error: 'Only the team member assigned to this visit can start the job.' }, { status: 403 });
   }
 
   if (opId) {

@@ -37,3 +37,13 @@ test('a closed job offers no visit or work actions', () => {
 });
 
 test('isTabAction', () => { assert.ok(isTabAction('moisture')); assert.ok(!isTabAction('start')); });
+
+test('Start job only shows for the team member the visit is assigned to', () => {
+  assert.deepEqual(keys({ service: 'carpet', visitStatus: 'scheduled', canStart: false }).slice(0, 1), ['otw']);
+  assert.ok(!keys({ service: 'carpet', visitStatus: 'scheduled', canStart: false }).includes('start'));
+  assert.deepEqual(keys({ service: 'carpet', visitStatus: 'on_the_way', canStart: false }).slice(0, 1), ['eta']);
+  assert.ok(!keys({ service: 'carpet', visitStatus: 'on_the_way', canStart: false }).includes('start'));
+  // the default stays on, and a started visit still offers Finish job
+  assert.ok(keys({ service: 'carpet', visitStatus: 'scheduled' }).includes('start'));
+  assert.ok(keys({ service: 'carpet', visitStatus: 'started', canStart: false }).includes('finish'));
+});
