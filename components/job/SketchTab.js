@@ -24,6 +24,7 @@ export default function SketchTab({ jobId, sketches, photos, isOffice, staff = n
   const [asideCopy, setAsideCopy] = useState(false); // a copy that could not be restored is kept on this device
   const [save, setSave] = useState({ state: 'idle', text: '' });
   const [adding, setAdding] = useState(false);
+  const [floorsSlot, setFloorsSlot] = useState(null); // where the floors row goes, in the same row as the sketch tabs
   const [headSlot, setHeadSlot] = useState(null); // where the sketch puts its export and full screen icons
   const [newName, setNewName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -229,6 +230,7 @@ export default function SketchTab({ jobId, sketches, photos, isOffice, staff = n
             <button key={s.id} type="button" role="tab" aria-selected={s.id === activeId} className={s.id === activeId ? 'on' : ''} onClick={() => setActiveId(s.id)}>{s.name}</button>
           ))}
           <button type="button" className="add" onClick={() => setAdding(true)}>+ Add sketch</button>
+          <span ref={setFloorsSlot} className="floors-slot" />
         </div>
         <span className="sketch-head-right"><span className={`sketch-save ${save.state}`} aria-live="polite">{save.state === 'saved' || save.state === 'dirty' || save.state === 'saving' ? save.text : ''}</span><span ref={setHeadSlot} /></span>
       </div>
@@ -258,6 +260,7 @@ export default function SketchTab({ jobId, sketches, photos, isOffice, staff = n
             key={loaded.id}
             plan={loaded.plan}
             exportName={loaded.name}
+            floorsSlot={floorsSlot}
             headSlot={headSlot}
             staff={staff}
             staffList={staffList}

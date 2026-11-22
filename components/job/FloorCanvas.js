@@ -1,16 +1,18 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import SketchCanvas from '@/components/job/SketchCanvas';
 import { normalizePlan, planBounds } from '@/lib/sketch';
-import { addFloor, addStairs, currentFloor, floorIsEmpty, floorView, mergeFloor, removeFloor, renameFloor, MAX_FLOORS } from '@/lib/floors';
+import { addFloor, addStairs, floorSlots, currentFloor, floorIsEmpty, floorView, mergeFloor, removeFloor, renameFloor, MAX_FLOORS } from '@/lib/floors';
 import { makeObject } from '@/lib/objectTypes';
 import './floors.css';
 
 // Floors around the drawing board. The board draws ONE floor at a time (it never knows floors exist); this keeps the whole
 // sketch, hands the board the current floor, and files what the board returns back onto that floor. A sketch with no floors
 // is shown exactly as before, with an Add floor button above it. Everything the parent gives SketchCanvas passes through.
-export default function FloorCanvas({ plan: initialPlan, onChange, ...rest }) {
+// `floorsSlot`: where to put the floors row when the page has a place for it beside its own tabs (null = not ready yet, left out until it is).
+export default function FloorCanvas({ plan: initialPlan, onChange, floorsSlot, ...rest }) {
   const fullRef = useRef(normalizePlan(initialPlan));
   const [floorId, setFloorId] = useState(() => currentFloor(fullRef.current, null));
   const [rev, setRev] = useState(0); // the board reads its plan once when it opens, so a change made here reopens it
@@ -34,8 +36,8 @@ export default function FloorCanvas({ plan: initialPlan, onChange, ...rest }) {
     onChange?.(merged);
   }, [floorId, onChange]);
 
-  const add = () => {
-    const r = addFloor(fullRef.current);
+  const add = (at) => {
+    const r = addFloor(fullRef.current, '', at);
     if (!r.id) { setNote(`A sketch holds up to ${MAX_FLOORS} floors.`); return; }
     apply(r.plan, r.id);
   };
@@ -58,25 +60,33 @@ export default function FloorCanvas({ plan: initialPlan, onChange, ...rest }) {
 
   const view = floors.length ? floorView(full, currentFloor(full, floorId)) : full;
   const cur = floors.find((f) => f.id === currentFloor(full, floorId));
+  const slots = floorSlots(full);
+  const bar = (
+    <div className={`floors-bar${floorsSlot ? ' in-slot' : ''}`}>
+      {floors.length > 0 && (
+        <div className="floors-tabs" role="tablist" aria-label="Floors">
+          {floors.map((f) => (
+            <button key={f.id} type="button" role="tab" aria-selected={f.id === cur?.id} className={f.id === cur?.id ? 'on' : ''} onClick={() => { if (f.id !== cur?.id) apply(fullRef.current, f.id); }}>{f.name}</button>
+          ))}
+        </div>
+      )}
+      <select className="floors-add" aria-label="Add a floor" value="" disabled={floors.length >= MAX_FLOORS} onChange={(e) => { if (e.target.value !== '') add(Number(e.target.value)); }}>
+        <option value="">{floors.length ? '+ Floor' : 'Add a floor'}</option>
+        {slots.map((o) => <option key={o.at} value={o.at}>{o.label}</option>)}
+      </select>
+      {floors.length > 1 && (
+        <>
+          <button type="button" className="secondary small" onClick={() => setStairsOpen((o) => !o)} aria-expanded={stairsOpen}>Stairs</button>
+          <button type="button" className="secondary small" onClick={() => setRenaming((o) => !o)}>Rename</button>
+          <button type="button" className="secondary small" onClick={del}>Remove floor</button>
+        </>
+      )}
+    </div>
+  );
   return (
     <>
-      <div className="floors-bar">
-        {floors.length > 0 && (
-          <div className="floors-tabs" role="tablist" aria-label="Floors">
-            {floors.map((f) => (
-              <button key={f.id} type="button" role="tab" aria-selected={f.id === cur?.id} className={f.id === cur?.id ? 'on' : ''} onClick={() => { if (f.id !== cur?.id) apply(fullRef.current, f.id); }}>{f.name}</button>
-            ))}
-          </div>
-        )}
-        <button type="button" className="secondary small" onClick={add} disabled={floors.length >= MAX_FLOORS}>{floors.length ? '+ Floor' : 'Add a floor'}</button>
-        {floors.length > 1 && (
-          <>
-            <button type="button" className="secondary small" onClick={() => setStairsOpen((o) => !o)} aria-expanded={stairsOpen}>Stairs</button>
-            <button type="button" className="secondary small" onClick={() => setRenaming((o) => !o)}>Rename</button>
-            <button type="button" className="secondary small" onClick={del}>Remove floor</button>
-          </>
-        )}
-      </div>
+      {floorsSlot === undefined && bar}
+      {floorsSlot && createPortal(bar, floorsSlot)}
       {stairsOpen && cur && (
         <div className="floors-pop" role="group" aria-label="Stairs to">
           <span className="muted">Stairs from {cur.name} to:</span>

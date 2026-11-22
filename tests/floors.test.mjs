@@ -74,3 +74,37 @@ test('reports lay the floors side by side with the floor in the room name, nothi
   assert.ok(Math.min(...xs(flat.rooms.find((r) => r.id === 'c'))) > Math.max(...xs(flat.rooms.find((r) => r.id === 'b'))), 'floor 2 sits to the right of floor 1');
   assert.ok(planBounds(flat));
 });
+
+import { floorSlots } from '../lib/floors.js';
+
+test('a one-floor sketch can gain a floor above or below; more floors, more places', () => {
+  assert.deepEqual(floorSlots({ floors: [] }).map((s) => s.label), ['Above this floor', 'Below this floor']);
+  const two = { floors: [{ id: 'a', name: 'Basement' }, { id: 'b', name: 'Main' }] };
+  assert.deepEqual(floorSlots(two).map((s) => s.label), ['Above Main', 'Between Basement and Main', 'Below Basement']);
+  const three = { floors: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }, { id: 'c', name: 'C' }] };
+  assert.equal(floorSlots(three).length, 4);
+});
+
+test('a floor added in a chosen place lands there, and nothing drawn changes floors', () => {
+  const base = { rooms: [{ id: 'r1' }, { id: 'r2' }], floors: [{ id: 'a', name: 'Floor 1' }, { id: 'b', name: 'Floor 2' }], floorOf: { r2: 'b' } };
+  const mid = addFloor(base, '', 1);
+  assert.deepEqual(mid.plan.floors.map((f) => f.id).filter((i) => i !== mid.id), ['a', 'b']);
+  assert.equal(mid.plan.floors[1].id, mid.id);
+  const below = addFloor(base, '', 0);
+  assert.equal(below.plan.floors[0].id, below.id);
+  assert.equal(below.plan.floorOf.r1, 'a'); // r1 had no floor, so it was on the first floor; it stays there
+  assert.equal(below.plan.floorOf.r2, 'b');
+  const names = below.plan.floors.map((f) => f.name);
+  assert.equal(new Set(names).size, names.length);
+  // a sketch with no floors: below makes the old drawing "Floor 1", above it the new one
+  const single = { rooms: [{ id: 'r1' }], floors: [], floorOf: {} };
+  const b = addFloor(single, '', 0);
+  assert.equal(b.plan.floors[1].name, 'Floor 1');
+  assert.equal(b.plan.floorOf.r1, b.plan.floors[1].id);
+  const u = addFloor(single, '', 1);
+  assert.equal(u.plan.floors[0].name, 'Floor 1');
+  assert.equal(u.plan.floors[1].id, u.id);
+  // the old behavior (no place given) is still "on top"
+  const top = addFloor(base);
+  assert.equal(top.plan.floors.at(-1).id, top.id);
+});
