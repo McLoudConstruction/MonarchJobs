@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import FolderPicker, { RoomPill } from '@/components/job/FolderPicker';
 import { PHOTO_KIND_KEYS, PHOTO_KINDS } from '@/lib/jobDocs';
 import PhotoMarkupEditor from '@/components/job/PhotoMarkupEditor';
@@ -60,6 +61,7 @@ const FOLDER_OPTIONS = PHOTO_KIND_KEYS.map((k) => ({ value: k, label: PHOTO_KIND
 export default function CameraCapture({
   open, onClose, uploader, fixedKind = null, onUploaded = null, jobId = null,
   rooms = [], defaultRoom = '', ghostUrl = null, pairOf = null, closeAfterOne = false,
+  over = false, // opened from inside a full-screen record (the inspection): show at the top level, above it, not clipped inside it
 }) {
   const [kind, setKind] = useState(fixedKind);
   const [room, setRoom] = useState(defaultRoom || '');
@@ -473,8 +475,8 @@ export default function CameraCapture({
   const zoomRatio = zoomRange.max > zoomRange.min ? (zoom - zoomRange.min) / (zoomRange.max - zoomRange.min) : 0;
   const digitalScale = !zoomRange.hardware && zoom > 1 ? zoom : 1;
 
-  return (
-    <div className="camera-overlay">
+  const shell = (
+    <div className={`camera-overlay${over ? ' camera-over' : ''}`}>
       <canvas ref={canvasRef} style={{ display: 'none' }} />
 
       {!reviewFile && (
@@ -676,4 +678,5 @@ export default function CameraCapture({
       />
     </div>
   );
+  return over && typeof document !== 'undefined' ? createPortal(shell, document.body) : shell;
 }

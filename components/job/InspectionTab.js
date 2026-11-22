@@ -186,7 +186,7 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, pho
                   onClick={() => update((d) => { d.room_count = Math.min(MAX_ROOM_COUNT, (d.room_count || 0) + 1); return d; })}>+</button>
               </div>
             </div>
-            <PhotoAttach photos={photos || []} ids={data.photo_ids || []} uploader={uploader} onOpen={onOpenPhotos} kind={kind === 'pre' ? 'before' : 'after'}
+            <PhotoAttach over photos={photos || []} ids={data.photo_ids || []} uploader={uploader} onOpen={onOpenPhotos} kind={kind === 'pre' ? 'before' : 'after'}
               label={kind === 'pre' ? 'Photos before cleaning' : 'Photos after cleaning'}
               onChange={(ids) => update((d) => { d.photo_ids = ids; return d; })} />
             <div className="field" style={{ marginTop: 8, marginBottom: 0 }}><label htmlFor="insp-notes">Notes (optional)</label>
@@ -247,7 +247,7 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, pho
                 </div>
               ))}
               {kind === 'pre' && <button type="button" className="secondary small" style={{ marginTop: 8 }} onClick={() => update((d) => { d.rooms[i].issues.push(blankIssue()); return d; })}>+ Add a spot or issue</button>}
-              <PhotoAttach photos={photos || []} ids={r.photo_ids || []} uploader={uploader} onOpen={onOpenPhotos} kind={kind === 'pre' ? 'before' : 'after'} label={`Photos of ${r.name || 'this room'}`}
+              <PhotoAttach over photos={photos || []} ids={r.photo_ids || []} uploader={uploader} onOpen={onOpenPhotos} kind={kind === 'pre' ? 'before' : 'after'} label={`Photos of ${r.name || 'this room'}`}
                 onChange={(ids) => update((d) => { d.rooms[i].photo_ids = ids; return d; })} />
               <div className="field" style={{ marginTop: 8, marginBottom: 0 }}><label>Notes (optional)</label><input value={room(i).notes} maxLength={400} onChange={(e) => update((d) => { d.rooms[i].notes = e.target.value; return d; })} /></div>
             </div>

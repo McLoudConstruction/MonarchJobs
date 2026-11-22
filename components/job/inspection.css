@@ -9,3 +9,5 @@
 .insp-stepper{ display: flex; align-items: stretch; gap: 10px; max-width: 320px; }
 .insp-stepper button{ flex: 0 0 64px; min-height: 56px; font-size: 28px; line-height: 1; padding: 0; }
 .insp-stepper input{ flex: 1; min-width: 0; min-height: 56px; text-align: center; font-size: 28px; font-weight: 700; }
+/* the camera opened from the inspection sits above it (the inspection is z-index 3000) */
+.camera-overlay.camera-over{ z-index: 3100; }

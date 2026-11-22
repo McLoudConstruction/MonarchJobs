@@ -8,7 +8,7 @@ import { useWaitingPhotos } from '@/lib/offlineClient';
 
 // The photos on an update being written: the ones chosen so far, plus ways to add more (pick from
 // the job's photos, take them now with the same camera as the Photos tab, or choose from the phone's library).
-export default function PhotoAttach({ photos, ids, onChange, uploader, onOpen, kind = 'during', label = 'Photos' }) {
+export default function PhotoAttach({ photos, ids, onChange, uploader, onOpen, kind = 'during', label = 'Photos', over = false }) {
   const [pickOpen, setPickOpen] = useState(false);
   const [draft, setDraft] = useState(new Set());
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -75,7 +75,7 @@ export default function PhotoAttach({ photos, ids, onChange, uploader, onOpen, k
         <button type="button" className="secondary" onClick={open} disabled={!available.length}>Pick from job photos</button>
       </div>
       <UploadStatus uploader={uploader} />
-      <CameraCapture open={cameraOpen} onClose={() => setCameraOpen(false)} uploader={uploader} fixedKind={kind} onUploaded={addTaken} />
+      <CameraCapture open={cameraOpen} onClose={() => setCameraOpen(false)} uploader={uploader} fixedKind={kind} onUploaded={addTaken} over={over} />
       <PopupModal open={pickOpen} onClose={() => setPickOpen(false)} title="Pick photos">
         <div style={{ padding: '0 16px 16px', maxHeight: '70vh', overflow: 'auto' }}>
           <PhotoGrid photos={available} selected={draft} onToggle={toggle} />
