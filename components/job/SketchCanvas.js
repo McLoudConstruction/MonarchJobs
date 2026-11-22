@@ -187,6 +187,8 @@ function DockIcon({ k }) {
   return <svg {...common}><circle cx="5" cy="12" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="19" cy="12" r="1.4" /></svg>;
 }
 
+const MOVE_STEP = 0.5; // feet: the Move arrows slide a room 6 inches at a time
+
 // a finger is the pointer: phones, and tablets that report a coarse pointer
 const coarse = () => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(pointer: coarse)').matches : false);
 
@@ -276,7 +278,6 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   const ghostRef = useRef(null); // Objects tool: the preview under the pointer
   const [traceOpen, setTraceOpen] = useState(false); // trace a room wall by wall
   const [moveMode, setMoveMode] = useState(false); // the Move pad floats over the sketch
-  const [nudge, setNudge] = useState(''); // how far the Move buttons slide the selected room
   const [gapErr, setGapErr] = useState('');
   const [addOpen, setAddOpen] = useState(false); // phone: the sheet of things to add
   const [moreOpen, setMoreOpen] = useState(false); // phone: the sheet of the other tools
@@ -570,10 +571,8 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   }
   function moveRoomBy(dx, dy) {
     if (!selected || sel.kind !== 'room') return;
-    const ft = parseFeet(nudge);
-    if (!Number.isFinite(ft) || ft <= 0 || ft > 100) { setDimErr('Type how far to move it, like 2 or 1\'6".'); return; }
     setDimErr('');
-    patchRoom(selected.id, translateRoom(selected, dx * ft, dy * ft));
+    patchRoom(selected.id, translateRoom(selected, dx * MOVE_STEP, dy * MOVE_STEP)); // each tap moves it 6 inches
   }
   function snapRoom() {
     if (!selected || sel.kind !== 'room') return;
@@ -2203,7 +2202,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
 
         {mode === 'draw' && moveMode && selected && sel.kind === 'room' && !showPop && (
           <div className="sk-movepad" role="group" aria-label="Move the selected room">
-            <input aria-label="Distance to move, feet" inputMode="decimal" value={nudge} onChange={(e) => setNudge(e.target.value)} placeholder={'feet, like 2 or 1\'6"'} />
+            <span className="sk-move-label">Move 6&quot; per tap</span>
             <button type="button" aria-label="Move up" onClick={() => moveRoomBy(0, -1)}>{'\u2191'}</button>
             <button type="button" aria-label="Move left" onClick={() => moveRoomBy(-1, 0)}>{'\u2190'}</button>
             <button type="button" aria-label="Move right" onClick={() => moveRoomBy(1, 0)}>{'\u2192'}</button>
