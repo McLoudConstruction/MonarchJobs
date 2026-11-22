@@ -24,6 +24,7 @@ import CostsTab from '@/components/job/CostsTab';
 import { normalizePlan } from '@/lib/sketch';
 import { unitsStillOnSite } from '@/lib/equipment';
 import CustomerPageCard from '@/components/job/CustomerPageCard';
+import DeleteJobCard from '@/components/job/DeleteJobCard';
 import UpdatesTab from '@/components/job/UpdatesTab';
 import ThreadPanel from '@/components/chat/ThreadPanel';
 import { useChatCenter } from '@/lib/useChatInbox';
@@ -636,6 +637,7 @@ function JobInner({ id, staff, token }) {
             </div>
           )}
           {isOffice && hasFeature(service, 'customerPage') && <CustomerPageCard jobId={id} token={token} staff={staff} jobStatus={job.status} />}
+          {staff.role === 'owner' && <DeleteJobCard jobId={id} job={job} token={token} />}
         </div>
       )}
 
