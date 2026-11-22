@@ -10,3 +10,6 @@
 .floors-slot { display: inline-flex; align-items: center; }
 .floors-slot:not(:empty) { margin-left: 8px; padding-left: 12px; border-left: 1px solid var(--line, #ced4da); }
 .floors-bar.in-slot { margin: 0; }
+/* "+ Add sketch" sits at the far right, beside the export and full screen buttons */
+.sketch-add { border-style: dashed; white-space: nowrap; }
+.floors-slot:not(:empty) { margin-left: 0; }

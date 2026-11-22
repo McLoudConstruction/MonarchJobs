@@ -229,10 +229,9 @@ export default function SketchTab({ jobId, sketches, photos, isOffice, staff = n
           {sketches.map((s) => (
             <button key={s.id} type="button" role="tab" aria-selected={s.id === activeId} className={s.id === activeId ? 'on' : ''} onClick={() => setActiveId(s.id)}>{s.name}</button>
           ))}
-          <button type="button" className="add" onClick={() => setAdding(true)}>+ Add sketch</button>
           <span ref={setFloorsSlot} className="floors-slot" />
         </div>
-        <span className="sketch-head-right"><span className={`sketch-save ${save.state}`} aria-live="polite">{save.state === 'saved' || save.state === 'dirty' || save.state === 'saving' ? save.text : ''}</span><span ref={setHeadSlot} /></span>
+        <span className="sketch-head-right"><button type="button" className="secondary small sketch-add" onClick={() => setAdding(true)}>+ Add sketch</button><span className={`sketch-save ${save.state}`} aria-live="polite">{save.state === 'saved' || save.state === 'dirty' || save.state === 'saving' ? save.text : ''}</span><span ref={setHeadSlot} /></span>
       </div>
 
       {adding && (
