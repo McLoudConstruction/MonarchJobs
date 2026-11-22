@@ -12,7 +12,7 @@ import {
   FLOOR_TYPES, MIN_CEIL, MAX_CEIL, cleanCeil, roomArea,
 } from '@/lib/sketch';
 import { turnRoomPts, placeBox } from '@/lib/roomShapes';
-import { diagCheck, estimatedRooms, openingPlace, placeOpeningAt, sharedWallMismatches, snapToNeighbour, translateRoom } from '@/lib/measure';
+import { openingPlace, placeOpeningAt, sharedWallMismatches, snapToNeighbour, translateRoom } from '@/lib/measure';
 import RoomTrace from '@/components/job/RoomTrace';
 import { hasFeature, areaKindsFor } from '@/lib/services';
 import RoomBySize from '@/components/job/RoomBySize';
@@ -275,6 +275,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   const [objType, setObjType] = useState('door'); // what the Objects tool places
   const ghostRef = useRef(null); // Objects tool: the preview under the pointer
   const [traceOpen, setTraceOpen] = useState(false); // trace a room wall by wall
+  const [moveMode, setMoveMode] = useState(false); // the Move pad floats over the sketch
   const [nudge, setNudge] = useState(''); // how far the Move buttons slide the selected room
   const [gapErr, setGapErr] = useState('');
   const [addOpen, setAddOpen] = useState(false); // phone: the sheet of things to add
@@ -547,7 +548,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   // A room typed in by size (see RoomBySize). Returns true when it was added.
   function addRoomBySize(room) {
     if (planRef.current.rooms.length >= MAX_ROOMS) return false;
-    commit({ ...planRef.current, rooms: [...planRef.current.rooms, { ...room, meas: true }] });
+    commit({ ...planRef.current, rooms: [...planRef.current.rooms, room] });
     setSel({ kind: 'room', id: room.id });
     setPopup(null);
     fit();
@@ -560,7 +561,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     const x0 = Math.min(...pts.map((q) => q[0])); const y0 = Math.min(...pts.map((q) => q[1]));
     const w = Math.max(...pts.map((q) => q[0])) - x0; const h = Math.max(...pts.map((q) => q[1])) - y0;
     const at = placeBox(cur.rooms, { w, h }, { nextTo: sel && sel.kind === 'room' ? cur.rooms.find((r) => r.id === sel.id) || null : null });
-    const room = { id: makeId(), num: 0, type, other: '', label: String(label).slice(0, 40), notes: '', meas: true, pts: pts.map((q) => [Math.round((q[0] - x0 + at.x) * 100) / 100, Math.round((q[1] - y0 + at.y) * 100) / 100]) };
+    const room = { id: makeId(), num: 0, type, other: '', label: String(label).slice(0, 40), notes: '', pts: pts.map((q) => [Math.round((q[0] - x0 + at.x) * 100) / 100, Math.round((q[1] - y0 + at.y) * 100) / 100]) };
     commit({ ...cur, rooms: [...cur.rooms, room] });
     setSel({ kind: 'room', id: room.id });
     setPopup(null);
@@ -580,12 +581,6 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     if (!mv) { setDimErr('No room is within 3 feet to snap to.'); return; }
     setDimErr('');
     patchRoom(selected.id, translateRoom(selected, mv.dx, mv.dy));
-  }
-  function setDiag(wrap, room) {
-    const v = [...wrap.querySelectorAll('input')].map((i) => parseFeet(i.value));
-    const blank = [...wrap.querySelectorAll('input')].every((i) => !i.value.trim());
-    if (blank) { if (room.diag) patchRoom(room.id, { diag: undefined }); return; }
-    if (v.every((n) => Number.isFinite(n) && n > 0 && n < 1000)) patchRoom(room.id, { diag: v.map((n) => Math.round(n * 100) / 100) });
   }
   function setSizingClass(cls) {
     commit({ ...planRef.current, sizing: { cls } });
@@ -1168,8 +1163,6 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     } else if (['move-room', 'vertex', 'edge', 'move-mark', 'avertex', 'move-area', 'move-pin', 'move-obj', 'move-comment'].includes(d.mode) && d.moved && d.plan) {
       let next = d.plan;
       if (d.mode === 'vertex' || d.mode === 'edge') {
-        // dragging a length makes it an estimate again
-        next = { ...next, rooms: next.rooms.map((r) => { if (r.id !== d.id || !r.meas) return r; const { meas, ...rest } = r; return rest; }) }; // eslint-disable-line no-unused-vars
         // a corner or wall that now lines up with its neighbours leaves a stray point: drop it
         const room = next.rooms.find((r) => r.id === d.id);
         if (room) {
@@ -1730,6 +1723,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     const h = popRef.current ? popRef.current.offsetHeight : 0;
     if (h && Math.abs(h - popH) > 1) setPopH(h);
   });
+  useEffect(() => { if (!(sel && sel.kind === 'room')) setMoveMode(false); }, [sel]);
   const sheetOpen = mode === 'moisture' && !!tgt && !!popup;
   const kbPad = full ? kb : 0;
   const phoneSheet = sheetOpen && sizeRef.current.W < 520; // on a phone the entry sheet is a layer over the whole screen, not a box inside the plan
@@ -2207,6 +2201,19 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
           </div>
         )}
 
+        {mode === 'draw' && moveMode && selected && sel.kind === 'room' && !showPop && (
+          <div className="sk-movepad" role="group" aria-label="Move the selected room">
+            <input aria-label="Distance to move, feet" inputMode="decimal" value={nudge} onChange={(e) => setNudge(e.target.value)} placeholder={'feet, like 2 or 1\'6"'} />
+            <button type="button" aria-label="Move up" onClick={() => moveRoomBy(0, -1)}>{'\u2191'}</button>
+            <button type="button" aria-label="Move left" onClick={() => moveRoomBy(-1, 0)}>{'\u2190'}</button>
+            <button type="button" aria-label="Move right" onClick={() => moveRoomBy(1, 0)}>{'\u2192'}</button>
+            <button type="button" aria-label="Move down" onClick={() => moveRoomBy(0, 1)}>{'\u2193'}</button>
+            <button type="button" className="secondary" onClick={snapRoom}>Snap</button>
+            <button type="button" className="primary" onClick={() => { setMoveMode(false); setDimErr(''); }}>Done</button>
+            {dimErr && <div className="msg err" style={{ margin: 0, flexBasis: '100%' }}>{dimErr}</div>}
+          </div>
+        )}
+
         <canvas
           ref={canvasRef}
           className={`sketch-canvas tool-${tool}`}
@@ -2331,34 +2338,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                 {roomAffected && ['water', 'growth', 'smoke'].filter((kd) => roomAffected[kd]).map((kd) => (
                   <div key={kd} className="sk-aff" style={{ color: kindDot(kd) }}><strong>{AREA_KINDS[kd]}</strong> {surfaceText(roomAffected[kd])} sq ft</div>
                 ))}
-                <div className="sk-meas">
-                  <span className={`sk-meas-badge${room.meas ? ' ok' : ''}`}>{room.meas ? 'Measured' : 'Estimated (drawn by eye)'}</span>
-                  <button type="button" className="small" onClick={() => patchRoom(room.id, { meas: room.meas ? undefined : true })}>{room.meas ? 'Mark as estimated' : 'Mark as measured'}</button>
-                </div>
-                {rect && box && (() => {
-                  const dg = room.diag || [];
-                  const chk = diagCheck(box.w, box.h, dg[0], dg[1]);
-                  return (
-                    <div className="field"><label>Diagonal check (optional, feet)</label>
-                      <div className="grid2" key={`${room.id}-dg-${dg.join('-')}`} onBlur={(e) => setDiag(e.currentTarget, room)}>
-                        <input aria-label="First diagonal" inputMode="decimal" defaultValue={dg[0] ? fmtFeet(dg[0]) : ''} placeholder="corner to corner" />
-                        <input aria-label="Second diagonal" inputMode="decimal" defaultValue={dg[1] ? fmtFeet(dg[1]) : ''} placeholder="other corners" />
-                      </div>
-                      {chk.warnings.map((w) => <div key={w} className="msg err" style={{ margin: '4px 0 0' }}>{w}</div>)}
-                      {dg[0] > 0 && dg[1] > 0 && chk.ok && <div className="muted">Square and matches the walls.</div>}
-                    </div>
-                  );
-                })()}
-                <div className="field"><label htmlFor="sk-nudge">Move this room by (feet)</label>
-                  <div className="sk-nudge">
-                    <input id="sk-nudge" inputMode="decimal" value={nudge} onChange={(e) => setNudge(e.target.value)} placeholder="2 or 1'6&quot;" />
-                    <button type="button" aria-label="Move up" onClick={() => moveRoomBy(0, -1)}>{'\u2191'}</button>
-                    <button type="button" aria-label="Move left" onClick={() => moveRoomBy(-1, 0)}>{'\u2190'}</button>
-                    <button type="button" aria-label="Move right" onClick={() => moveRoomBy(1, 0)}>{'\u2192'}</button>
-                    <button type="button" aria-label="Move down" onClick={() => moveRoomBy(0, 1)}>{'\u2193'}</button>
-                  </div>
-                  <button type="button" className="small" onClick={snapRoom}>Snap to the room beside it</button>
-                </div>
+                <button type="button" className="secondary" onClick={() => { setDimErr(''); setMoveMode(true); closePopup(); }}>Move this room</button>
                 <div className="field"><label htmlFor="sk-room-notes">Notes</label>
                   <input id="sk-room-notes" key={`${room.id}-n-${room.notes}`} defaultValue={room.notes} maxLength={300} onBlur={(e) => e.target.value !== room.notes && patchRoom(room.id, { notes: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} placeholder="Hardwood, wet along north wall" />
                 </div>
@@ -2876,12 +2856,11 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
           <div className="sketch-modal-card" role="dialog" aria-label="Export sketch">
             <div className="sketch-pop-head"><strong>Export sketch</strong><button type="button" className="sk-x" aria-label="Close" onClick={() => setExportOpen(false)}>{'\u00d7'}</button></div>
             {(() => {
-              const est = estimatedRooms(plan); const mm = sharedWallMismatches(plan);
+              const mm = sharedWallMismatches(plan);
               const name = (id) => { const r = plan.rooms.find((x) => x.id === id); return r ? `${r.num ? `#${r.num} ` : ''}${roomTitle(r)}` : 'Room'; };
-              if (!est.length && !mm.length) return null;
+              if (!mm.length) return null;
               return (
                 <div className="sk-checks" role="note">
-                  {est.length > 0 && <div><strong>Not measured yet:</strong> {est.map((r) => `${r.num ? `#${r.num} ` : ''}${roomTitle(r)}`).join(', ')}. Type the lengths, or open the room and tap Mark as measured.</div>}
                   {mm.map((m, i) => <div key={i}><strong>Shared wall differs:</strong> {name(m.a)} says {fmtFeet(m.lenA)}, {name(m.b)} says {fmtFeet(m.lenB)}.</div>)}
                 </div>
               );

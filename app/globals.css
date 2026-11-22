@@ -2507,12 +2507,6 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]){ margin: 0
 .rtr-gap.ok{ color: var(--accent); font-weight: 600; }
 .rtr input, .rtr select{ min-height: 48px; font-size: 18px; }
 .rtr .row button{ min-height: 48px; }
-.sk-meas{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
-.sk-meas-badge{ font-size: 12.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: rgba(224,160,0,0.18); color: #8a6100; }
-.sk-meas-badge.ok{ background: rgba(11,122,115,0.15); color: var(--accent); }
-.sk-nudge{ display: flex; gap: 4px; align-items: center; }
-.sk-nudge input{ flex: 1 1 auto; min-width: 0; }
-.sk-nudge button{ min-width: 40px; min-height: 40px; }
 .sk-objnav button{ flex: 1; min-height: 44px; }
 .sk-checks{ padding: 8px 10px; border-radius: 8px; background: rgba(224,160,0,0.14); font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
 @media (pointer: coarse){
@@ -2520,3 +2514,8 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]){ margin: 0
   .sketch-over button.sk-icon, .sketch-head-tools button{ width: 44px; height: 44px; }
   .sketch-pop input, .sketch-pop select{ min-height: 44px; font-size: 16px; }
 }
+
+.sk-movepad{ position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 7; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px; background: var(--card-bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 6px 22px rgba(0,0,0,0.22); }
+.sk-movepad input{ flex: 1 1 110px; min-width: 0; min-height: 44px; font-size: 16px; }
+.sk-movepad button{ min-width: 44px; min-height: 44px; }
+.sketch-stage:has(.sk-dock) .sk-movepad{ bottom: 76px; }
