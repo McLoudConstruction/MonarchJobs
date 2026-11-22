@@ -2459,3 +2459,16 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]){ margin: 0
 .sketch-modal-card.sk-dayone .sketch-pop-head{ flex: 0 0 auto; padding: 14px 16px; border-bottom: 1px solid var(--line); }
 .sk-dayone-body{ flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 14px 16px 18px; }
 .sk-modal-lock, .sketch-modal{ overscroll-behavior: contain; }
+
+/* ---------- Tighter page top (Nov 22): less empty space above the page's substance ---------- */
+@media (min-width: 900px){
+  .page{ padding-top: 14px; }
+  .crumbs{ margin-bottom: 0; }
+  .crumbs a{ min-height: 28px; }
+  .tabs{ margin-bottom: 12px; }
+}
+.job-head{ margin-bottom: 8px; }
+.page .job-head .job-head-main{ display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 14px; min-width: 0; }
+.page .job-head h1{ margin: 0; }
+.page .job-head .job-head-main .sub{ margin: 0; }
+.floors-bar{ margin-bottom: 6px; }

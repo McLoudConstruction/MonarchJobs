@@ -485,8 +485,15 @@ function JobInner({ id, staff, token }) {
     <>
       <Breadcrumb items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Jobs', href: '/jobs' }, { label: `Job #${job.job_number}` }]} />
       {mobile && qaFrom && !qaOpen && <button type="button" className="secondary qa-back" onClick={backToQa}>&lsaquo; Quick actions</button>}
-      <div className="page-head">
-        <h1>Job #{job.job_number} <span className={`badge s-${job.status}`}>{JOB_STATUS[job.status]}</span></h1>
+      <div className="page-head job-head">
+        <div className="job-head-main">
+          <h1>Job #{job.job_number} <span className={`badge s-${job.status}`}>{JOB_STATUS[job.status]}</span></h1>
+          <p className="sub">
+            {isOffice ? <Link href={`/customers/${job.customer.id}`}>{job.customer.display_name}</Link> : job.customer.display_name}
+            {' · '}{serviceTitle(service) || JOB_TYPES[job.job_type]}
+            {isOffice && job.lead_id && <>{' · '}<Link href={`/leads/${job.lead_id}`}>From lead</Link></>}
+          </p>
+        </div>
         <div className="row" style={{ gap: 8 }}>
           {unassignedVisit && <button type="button" className="assign-btn" onClick={() => setAssignOpen(true)}>Assign Job</button>}
           {otwVisit && <button type="button" className="primary desktop-only" onClick={() => setOtwOpen(true)}>On the way</button>}
@@ -494,11 +501,6 @@ function JobInner({ id, staff, token }) {
       </div>
       <AssignJobModal open={assignOpen} visit={unassignedVisit} staffList={staffList} onClose={() => setAssignOpen(false)} onDone={load} logEvent={logEvent} />
       {otwVisit && <OnTheWayModal open={otwOpen} visit={otwVisit} token={token} onClose={() => setOtwOpen(false)} onDone={load} />}
-      <p className="sub">
-        {isOffice ? <Link href={`/customers/${job.customer.id}`}>{job.customer.display_name}</Link> : job.customer.display_name}
-        {' · '}{serviceTitle(service) || JOB_TYPES[job.job_type]}
-        {isOffice && job.lead_id && <>{' · '}<Link href={`/leads/${job.lead_id}`}>From lead</Link></>}
-      </p>
       {!isOffice && !visits.some((v) => v.tech_id === staff.id) && <p className="hint" style={{ marginTop: 0 }}>This job is not on your schedule. It is open to you from the Jobs list in case you need it.</p>}
 
       {warnings.map((w, i) => <div key={i} className="banner">Warning: {w}</div>)}
