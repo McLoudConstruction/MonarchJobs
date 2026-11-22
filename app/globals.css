@@ -2366,6 +2366,11 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]){ margin: 0
 .sig-full{ position: fixed; inset: 0; z-index: 3000; background: #e9ecef; overflow: hidden; }
 .sig-stage{ display: flex; flex-direction: column; background: #e9ecef; }
 .sig-bar{ flex: none; display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: var(--card-bg, #fff); color: var(--ink, #111); border-bottom: 1px solid var(--line, #ccc); }
+.sig-namebar{ flex: none; display: flex; align-items: flex-end; gap: 10px; padding: 8px 14px 0; }
+.sig-name{ flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--ink-soft, #555); }
+.sig-name input{ width: 100%; box-sizing: border-box; min-height: 44px; font-size: 18px; }
+.sig-namebar button{ flex: none; min-height: 44px; }
+.sig-error{ margin: 8px 14px 0; }
 .sig-turn{ font-size: 13px; color: var(--ink-soft, #555); }
 .sig-area{ position: relative; flex: 1; min-height: 0; margin: 10px; background: #fff; border: 2px dashed #adb5bd; border-radius: 10px; touch-action: none; overflow: hidden; }
 .sig-area canvas{ position: absolute; inset: 0; touch-action: none; cursor: crosshair; }

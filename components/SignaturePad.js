@@ -8,7 +8,9 @@ import { createPortal } from 'react-dom';
 // drawn turned on its side so it is already landscape: the person just turns the phone to match.
 // Calls onChange with a PNG data URL once Done is tapped, and with null when cleared.
 
-function SignOverlay({ onDone, onCancel }) {
+// Optional extras: nameField { label, value, onChange } puts a name box above the pad (Done then also needs a name),
+// doneLabel renames Done, extra is a node shown beside the name box, error is a line of text shown under the bar.
+export function SignOverlay({ onDone, onCancel, nameField = null, doneLabel = 'Done', extra = null, error = '' }) {
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
   const drawing = useRef(false);
@@ -17,6 +19,8 @@ function SignOverlay({ onDone, onCancel }) {
   const hasRef = useRef(false);
   const [view, setView] = useState({ w: window.innerWidth, h: window.innerHeight });
   const portrait = view.h > view.w;
+  const cancelRef = useRef(onCancel); // the parent may pass a new function each render (typing a name); setup below must not re-run for it
+  cancelRef.current = onCancel;
 
   // follow the screen turning
   useEffect(() => {
@@ -37,7 +41,7 @@ function SignOverlay({ onDone, onCancel }) {
       } catch { /* not allowed here: fine */ }
       try { await window.screen?.orientation?.lock?.('landscape'); } catch { /* not supported: the pad is turned instead */ }
     })();
-    const onKey = (e) => { if (e.key === 'Escape') onCancel(); };
+    const onKey = (e) => { if (e.key === 'Escape') cancelRef.current(); };
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
@@ -45,7 +49,7 @@ function SignOverlay({ onDone, onCancel }) {
       try { window.screen?.orientation?.unlock?.(); } catch { /* ignore */ }
       if (fs && document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
     };
-  }, [onCancel]);
+  }, []);
 
   // size the canvas to its box; keep what is already drawn if the box changes (the phone was turned)
   const fit = useCallback(() => {
@@ -137,8 +141,20 @@ function SignOverlay({ onDone, onCancel }) {
           <span style={{ flex: 1 }} />
           <button type="button" className="secondary" onClick={clear} disabled={!has}>Clear</button>
           <button type="button" className="secondary" onClick={onCancel}>Cancel</button>
-          <button type="button" className="primary" disabled={!has} onClick={() => onDone(canvasRef.current.toDataURL('image/png'))}>Done</button>
+          <button type="button" className="primary" disabled={!has || (nameField && nameField.value.trim().length < 2)} onClick={() => onDone(canvasRef.current.toDataURL('image/png'))}>{doneLabel}</button>
         </div>
+        {(nameField || extra) && (
+          <div className="sig-namebar">
+            {nameField && (
+              <label className="sig-name">
+                <span>{nameField.label}</span>
+                <input value={nameField.value} onChange={(e) => nameField.onChange(e.target.value)} autoComplete="off" placeholder="Type full name" />
+              </label>
+            )}
+            {extra}
+          </div>
+        )}
+        {error && <div className="msg err sig-error">{error}</div>}
         <div className="sig-area" ref={wrapRef}>
           <canvas ref={canvasRef} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} />
           <div className="sig-line" />

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getSupabase } from '@/lib/supabaseClient';
-import SignaturePad from '@/components/SignaturePad';
+import { SignOverlay } from '@/components/SignaturePad';
 import PhotoAttach from '@/components/job/PhotoAttach';
 import './inspection.css';
 import { fmtDateTime } from '@/lib/format';
@@ -83,16 +83,16 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, pho
     onReload();
   }
 
-  async function sign() {
+  async function sign(sigUrl = sig) {
     setMsg(null);
     const full = { ...data, ...(kind === 'post' ? { comments } : {}) };
     const missing = missingBeforeSigning(kind, full);
     if (missing.length) { setMsg({ err: true, text: missing[0] }); return; }
     if (name.trim().length < 2) { setMsg({ err: true, text: 'Type the customer’s full name.' }); return; }
-    if (!sig) { setMsg({ err: true, text: 'The customer needs to sign in the box.' }); return; }
+    if (!sigUrl) { setMsg({ err: true, text: 'The customer needs to sign in the box.' }); return; }
     clearTimeout(timer.current);
     const sb = getSupabase();
-    const { error } = await sb.from('job_inspections').update({ data: cleanInspection(kind, full), signer_name: name.trim(), signature_png: sig }).eq('id', draftId);
+    const { error } = await sb.from('job_inspections').update({ data: cleanInspection(kind, full), signer_name: name.trim(), signature_png: sigUrl }).eq('id', draftId);
     if (error) { setMsg({ err: true, text: error.message.includes('INSPECTION_SIGNED') ? 'This record was already signed.' : error.message }); return; }
     await sb.from('job_events').insert({ job_id: jobId, actor_id: staff.id, actor_email: staff.email, kind: 'inspection_signed', details: { kind, signer_name: name.trim() } });
     setName(''); setSig(null); setOpen(false); setStep('edit');
@@ -270,13 +270,15 @@ function Panel({ kind, jobId, rows, sketches, pre, canEdit, onReload, staff, pho
 
               </>
             ) : (
-              <div style={{ maxWidth: 520, margin: '0 auto' }}>
-                <p className="hint">Hand the phone to the customer. Signing locks this record.</p>
-                <div className="field"><label>Customer’s full name</label><input value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" /></div>
-                <div className="field"><label>Customer’s signature</label><SignaturePad onChange={setSig} /></div>
-                <button className="primary big" style={{ width: '100%' }} onClick={sign}>Sign and lock</button>
-                <button type="button" className="secondary big" style={{ width: '100%', marginTop: 10 }} onClick={markAbsent}>Customer not present</button>
-              </div>
+              // the signing page: landscape, with the customer's name and the pad together (turned on its side where the phone cannot rotate itself)
+              <SignOverlay
+                nameField={{ label: 'Customer’s full name', value: name, onChange: setName }}
+                doneLabel="Sign and lock"
+                error={msg?.err ? msg.text : ''}
+                extra={<button type="button" className="secondary" onClick={markAbsent}>Customer not present</button>}
+                onCancel={() => { setMsg(null); setStep('edit'); }}
+                onDone={(url) => { setSig(url); sign(url); }}
+              />
             )}
           </div>
           {step === 'edit' && (
