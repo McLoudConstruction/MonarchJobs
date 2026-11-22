@@ -47,3 +47,11 @@ test('Start job only shows for the team member the visit is assigned to', () => 
   assert.ok(keys({ service: 'carpet', visitStatus: 'scheduled' }).includes('start'));
   assert.ok(keys({ service: 'carpet', visitStatus: 'started', canStart: false }).includes('finish'));
 });
+
+test('screens opened from Quick Actions have a title, falling back to the tab name', async () => {
+  const { qaScreenTitle } = await import('../lib/quickActions.js');
+  assert.equal(qaScreenTitle('evalsheet'), 'Eval sheet');
+  assert.equal(qaScreenTitle('moisture'), 'Moisture');
+  assert.equal(qaScreenTitle('unknown', 'Something'), 'Something');
+  assert.equal(qaScreenTitle('unknown'), 'Job');
+});

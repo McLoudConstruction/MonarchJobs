@@ -32,6 +32,7 @@ import { useChatDock } from '@/components/chat/ChatDockContext';
 import { countForTarget } from '@/lib/chat';
 import JobFab from '@/components/job/JobFab';
 import QuickActionScreen from '@/components/job/QuickActionScreen';
+import QaPageBar from '@/components/job/QaPageBar';
 import PhotoViewer from '@/components/job/PhotoViewer';
 import CameraCapture from '@/components/job/CameraCapture';
 import { useJobRooms } from '@/lib/useJobRooms';
@@ -41,7 +42,7 @@ import { UploadStatus } from '@/components/job/PhotoUi';
 import { usePhotoUploader } from '@/lib/usePhotoUploader';
 import { eventLabel, updateRecipients, INTERNAL_CATEGORIES } from '@/lib/jobDocs';
 import { fabActions, FAB_LABELS, FAB_HIDDEN_TABS } from '@/lib/jobFab';
-import { isTabAction } from '@/lib/quickActions';
+import { isTabAction, qaScreenTitle } from '@/lib/quickActions';
 import { reasonText } from '@/lib/visitReasons';
 import { groupVisits } from '@/lib/visitCrew';
 import { getSupabase } from '@/lib/supabaseClient';
@@ -170,6 +171,11 @@ function JobInner({ id, staff, token }) {
   const qaFromRef = useRef(false);
   const backToQaRef = useRef(null);
   const [qaFrom, setQaFrom] = useState(false);
+  // a screen opened from Quick Actions hides the phone's top bar and bottom navigation (see quickactions.css)
+  useEffect(() => {
+    document.body.classList.toggle('qa-page', mobile && qaFrom && !qaOpen);
+    return () => document.body.classList.remove('qa-page');
+  }, [mobile, qaFrom, qaOpen]);
   // keep the open tab across refreshes and back/forward (#overview, #photos, #sketch ...)
   useEffect(() => {
     setTab(tabFromHash());
@@ -465,6 +471,13 @@ function JobInner({ id, staff, token }) {
     setQaOpen(true);
   };
   backToQaRef.current = backToQa;
+  // Exit leaves Quick Actions for this visit to the job and lands on the normal Overview
+  const exitQa = () => {
+    setQaMode(false); qaFromRef.current = false; setQaFrom(false); setQaOpen(false); setQaLanding(false); setTab('overview');
+    if (window.location.hash) window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  };
+  // a screen opened from Quick Actions is its own page: Back arrow and Exit only, no breadcrumb, header or tabs
+  const qaScreen = mobile && qaFrom && !qaOpen;
   const qaRun = (key) => {
     if (key === 'eta') return fabRun.otw();
     if (key === 'recheck') { enterFromQa('moisture'); return fabRun.recheck(); }
@@ -477,9 +490,10 @@ function JobInner({ id, staff, token }) {
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Jobs', href: '/jobs' }, { label: `Job #${job.job_number}` }]} />
-      {mobile && qaFrom && !qaOpen && <button type="button" className="secondary qa-back" onClick={backToQa}>&lsaquo; Quick actions</button>}
-      <div className="page-head job-head">
+      {qaScreen
+        ? <QaPageBar title={qaScreenTitle(tab, shownTabs.find(([k]) => k === tab)?.[1])} jobNumber={job.job_number} onBack={backToQa} onExit={exitQa} />
+        : <Breadcrumb items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Jobs', href: '/jobs' }, { label: `Job #${job.job_number}` }]} />}
+      {!qaScreen && <div className="page-head job-head">
         <div className="job-head-main">
           <h1>Job #{job.job_number} <span className={`badge s-${job.status}`}>{JOB_STATUS[job.status]}</span></h1>
           <p className="sub">
@@ -492,29 +506,29 @@ function JobInner({ id, staff, token }) {
           {unassignedVisit && <button type="button" className="assign-btn" onClick={() => setAssignOpen(true)}>Assign Job</button>}
           {otwVisit && <button type="button" className="primary desktop-only" onClick={() => setOtwOpen(true)}>On the way</button>}
         </div>
-      </div>
+      </div>}
       <AssignJobModal open={assignOpen} visit={unassignedVisit} staffList={staffList} onClose={() => setAssignOpen(false)} onDone={load} logEvent={logEvent} />
       {otwVisit && <OnTheWayModal open={otwOpen} visit={otwVisit} token={token} onClose={() => setOtwOpen(false)} onDone={load} />}
-      {!isOffice && !visits.some((v) => v.tech_id === staff.id) && <p className="hint" style={{ marginTop: 0 }}>This job is not on your schedule. It is open to you from the Jobs list in case you need it.</p>}
+      {!qaScreen && !isOffice && !visits.some((v) => v.tech_id === staff.id) && <p className="hint" style={{ marginTop: 0 }}>This job is not on your schedule. It is open to you from the Jobs list in case you need it.</p>}
 
-      {warnings.map((w, i) => <div key={i} className="banner">Warning: {w}</div>)}
-      {anyFlag && <div className="banner flag">Double-booked: one of this job's visits overlaps another visit for the same tech. Move one of them.</div>}
+      {!qaScreen && warnings.map((w, i) => <div key={i} className="banner">Warning: {w}</div>)}
+      {!qaScreen && anyFlag && <div className="banner flag">Double-booked: one of this job's visits overlaps another visit for the same tech. Move one of them.</div>}
       {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
 
-      {docsMissing && (
+      {!qaScreen && docsMissing && (
         <div className="banner">Photos, sketches and updates are switched off until migration 007 is run in Supabase (SQL Editor, file supabase/migrations/007_job_documentation.sql).</div>
       )}
 
       {fromPhone && (
         <div className="msg err" role="status">You are looking at a copy saved on this phone (no signal). Photos, notes and sketch changes you make are kept and sent when you have signal. Visit and status buttons need a connection.</div>
       )}
-      {shortCount.length > 0 && (
+      {!qaScreen && shortCount.length > 0 && (
         <div className="msg err" role="alert">
           <strong>{shortCount.length} piece{shortCount.length === 1 ? '' : 's'} of equipment {shortCount.length === 1 ? 'is' : 'are'} still marked on site</strong> ({shortCount.slice(0, 8).join(', ')}{shortCount.length > 8 ? ', ...' : ''}). Pick {shortCount.length === 1 ? 'it' : 'them'} up on the {hasFeature(service, 'moistureTab') ? 'Moisture' : 'Sketch'} tab, or {shortCount.length === 1 ? 'it' : 'they'} stay on the count.
           {' '}<button type="button" className="secondary small" onClick={() => openTab(hasFeature(service, 'moistureTab') ? 'moisture' : 'sketch')}>Open {hasFeature(service, 'moistureTab') ? 'Moisture' : 'Sketch'}</button>
         </div>
       )}
-      <div className="tabs" role="tablist">
+      {!qaScreen && <div className="tabs" role="tablist">
         {shownTabs.map(([k, label]) => {
           const n = k === 'photos' ? photos.filter((p) => !p.archived_at).length : k === 'sketch' ? sketches.length : k === 'updates' ? updates.length : k === 'thread' ? countForTarget(chatRows, { jobId: id }) : 0;
           return (
@@ -523,11 +537,11 @@ function JobInner({ id, staff, token }) {
             </button>
           );
         })}
-      </div>
+      </div>}
 
       {mobile && tab === 'overview' && <button type="button" className="primary qa-open-btn" onClick={() => { setQaMode(true); setQaLanding(true); setQaOpen(true); }}>Quick actions</button>}
       {mobile && <QuickActionScreen
-        open={qaOpen} landing={qaLanding} onClose={() => { setQaOpen(false); setQaLanding(false); }} onExit={() => { setQaMode(false); qaFromRef.current = false; setQaFrom(false); setQaOpen(false); setQaLanding(false); setTab('overview'); if (window.location.hash) window.history.replaceState(null, '', window.location.pathname + window.location.search); }} job={job} customerName={job.customer.display_name}
+        open={qaOpen} landing={qaLanding} onClose={() => { setQaOpen(false); setQaLanding(false); }} onExit={exitQa} job={job} customerName={job.customer.display_name}
         visitStatus={dockVisit?.status || null} canStart={canStart} clock={clockMode} service={service} tabs={shownTabs.map(([k]) => k)}
         hasSketch={sketches.length > 0} run={qaRun} badges={{ chat: jobChatUnread }}
       />}
@@ -852,7 +866,7 @@ function JobInner({ id, staff, token }) {
         )}
       </PopupModal>
 
-      {!qaOpen && <JobFab items={fabItems} />}
+      {!qaOpen && !qaScreen && <JobFab items={fabItems} />}
 
       <input
         ref={roomInput}

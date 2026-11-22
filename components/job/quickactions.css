@@ -25,4 +25,14 @@
 .qa-badge-abs{ position: absolute; top: 6px; right: 8px; }
 /* landing page on phones: fills the screen above the bottom navigation, which stays usable */
 .qa-screen.landing{ z-index: 40; bottom: calc(64px + env(safe-area-inset-bottom)); }
-.qa-back{ min-height: 48px; margin: 0 0 10px; padding: 0 16px; font-size: 17px; font-weight: 600; }
+
+/* A screen opened from Quick Actions (phones): its own page with just a Back arrow and an Exit button.
+   The phone's top bar and bottom navigation step aside while it is open. */
+.qa-pagebar{ position: sticky; top: 0; z-index: 45; display: flex; align-items: center; gap: 10px; margin: 0 -16px 12px; padding: calc(10px + env(safe-area-inset-top)) 12px 10px; border-bottom: 1px solid var(--line); background: var(--card-bg); color: var(--ink); }
+.qa-pagebar-back, .qa-pagebar-exit{ flex: 0 0 auto; min-width: 52px; height: 52px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 12px; background: var(--card-bg); color: var(--ink); font-size: 17px; font-weight: 700; cursor: pointer; }
+.qa-pagebar-exit{ padding: 0 18px; }
+.qa-pagebar-title{ flex: 1 1 auto; min-width: 0; text-align: center; }
+.qa-pagebar-job{ font-size: 13px; color: var(--muted); }
+.qa-pagebar-title h1{ margin: 0; font-size: 21px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.qa-page .shell-topbar-mobile, body.qa-page .shell-bottomnav{ display: none !important; }
+body.qa-page .shell-content{ padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
