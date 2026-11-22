@@ -2515,8 +2515,12 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]){ margin: 0
   .sketch-pop input, .sketch-pop select{ min-height: 44px; font-size: 16px; }
 }
 
-.sk-movepad{ position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 7; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px; background: var(--card-bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 6px 22px rgba(0,0,0,0.22); }
-.sk-move-label{ flex: 1 1 auto; font-size: 13px; font-weight: 600; }
-.sk-movepad button{ min-width: 48px; min-height: 48px; font-size: 22px; }
-.sk-movepad button.secondary, .sk-movepad button.primary{ font-size: 14px; }
+
+.sk-movepad{ position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 7; display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--card-bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 6px 22px rgba(0,0,0,0.22); }
 .sketch-stage:has(.sk-dock) .sk-movepad{ bottom: 76px; }
+.sk-move-label{ font-size: 12.5px; font-weight: 600; color: var(--muted, inherit); }
+.sk-move-arrows, .sk-move-actions{ display: grid; gap: 6px; }
+.sk-move-arrows{ grid-template-columns: repeat(4, 1fr); }
+.sk-move-actions{ grid-template-columns: 1fr 1fr; }
+.sk-movepad button{ min-height: 48px; font-size: 24px; }
+.sk-movepad .sk-move-actions button{ font-size: 15px; }

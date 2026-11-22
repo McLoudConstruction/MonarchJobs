@@ -2202,14 +2202,18 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
 
         {mode === 'draw' && moveMode && selected && sel.kind === 'room' && !showPop && (
           <div className="sk-movepad" role="group" aria-label="Move the selected room">
-            <span className="sk-move-label">Move 6&quot; per tap</span>
-            <button type="button" aria-label="Move up" onClick={() => moveRoomBy(0, -1)}>{'\u2191'}</button>
-            <button type="button" aria-label="Move left" onClick={() => moveRoomBy(-1, 0)}>{'\u2190'}</button>
-            <button type="button" aria-label="Move right" onClick={() => moveRoomBy(1, 0)}>{'\u2192'}</button>
-            <button type="button" aria-label="Move down" onClick={() => moveRoomBy(0, 1)}>{'\u2193'}</button>
-            <button type="button" className="secondary" onClick={snapRoom}>Snap</button>
-            <button type="button" className="primary" onClick={() => { setMoveMode(false); setDimErr(''); }}>Done</button>
-            {dimErr && <div className="msg err" style={{ margin: 0, flexBasis: '100%' }}>{dimErr}</div>}
+            <div className="sk-move-label">Move 6&quot; per tap</div>
+            <div className="sk-move-arrows">
+              <button type="button" aria-label="Move left" onClick={() => moveRoomBy(-1, 0)}>{'\u2190'}</button>
+              <button type="button" aria-label="Move up" onClick={() => moveRoomBy(0, -1)}>{'\u2191'}</button>
+              <button type="button" aria-label="Move down" onClick={() => moveRoomBy(0, 1)}>{'\u2193'}</button>
+              <button type="button" aria-label="Move right" onClick={() => moveRoomBy(1, 0)}>{'\u2192'}</button>
+            </div>
+            <div className="sk-move-actions">
+              <button type="button" className="secondary" onClick={snapRoom}>Snap to neighbor</button>
+              <button type="button" className="primary" onClick={() => { setMoveMode(false); setDimErr(''); }}>Done</button>
+            </div>
+            {dimErr && <div className="msg err" style={{ margin: 0 }}>{dimErr}</div>}
           </div>
         )}
 
