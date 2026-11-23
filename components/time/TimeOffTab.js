@@ -51,7 +51,7 @@ export default function TimeOffTab({ staff }) {
   return (
     <>
       <div className="card">
-        <h2>Ask for time off</h2>
+        <h2>Submit Time Off Request</h2>
         {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
         <form onSubmit={submit}>
           <div className="grid2" style={{ gap: 12 }}>
