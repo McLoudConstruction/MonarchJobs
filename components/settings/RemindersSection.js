@@ -70,10 +70,8 @@ export default function RemindersSection({ token }) {
   async function runPreview() {
     setBusy(true); setPreview(null);
     try {
-      const res = await apiFetch('/api/outreach/preview', token, { method: 'POST' });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || 'Could not check.');
-      setPreview(body);
+      // apiFetch already reads the answer and throws on an error
+      setPreview(await apiFetch('/api/outreach/preview', token, { method: 'POST' }));
     } catch (e) { setMsg({ err: true, text: e.message }); }
     setBusy(false);
   }

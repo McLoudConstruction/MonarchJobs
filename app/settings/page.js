@@ -9,6 +9,7 @@ import UsersSection from '@/components/settings/UsersSection';
 import PriceListSection from '@/components/settings/PriceListSection';
 import IntegrationsSection from '@/components/settings/IntegrationsSection';
 import RemindersSection from '@/components/settings/RemindersSection';
+import JobAlertsSection from '@/components/settings/JobAlertsSection';
 import EquipmentSection from '@/components/settings/EquipmentSection';
 import InvoicingSection from '@/components/settings/InvoicingSection';
 import BookingSection from '@/components/settings/BookingSection';
@@ -85,6 +86,7 @@ export default function SettingsPage() {
             {tab === 'reminders' && (
               <>
                 <RemindersSection token={token} />
+                {staff.role === 'owner' && <JobAlertsSection token={token} />}
                 <div className="card">
                   <h2>Outreach tools</h2>
                   <p className="hint">Plans coming due and the postcard mailing list. These used to sit on the Customers page.</p>

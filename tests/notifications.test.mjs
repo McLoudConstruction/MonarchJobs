@@ -17,7 +17,7 @@ test('every type has a label, a valid role list and a group', () => {
 test('office mirrors the owner, except owner-only types', () => {
   const owner = typesForRole('owner').map((t) => t.key);
   const office = typesForRole('office').map((t) => t.key);
-  const ownerOnly = ['staff_signup', 'time_edit_request', 'shift_edit_request', 'invoice_sent', 'invoice_viewed', 'payment_received', 'payment_problem', 'invoice_past_due', 'clock_reminder_office'];
+  const ownerOnly = ['staff_signup', 'time_edit_request', 'shift_edit_request', 'invoice_sent', 'invoice_viewed', 'payment_received', 'payment_problem', 'invoice_past_due', 'clock_reminder_office', 'anomaly_alert'];
   assert.deepEqual(office, owner.filter((k) => !ownerOnly.includes(k)));
   for (const k of ownerOnly) assert.ok(owner.includes(k), k);
   assert.ok(office.includes('invoice_ready')); // the office is told a draft is waiting, but not about money coming in

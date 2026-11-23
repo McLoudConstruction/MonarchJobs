@@ -55,3 +55,10 @@ a.own-tile:hover{ border-color: var(--accent); }
   .own-hbar{ grid-template-columns: 84px 1fr auto; }
   .own-col .v{ display: none; }
 }
+
+/* commission: one person per row, opens to show the jobs behind the number */
+.own-detail{ border-top: 1px solid var(--line); padding: 8px 0; }
+.own-detail summary{ cursor: pointer; min-height: 40px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.own-detail summary span[style*="float"]{ margin-left: auto; float: none !important; }
+.own-detail .own-table{ margin: 6px 0 4px; }
+.own-table tfoot td{ border-top: 1px solid var(--line); padding-top: 8px; }

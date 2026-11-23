@@ -9,6 +9,7 @@ import { PAYMENT_METHODS } from '@/lib/invoice';
 import { PlansDue, MailingList } from '@/components/customer/OutreachPanels';
 import ClockPanel from '@/components/owner/ClockPanel';
 import GobackPanel from '@/components/owner/GobackPanel';
+import FinancePanels from '@/components/owner/FinancePanels';
 import './owner.css';
 
 const TITLES = { overview: 'Overview', financials: 'Financials', customers: 'Customers', work: 'Jobs & leads' };
@@ -168,7 +169,7 @@ function Financials({ fin, inv, invoicesMissing, rangeLabel }) {
     <>
       <div className="own-note">
         <strong>Booked</strong> means an estimate the customer approved, counted on the day they approved it, at the tier and add-ons they picked.
-        <strong> Collected</strong> is money actually received (card, Square, cash, check), minus refunds. Tips are counted apart. Profit needs job costs, which are not tracked yet.
+        <strong> Collected</strong> is money actually received (card, Square, cash, check), minus refunds. Tips are counted apart. Profit and commission below use the job costs logged on each job.
         {invoicesMissing && <> <strong>Invoices are not set up yet:</strong> run the latest database update (migration 019).</>}
       </div>
       <div className="own-tiles">
@@ -371,6 +372,7 @@ export default function OwnerDashboard({ section = 'overview' }) {
       {calc && tab === 'overview' && <ClockPanel bounds={bounds} rangeLabel={rangeLabel} />}
       {calc && tab === 'overview' && <GobackPanel bounds={bounds} rangeLabel={rangeLabel} />}
       {calc && tab === 'financials' && <Financials fin={calc.fin} inv={calc.inv} invoicesMissing={calc.invoicesMissing} rangeLabel={rangeLabel} />}
+      {calc && tab === 'financials' && <FinancePanels bounds={bounds} rangeLabel={rangeLabel} />}
       {calc && tab === 'customers' && <Customers cust={calc.cust} rangeLabel={rangeLabel} />}
       {calc && tab === 'work' && <Work work={calc.work} rangeLabel={rangeLabel} />}
     </>

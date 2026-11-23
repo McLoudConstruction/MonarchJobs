@@ -7,6 +7,7 @@ import { fmtTime, toLocalInput, fromLocalInput } from '@/lib/format';
 import { staffName } from '@/lib/userDisplay';
 import { colorFor } from '@/lib/userColors';
 import { dayRows, dayKey, weekStartKey, weekKeys, addDaysKey, dayStartInstant, hmText, hmWords, shiftsCsv, REQUEST_WHAT } from '@/lib/shiftClock';
+import PayrollPanel from '@/components/owner/PayrollPanel';
 import '@/components/shiftclock.css';
 
 const when = (key) => new Date(`${key}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -79,6 +80,7 @@ export default function TimeClockTab() {
   if (data.error) return <div className="msg err" role="alert">{data.error}</div>;
   return (
     <>
+      <PayrollPanel />
       {requests.length > 0 && (
         <section className="card" aria-label="Changes waiting for approval">
           <h2 style={{ marginTop: 0 }}>Changes waiting for you <span className="tab-count warn">{requests.length}</span></h2>
