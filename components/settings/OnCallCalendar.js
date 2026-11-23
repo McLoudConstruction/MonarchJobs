@@ -6,6 +6,7 @@ import { dayInfo } from '@/lib/onCall';
 import { colorHex } from '@/lib/userColors';
 import { staffName } from '@/lib/userDisplay';
 import '@/components/monthgrid.css';
+import './oncall.css';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const ymd = (d) => d.toLocaleDateString('en-CA');
@@ -20,6 +21,22 @@ export default function OnCallCalendar({ cfg, people }) {
   const days = useMemo(() => monthGridDays(month), [month]);
   const info = useMemo(() => days.map((d) => dayInfo(ymd(d), cfg)), [days, cfg]);
   const person = (id) => people.find((p) => p.id === id);
+  // each week as one row: the day numbers, one bar per stretch of the same on-call person, and the time off flags
+  const weeks = useMemo(() => {
+    const out = [];
+    for (let w = 0; w < days.length; w += 7) {
+      const cells = days.slice(w, w + 7).map((d, i) => ({ ...info[w + i], dom: d.getDate(), out: d.getMonth() !== month.getMonth() }));
+      const segments = [];
+      cells.forEach((x, c) => {
+        const kind = x.swapped ? 'swap' : x.covering ? 'covering' : 'plan';
+        const last = segments[segments.length - 1];
+        if (last && last.staffId === x.staffId && last.kind === kind) last.span += 1;
+        else segments.push({ start: c, span: 1, staffId: x.staffId, kind });
+      });
+      out.push({ days: cells, segments });
+    }
+    return out;
+  }, [days, info, month]);
   const todayStr = ymd(new Date());
   const ready = cfg.oncall_order.length > 0 && !!cfg.oncall_start;
 
@@ -50,29 +67,33 @@ export default function OnCallCalendar({ cfg, people }) {
           <span className="mg-legend"><span>Colored name = on call that day</span><span style={{ color: 'var(--danger)' }}>Red = the person due on call is off</span></span>
         </div>
         <div className="mg-scroll">
-          <div className="mg-grid">
-            {WEEKDAYS.map((d) => <div key={d} className="mg-dow">{d}</div>)}
-            {days.map((d, i) => {
-              const x = info[i];
-              const on = x.staffId && person(x.staffId);
-              const hex = on ? colorHex(on, people) : null;
-              return (
-                <div key={x.date} className={`mg-day${d.getMonth() !== month.getMonth() ? ' out' : ''}${x.date === todayStr ? ' today' : ''}`}>
-                  <div className="mg-num">{d.getDate()}</div>
-                  {ready && on && (
-                    <span className="mg-row" style={{ '--mg-color': hex }} title={`${staffName(on)} is on call${x.swapped ? ' (swap)' : ''}${x.covering ? ' (covering)' : ''}`}>
-                      <b>{first(on)}</b>{x.swapped ? ' (swap)' : x.covering ? ' (covering)' : ''}
-                    </span>
-                  )}
-                  {ready && !on && <span className="mg-row" style={{ '--mg-color': '#b42318' }}>Nobody</span>}
-                  {x.off.map((id) => (
-                    <span key={id} className={`mg-row${id === x.plannedId ? ' flag' : ''}`} style={{ '--mg-color': '#6b7686' }} title={id === x.plannedId ? 'Due to be on call but off this day' : 'Time off'}>
-                      Off: {person(id) ? first(person(id)) : 'Someone'}
-                    </span>
-                  ))}
-                </div>
-              );
-            })}
+          <div className="oc-cal">
+            <div className="oc-head">{WEEKDAYS.map((d) => <div key={d} className="mg-dow">{d}</div>)}</div>
+            {weeks.map((w) => (
+              <div key={w.days[0].date} className="oc-week">
+                {w.days.map((x, c) => (
+                  <div key={x.date} className={`oc-num${x.out ? ' out' : ''}${x.date === todayStr ? ' today' : ''}`} style={{ gridColumn: c + 1, gridRow: 1 }}>{x.dom}</div>
+                ))}
+                {ready && w.segments.map((g) => {
+                  const on = g.staffId && person(g.staffId);
+                  return (
+                    <div key={`${g.start}-${g.staffId}`} className="oc-bar" style={{ gridColumn: `${g.start + 1} / span ${g.span}`, gridRow: 2, '--mg-color': on ? colorHex(on, people) : '#b42318' }}
+                      title={on ? `${staffName(on)} is on call${g.kind === 'swap' ? ' (swap)' : g.kind === 'covering' ? ' (covering)' : ''}` : 'Nobody is on call'}>
+                      <b>{on ? staffName(on) : 'Nobody on call'}</b>{g.kind === 'swap' ? ' (swap)' : g.kind === 'covering' ? ' (covering)' : ''}
+                    </div>
+                  );
+                })}
+                {w.days.map((x, c) => (
+                  <div key={`o-${x.date}`} className={`oc-off${x.out ? ' out' : ''}`} style={{ gridColumn: c + 1, gridRow: 3 }}>
+                    {x.off.map((id) => (
+                      <span key={id} className={`mg-row${id === x.plannedId ? ' flag' : ''}`} style={{ '--mg-color': '#6b7686' }} title={id === x.plannedId ? 'Due to be on call but off this day' : 'Time off'}>
+                        Off: {person(id) ? first(person(id)) : 'Someone'}
+                      </span>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            ))}
           </div>
         </div>
       </div>
