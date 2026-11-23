@@ -9,6 +9,7 @@ import {
   centsToText, parseMoneyToCents, invoiceChip, invoiceLineCents, isPastDue, daysPastDue, defaultInterestMonths, interestCents,
   interestBase, interestWarning, canVoid, canReopen, PAYMENT_METHODS,
 } from '@/lib/invoice';
+import { downloadInvoicePdf } from '@/lib/documentPdfClient';
 import './invoice.css';
 
 const dateText = (d) => (d ? new Date(`${d}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '');
@@ -247,7 +248,10 @@ export default function InvoiceTab({ jobId, job, photos, staff, token, isOffice,
               </p>
               {inv.first_viewed_at && <p className="hint" style={{ margin: 0 }}>Customer opened it {fmtDateTime(inv.first_viewed_at)}{inv.view_count > 1 ? ` (${inv.view_count} times)` : ''}.</p>}
             </div>
-            {inv.status !== 'draft' && <a className="button secondary" href={`/i/${inv.share_token}?preview=1`} target="_blank" rel="noreferrer">What the customer sees</a>}
+            <div className="row" style={{ gap: 8 }}>
+              <button type="button" className="secondary" disabled={busy === 'pdf'} onClick={() => run('pdf', () => downloadInvoicePdf({ jobId }, { ...inv, balance_cents: inv.balance_cents }))}>{busy === 'pdf' ? 'Making PDF...' : 'Download PDF'}</button>
+              {inv.status !== 'draft' && <a className="button secondary" href={`/i/${inv.share_token}?preview=1`} target="_blank" rel="noreferrer">What the customer sees</a>}
+            </div>
           </div>
 
           {inv.kind === 'difference' && <div className="inv-banner info">Return visit: this invoice lists the whole job and takes off the {centsToText(inv.credit_cents)} already paid, so only the difference is due.</div>}

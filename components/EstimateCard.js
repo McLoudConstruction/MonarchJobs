@@ -10,6 +10,9 @@ import { hasFeature } from '@/lib/services';
 import { rateMap, priceFor, rateChanges } from '@/lib/propertyRates';
 import { expiryNote } from '@/lib/estimateExpiry';
 import { LINE_KINDS, lineKind, kindFields, lineKindLabel, hasTiers, tiersPresent, tierTotals, currentTotals, effectiveLines, choiceFromEstimate, TIER_LABELS } from '@/lib/estimateOptions';
+import SaveButton from '@/components/SaveButton';
+import { useSaveStatus } from '@/lib/saveStatus';
+import { downloadEstimatePdf } from '@/lib/documentPdfClient';
 
 const BLANK_CUSTOM = { description: '', quantity: '1', unit: 'flat', unit_price: '', kind: 'included' };
 
@@ -34,6 +37,8 @@ export default function EstimateCard({ service = '', scope, open, staff, token, 
   const [edit, setEdit] = useState(null);
   const [minimum, setMinimum] = useState('');
   const [msg, setMsg] = useState(null);
+  const minSave = useSaveStatus();
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [signature, setSignature] = useState(null);
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState(null);
@@ -144,6 +149,12 @@ export default function EstimateCard({ service = '', scope, open, staff, token, 
     changed();
   }
 
+  async function downloadPdf() {
+    setPdfBusy(true); setMsg(null);
+    try { await downloadEstimatePdf(scope, est, lines); } catch (e) { setMsg({ err: true, text: e?.message || 'The PDF could not be made.' }); }
+    setPdfBusy(false);
+  }
+
   async function removeLine(l) {
     if (!window.confirm(`Remove "${l.description}"?`)) return;
     const { error } = await getSupabase().from('estimate_lines').delete().eq('id', l.id);
@@ -154,8 +165,9 @@ export default function EstimateCard({ service = '', scope, open, staff, token, 
   async function updateEstimate(patch) {
     setMsg(null);
     const { error } = await getSupabase().from('estimates').update(patch).eq('id', est.id);
-    if (error) return fail(error);
+    if (error) { fail(error); return false; }
     changed();
+    return true;
   }
 
   // Tie the estimate to a property so its saved rates are used. Lines already on the estimate keep their prices until
@@ -352,9 +364,9 @@ export default function EstimateCard({ service = '', scope, open, staff, token, 
               {open && pending.length > 0 && <button type="button" className="secondary" onClick={applyRates}>Apply property rates to {pending.length} {pending.length === 1 ? 'line' : 'lines'}</button>}
             </div>
           )}
-          <form className="row" style={{ alignItems: 'flex-end', marginBottom: 12 }} onSubmit={(e) => { e.preventDefault(); updateEstimate({ minimum_charge: Number(minimum) || 0 }); }}>
+          <form className="row" style={{ alignItems: 'flex-end', marginBottom: 12 }} onSubmit={minSave.track(async (e) => { e.preventDefault(); return updateEstimate({ minimum_charge: Number(minimum) || 0 }); })}>
             <div className="field" style={{ marginBottom: 0 }}><label>Minimum charge for this job</label><input type="number" min="0" step="0.01" value={minimum} onChange={(e) => setMinimum(e.target.value)} /></div>
-            <button className="secondary">Save minimum</button>
+            <SaveButton save={minSave} idle="Save minimum" className="secondary" />
           </form>
 
           <div className="row">
@@ -376,6 +388,7 @@ export default function EstimateCard({ service = '', scope, open, staff, token, 
             {est.status === 'draft' && <button className="secondary" onClick={() => updateEstimate({ status: 'sent', sent_at: new Date().toISOString() })}>Mark as sent (without messaging)</button>}
             {est.status !== 'draft' && <button className="secondary" onClick={async () => { await getSupabase().from('estimate_lines').update({ accepted: false }).eq('estimate_id', est.id); updateEstimate({ status: 'draft', chosen_tier: null }); }}>Back to draft</button>}
             <a href={`/e/${est.share_token}?preview=1`} target="_blank" rel="noreferrer"><button type="button" className="secondary">Preview customer view</button></a>
+            <button type="button" className="secondary" disabled={pdfBusy || lines.length === 0} onClick={downloadPdf}>{pdfBusy ? 'Making PDF...' : 'Download PDF'}</button>
           </div>
           {est.status !== 'approved' && (
             <p className="hint" style={{ marginTop: 8 }}>
