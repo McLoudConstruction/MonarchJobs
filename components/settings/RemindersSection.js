@@ -106,7 +106,7 @@ export default function RemindersSection({ token }) {
 
   async function checkWeather() {
     setBusy(true); setWx(null);
-    try { setWx(await apiFetch('/api/weather/check', token, { method: 'POST' })); } catch (e) { setMsg({ err: true, text: e.message }); }
+    try { setWx(await apiFetch('/api/weather/check', token, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: f.weather_location }) })); } catch (e) { setMsg({ err: true, text: e.message }); }
     setBusy(false);
   }
   const toggleEvent = (name) => (e) => {
@@ -270,7 +270,7 @@ export default function RemindersSection({ token }) {
               <ul style={{ paddingLeft: 18 }}>{wx.active.map((a, i) => <li key={i}>{a.event} ({a.kind === 'freeze' ? 'freeze' : 'storm'}){a.expires_at ? ` until ${new Date(a.expires_at).toLocaleString()}` : ''}</li>)}</ul>
             </>
           )}
-          <p className="hint">This is what the weather service lists right now for the kinds of warning you ticked. Nothing was saved or sent.</p>
+          <p className="hint">{wx.saved ? `Alert area saved as ${wx.saved}. ` : ''}This is what the weather service lists right now. No message was sent.</p>
         </div>
       )}
       </OutreachSection>
