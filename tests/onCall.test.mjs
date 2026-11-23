@@ -70,3 +70,47 @@ test('validation', () => {
   assert.match(validateOnCall({ ...ok, oncall_wait_minutes: 2 }).error, /5 and 120/);
   assert.match(validateOnCall({ ...ok, oncall_handoff_hour: 30 }).error, /0 and 23/);
 });
+
+import { offDaysInWeek, rotationConflicts, bestOrder, dayInfo } from '../lib/onCall.js';
+
+test('off days in a week count only that week', () => {
+  const to = [{ staff_id: A, starts_on: '2026-11-26', ends_on: '2026-12-02' }];
+  assert.equal(offDaysInWeek(A, '2026-11-23', to), 4); // Thu to Sun
+  assert.equal(offDaysInWeek(A, '2026-11-30', to), 3); // Mon to Wed
+  assert.equal(offDaysInWeek(A, '2026-12-07', to), 0);
+  assert.equal(offDaysInWeek(B, '2026-11-23', to), 0);
+});
+
+test('rotation conflicts count weeks where the on-call person is off', () => {
+  const to = [{ staff_id: A, starts_on: '2026-11-23', ends_on: '2026-11-24' }];
+  assert.deepEqual(rotationConflicts([A, B, C], '2026-11-23', to, 6), { weeksHit: 1, daysHit: 2 });
+  assert.deepEqual(rotationConflicts([B, A, C], '2026-11-23', to, 6), { weeksHit: 0, daysHit: 0 });
+  assert.deepEqual(rotationConflicts([], '2026-11-23', to, 6), { weeksHit: 0, daysHit: 0 });
+});
+
+test('best order moves people away from their own time off, and keeps the order when nothing differs', () => {
+  const to = [{ staff_id: A, starts_on: '2026-11-23', ends_on: '2026-11-24' }, { staff_id: B, starts_on: '2026-11-30', ends_on: '2026-11-30' }];
+  const r = bestOrder([A, B, C], '2026-11-23', to, 6);
+  assert.equal(r.weeksHit, 0);
+  assert.equal(r.order.length, 3);
+  assert.deepEqual(bestOrder([A, B, C], '2026-11-23', [], 6).order, [A, B, C]);
+  assert.deepEqual(bestOrder([A], '2026-11-23', to, 6).order, [A]);
+});
+
+test('best order handles a long list by swapping', () => {
+  const ids = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'];
+  const to = [{ staff_id: 'p1', starts_on: '2026-11-23', ends_on: '2026-11-25' }];
+  const r = bestOrder(ids, '2026-11-23', to, 16);
+  assert.equal(r.weeksHit, 0);
+  assert.deepEqual([...r.order].sort(), [...ids].sort());
+});
+
+test('calendar day info: planned person, who covers, and who is off', () => {
+  const c = { ...cfg, timeOff: [{ staff_id: A, starts_on: '2026-11-24', ends_on: '2026-11-25' }] };
+  const mon = dayInfo('2026-11-23', c);
+  assert.equal(mon.staffId, A); assert.equal(mon.covering, false); assert.deepEqual(mon.off, []);
+  const tue = dayInfo('2026-11-24', c);
+  assert.equal(tue.plannedId, A); assert.equal(tue.staffId, B); assert.equal(tue.covering, true); assert.equal(tue.plannedOff, true); assert.deepEqual(tue.off, [A]);
+  const swapped = dayInfo('2026-11-25', { ...c, overrides: [{ staff_id: C, starts_at: '2026-11-25T00:00:00-06:00', ends_at: '2026-11-26T00:00:00-06:00' }] });
+  assert.equal(swapped.staffId, C); assert.equal(swapped.swapped, true); assert.equal(swapped.covering, false);
+});

@@ -4,37 +4,41 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
 import { staffName } from '@/lib/userDisplay';
 import { fromLocalInput, fmtDateTime } from '@/lib/format';
-import { upcomingWeeks, validateOnCall, handoffLabel } from '@/lib/onCall';
+import { validateOnCall, handoffLabel, bestOrder, rotationConflicts } from '@/lib/onCall';
+import OnCallCalendar from '@/components/settings/OnCallCalendar';
 import SaveButton from '@/components/SaveButton';
 import { useSaveStatus } from '@/lib/saveStatus';
 
 const COLUMNS = 'timezone,oncall_enabled,oncall_order,oncall_start,oncall_handoff_hour,oncall_wait_minutes';
+const WEEKS_AHEAD = 26;
 const mondayOnOrAfter = (d = new Date()) => {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   x.setDate(x.getDate() + ((8 - x.getDay()) % 7));
   return x.toLocaleDateString('en-CA');
 };
+const h3 = { marginTop: 28, marginBottom: 10 };
 
-// Owner and office: who is on call each week, how long to wait before an unclaimed emergency lead goes further, and swaps.
+// Owner and office: who is in the on-call rotation, in what order, how long to wait before an unclaimed emergency lead goes further,
+// a calendar of who is on call (with time off flagged), and swaps.
 export default function OnCallSection() {
   const [f, setF] = useState(null);
   const [missing, setMissing] = useState(false);
   const [people, setPeople] = useState([]);
   const [timeOff, setTimeOff] = useState([]);
   const [swaps, setSwaps] = useState([]);
-  const [add, setAdd] = useState('');
   const [swap, setSwap] = useState({ staff_id: '', from: '', to: '' });
   const [msg, setMsg] = useState(null);
+  const [suggest, setSuggest] = useState(null);
   const saveS = useSaveStatus();
 
   const load = useCallback(async () => {
     const sb = getSupabase();
-    const today = new Date().toLocaleDateString('en-CA');
+    const since = new Date(Date.now() - 45 * 86400000).toLocaleDateString('en-CA');
     const [s, p, t, o] = await Promise.all([
       sb.from('settings').select(COLUMNS).eq('id', 1).maybeSingle(),
-      sb.from('staff_users').select('id,full_name,email,role').eq('active', true).order('full_name'),
-      sb.from('time_off').select('staff_id,starts_on,ends_on').gte('ends_on', today).limit(300),
-      sb.from('oncall_overrides').select('id,staff_id,starts_at,ends_at,created_at').gt('ends_at', new Date().toISOString()).order('starts_at'),
+      sb.from('staff_users').select('id,full_name,email,role,color,created_at').eq('active', true).order('full_name'),
+      sb.from('time_off').select('staff_id,starts_on,ends_on').gte('ends_on', since).limit(500),
+      sb.from('oncall_overrides').select('id,staff_id,starts_at,ends_at,created_at').gt('ends_at', new Date(Date.now() - 45 * 86400000).toISOString()).order('starts_at'),
     ]);
     if (s.error || !s.data) { setMissing(true); return; }
     setF((cur) => cur || { ...s.data, oncall_order: s.data.oncall_order || [], oncall_start: s.data.oncall_start || '' });
@@ -44,22 +48,31 @@ export default function OnCallSection() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  const nameOf = (id) => { const x = people.find((q) => q.id === id); return x ? staffName(x) : 'Former staff member'; };
-  const weeks = useMemo(() => (f && f.oncall_order.length && f.oncall_start
-    ? upcomingWeeks(Date.now(), 8, { ...f, tz: f.timezone || undefined, timeOff, isActive: (id) => people.some((p) => p.id === id) })
-    : []), [f, timeOff, people]);
+  const cfg = useMemo(() => (f ? { ...f, tz: f.timezone || undefined, timeOff, overrides: swaps, isActive: (id) => people.some((p) => p.id === id) } : null), [f, timeOff, swaps, people]);
+  const stats = useMemo(() => (f && f.oncall_order.length && f.oncall_start ? rotationConflicts(f.oncall_order, f.oncall_start, timeOff, WEEKS_AHEAD) : null), [f, timeOff]);
 
   if (missing) return <div className="card"><h2>On call</h2><p className="muted">This needs database update 047. Run it in Supabase, then reload.</p></div>;
   if (!f) return <div className="card"><p className="muted">Loading...</p></div>;
 
+  const nameOf = (id) => { const x = people.find((q) => q.id === id); return x ? staffName(x) : 'Former staff member'; };
   const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
-  const move = (i, d) => { const o = [...f.oncall_order]; const j = i + d; if (j < 0 || j >= o.length) return; [o[i], o[j]] = [o[j], o[i]]; setF({ ...f, oncall_order: o }); };
-  const remove = (id) => setF({ ...f, oncall_order: f.oncall_order.filter((x) => x !== id) });
-  const addPerson = () => {
-    if (!add || f.oncall_order.includes(add)) return;
-    setF({ ...f, oncall_order: [...f.oncall_order, add], oncall_start: f.oncall_start || mondayOnOrAfter() });
-    setAdd('');
+  const inRotation = (id) => f.oncall_order.includes(id);
+  const toggle = (id) => {
+    setSuggest(null);
+    if (inRotation(id)) setF({ ...f, oncall_order: f.oncall_order.filter((x) => x !== id) });
+    else setF({ ...f, oncall_order: [...f.oncall_order, id], oncall_start: f.oncall_start || mondayOnOrAfter() });
   };
+  const move = (i, d) => { const o = [...f.oncall_order]; const j = i + d; if (j < 0 || j >= o.length) return; [o[i], o[j]] = [o[j], o[i]]; setSuggest(null); setF({ ...f, oncall_order: o }); };
+  const n = f.oncall_order.length;
+  const others = people.filter((p) => !inRotation(p.id));
+
+  function suggestBest() {
+    const start = f.oncall_start || mondayOnOrAfter();
+    const r = bestOrder(f.oncall_order, start, timeOff, WEEKS_AHEAD);
+    const before = rotationConflicts(f.oncall_order, start, timeOff, WEEKS_AHEAD);
+    setF({ ...f, oncall_order: r.order, oncall_start: start });
+    setSuggest({ before, after: r });
+  }
 
   async function save(e) {
     e.preventDefault();
@@ -95,69 +108,75 @@ export default function OnCallSection() {
       {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
       <form onSubmit={saveS.track(save)}>
         <div className="field"><label className="row"><input type="checkbox" checked={!!f.oncall_enabled} onChange={set('oncall_enabled')} /> Turn on the on-call alerts</label></div>
-        <div className="grid2">
-          <div className="field"><label>Rotation starts the week of (a Monday)</label><input type="date" value={f.oncall_start} onChange={set('oncall_start')} /></div>
-          <div className="field"><label>Week changes over at (hour)</label>
+        <div className="grid2" style={{ gap: 12 }}>
+          <div className="field" style={{ margin: 0 }}><label>Rotation starts the week of (a Monday)</label><input type="date" value={f.oncall_start} onChange={set('oncall_start')} /></div>
+          <div className="field" style={{ margin: 0 }}><label>Week changes over at (hour)</label>
             <select value={f.oncall_handoff_hour} onChange={set('oncall_handoff_hour')}>
               {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{handoffLabel(h)}</option>)}
             </select>
           </div>
-          <div className="field"><label>Wait before passing it on (minutes)</label><input type="number" min="5" max="120" value={f.oncall_wait_minutes} onChange={set('oncall_wait_minutes')} /></div>
+          <div className="field" style={{ margin: 0 }}><label>Wait before passing it on (minutes)</label><input type="number" min="5" max="120" value={f.oncall_wait_minutes} onChange={set('oncall_wait_minutes')} /></div>
         </div>
 
-        <h3>Rotation order</h3>
-        {f.oncall_order.length === 0 && <p className="muted">Nobody yet. Add people in the order they take the week.</p>}
-        <ol>
+        <h3 style={h3}>Who is in the rotation</h3>
+        <p className="hint" style={{ marginTop: 0 }}>Tick the people who take a week. Weeks go in the order shown.</p>
+        <ol style={{ listStyle: 'none', padding: 0, margin: 0 }}>
           {f.oncall_order.map((id, i) => (
-            <li key={id} className="row" style={{ gap: 8, margin: '4px 0' }}>
-              <span style={{ minWidth: 160 }}>{nameOf(id)}</span>
+            <li key={id} className="row" style={{ gap: 10, padding: '6px 0', borderTop: i ? '1px solid var(--border)' : 'none', alignItems: 'center' }}>
+              <input type="checkbox" checked onChange={() => toggle(id)} aria-label={`${nameOf(id)} is in the rotation`} />
+              <span style={{ minWidth: 70, color: 'var(--muted)' }}>Week {i + 1}</span>
+              <span style={{ flex: 1 }}>{nameOf(id)}</span>
               <button type="button" className="secondary" aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}>Up</button>
-              <button type="button" className="secondary" aria-label="Move down" disabled={i === f.oncall_order.length - 1} onClick={() => move(i, 1)}>Down</button>
-              <button type="button" className="danger" onClick={() => remove(id)}>Remove</button>
+              <button type="button" className="secondary" aria-label="Move down" disabled={i === n - 1} onClick={() => move(i, 1)}>Down</button>
+            </li>
+          ))}
+          {others.map((p, i) => (
+            <li key={p.id} className="row" style={{ gap: 10, padding: '6px 0', borderTop: n || i ? '1px solid var(--border)' : 'none', alignItems: 'center', opacity: 0.8 }}>
+              <input type="checkbox" checked={false} onChange={() => toggle(p.id)} aria-label={`Add ${staffName(p)} to the rotation`} />
+              <span style={{ flex: 1 }}>{staffName(p)}</span>
             </li>
           ))}
         </ol>
-        <div className="row">
-          <select value={add} onChange={(e) => setAdd(e.target.value)} aria-label="Person to add">
-            <option value="">Add a person...</option>
-            {people.filter((p) => !f.oncall_order.includes(p.id)).map((p) => <option key={p.id} value={p.id}>{staffName(p)}</option>)}
-          </select>
-          <button type="button" className="secondary" onClick={addPerson} disabled={!add}>Add</button>
-        </div>
-        <p className="hint">Times use {f.timezone || 'America/Chicago'}. Save to apply changes.</p>
-        <SaveButton save={saveS} idle="Save on-call settings" className="primary" />
+
+        {n > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <p style={{ margin: '0 0 4px' }}><strong>{n}-week rotation.</strong> {n === 1 ? 'The same person is on call every week.' : `Each person is on call 1 week out of every ${n}.`}</p>
+            {stats && <p className="hint" style={{ margin: '0 0 8px' }}>{stats.weeksHit === 0 ? `No time off falls on anyone's on-call week in the next ${WEEKS_AHEAD} weeks.` : `${stats.weeksHit} of the next ${WEEKS_AHEAD} weeks fall on the on-call person's own time off (the next person covers those days).`}</p>}
+            <button type="button" className="secondary" disabled={n < 2} onClick={suggestBest}>Suggest the best order</button>
+            {suggest && (
+              <p className="hint" style={{ margin: '8px 0 0' }}>
+                {suggest.after.weeksHit === suggest.before.weeksHit && suggest.after.daysHit === suggest.before.daysHit
+                  ? 'This order already avoids as much time off as any other order can, so nothing moved.'
+                  : `Reordered: weeks that hit someone's time off went from ${suggest.before.weeksHit} to ${suggest.after.weeksHit} over the next ${WEEKS_AHEAD} weeks. Save to keep it.`}
+              </p>
+            )}
+          </div>
+        )}
+        <p className="hint" style={{ margin: '12px 0' }}>Times use {f.timezone || 'America/Chicago'}. Save to apply changes. The calendar below shows your unsaved changes.</p>
+        <div style={{ marginBottom: 8 }}><SaveButton save={saveS} idle="Save on-call settings" className="primary" /></div>
       </form>
 
-      {weeks.length > 0 && (
-        <>
-          <h3>Next 8 weeks</h3>
-          <table className="own-table">
-            <thead><tr><th>Week of</th><th>On call</th></tr></thead>
-            <tbody>
-              {weeks.map((w) => <tr key={w.weekStart}><td>{new Date(`${w.weekStart}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td><td>{w.staffId ? nameOf(w.staffId) : 'Nobody available'}</td></tr>)}
-            </tbody>
-          </table>
-        </>
-      )}
+      <h3 style={h3}>Calendar</h3>
+      <OnCallCalendar cfg={cfg} people={people} />
 
-      <h3>Swaps</h3>
+      <h3 style={h3}>Swaps</h3>
       <p className="hint">Someone covering a stretch of time instead of the rotation, for example a night off.</p>
-      {swaps.length === 0 && <p className="muted">No swaps coming up.</p>}
+      {swaps.filter((s) => new Date(s.ends_at) > new Date()).length === 0 && <p className="muted">No swaps coming up.</p>}
       <ul>
-        {swaps.map((s) => (
+        {swaps.filter((s) => new Date(s.ends_at) > new Date()).map((s) => (
           <li key={s.id} className="row" style={{ gap: 8 }}>
             <span>{nameOf(s.staff_id)}: {fmtDateTime(s.starts_at)} to {fmtDateTime(s.ends_at)}</span>
             <button type="button" className="danger" onClick={() => removeSwap(s.id)}>Remove</button>
           </li>
         ))}
       </ul>
-      <form onSubmit={addSwap} className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
-        <select value={swap.staff_id} onChange={(e) => setSwap({ ...swap, staff_id: e.target.value })} aria-label="Who covers">
+      <form onSubmit={addSwap} style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+        <select style={{ flex: '1 1 100%', minWidth: 0 }} value={swap.staff_id} onChange={(e) => setSwap({ ...swap, staff_id: e.target.value })} aria-label="Who covers">
           <option value="">Who covers...</option>
           {people.map((p) => <option key={p.id} value={p.id}>{staffName(p)}</option>)}
         </select>
-        <input type="datetime-local" aria-label="From" value={swap.from} onChange={(e) => setSwap({ ...swap, from: e.target.value })} />
-        <input type="datetime-local" aria-label="To" value={swap.to} onChange={(e) => setSwap({ ...swap, to: e.target.value })} />
+        <input style={{ flex: '1 1 220px', minWidth: 0 }} type="datetime-local" aria-label="From" value={swap.from} onChange={(e) => setSwap({ ...swap, from: e.target.value })} />
+        <input style={{ flex: '1 1 220px', minWidth: 0 }} type="datetime-local" aria-label="To" value={swap.to} onChange={(e) => setSwap({ ...swap, to: e.target.value })} />
         <button type="submit" className="secondary">Add swap</button>
       </form>
     </div>
