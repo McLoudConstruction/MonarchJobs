@@ -24,6 +24,7 @@ const TABS = [
   { id: 'prices', label: 'Price list' },
   { id: 'booking', label: 'Booking' },
   { id: 'reminders', label: 'Outreach' },
+  { id: 'oncall', label: 'On call' },
   { id: 'equipment', label: 'Equipment' },
   { id: 'invoicing', label: 'Invoicing' },
   { id: 'integrations', label: 'Integrations' },
@@ -87,7 +88,6 @@ export default function SettingsPage() {
             {tab === 'reminders' && (
               <>
                 <RemindersSection token={token} />
-                <OnCallSection />
                 {staff.role === 'owner' && <JobAlertsSection token={token} />}
                 <div className="card">
                   <h2>Outreach tools</h2>
@@ -97,6 +97,7 @@ export default function SettingsPage() {
                 </div>
               </>
             )}
+            {tab === 'oncall' && <OnCallSection />}
             {tab === 'equipment' && <EquipmentSection />}
             {tab === 'invoicing' && <InvoicingSection />}
             {tab === 'integrations' && <IntegrationsSection token={token} />}

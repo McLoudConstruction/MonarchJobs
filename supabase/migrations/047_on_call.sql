@@ -2,7 +2,7 @@
 -- One person is on call each week, in a rotation the owner sets in Settings. When an EMERGENCY lead comes in, the on-call person
 -- gets their own alert. If nobody claims the lead within the wait time, the next person in the rotation and the office and owner
 -- are told. Someone on time off (Time off tab) is skipped, and a one-off swap can be added for any stretch of time.
--- OFF until the owner turns it on in Settings > Reminders. Safe to run more than once. Run in the Supabase SQL Editor after 046.
+-- OFF until the owner turns it on in Settings > On call. Safe to run more than once. Run in the Supabase SQL Editor after 046.
 
 alter table public.settings
   add column if not exists oncall_enabled boolean not null default false,
@@ -164,7 +164,7 @@ begin
     insert into public.oncall_alerts (lead_id, first_staff) values (new.id, v) on conflict (lead_id) do nothing;
     if v is null then
       perform public.notify_users(public.notif_office_owner(), 'oncall_alert', 'alert', 'No one is on call',
-        'An emergency lead came in and nobody is on the on-call rotation right now. Check Settings > Reminders.',
+        'An emergency lead came in and nobody is on the on-call rotation right now. Check Settings > On call.',
         '/leads/' || new.id, null, new.id, 'oncall:' || new.id || ':esc');
     else
       perform public.notify_users(array[v], 'oncall_alert', 'alert', 'You are on call: new EMERGENCY lead',
