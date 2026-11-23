@@ -9,6 +9,7 @@ import { money, addressLine, fmtDateTime, JOB_TYPES, UNIT_LABELS } from '@/lib/f
 import { displayPhone } from '@/lib/phone';
 import { logoUrl } from '@/lib/branding';
 import CenterCard from '@/components/CenterCard';
+import { getSupabase } from '@/lib/supabaseClient';
 import AfterSignScheduler from '@/components/booking/AfterSignScheduler';
 import { fmtSlotFull } from '@/lib/booking';
 import { prettyDay } from '@/lib/estimateExpiry';
@@ -94,7 +95,14 @@ function EstimateView() {
   const [picks, setPicks] = useState([]);
 
   const load = useCallback((isPreview) => {
-    fetch(`/api/public/estimate/${token}${isPreview ? '?preview=1' : ''}`)
+    (async () => {
+      // staff previewing an estimate that is not sent yet are let in by their login
+      let headers;
+      if (isPreview) {
+        try { const { data: sess } = await getSupabase().auth.getSession(); if (sess?.session?.access_token) headers = { Authorization: `Bearer ${sess.session.access_token}` }; } catch { /* not signed in: the customer view */ }
+      }
+      return fetch(`/api/public/estimate/${token}${isPreview ? '?preview=1' : ''}`, headers ? { headers } : undefined);
+    })()
       .then(async (r) => {
         const body = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error('This estimate is not available.');
@@ -128,6 +136,7 @@ function EstimateView() {
       )}
       <h1>{data.business.business_name || 'Estimate'}</h1>
       <p className="sub">{contact}</p>
+      {data.draft && <div className="msg" role="status">Draft preview: this estimate has not been sent. The customer cannot see it until you send it.</div>}
       <div className="card">
         <h2>Estimate for {data.job?.customer}</h2>
         <p className="hint">{JOB_TYPES[data.job?.job_type]} · {addressLine(data.job?.address)}</p>

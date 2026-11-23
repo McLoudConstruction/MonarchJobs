@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAdmin } from '@/lib/supabaseAdmin';
 import { isExpired, validThrough } from '@/lib/estimateExpiry';
+import { optionalStaff } from '@/lib/apiAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,6 +9,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Customer-facing estimate, found by its secret link. Draft estimates are not visible.
 // Internal notes and staff details are never returned. A view is recorded unless ?preview=1.
+// Signed-in staff can preview a draft (?preview=1 with their login token) to see what the customer will see before it is sent.
 export async function GET(request, { params }) {
   const token = params.token;
   if (!UUID.test(token)) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
@@ -18,9 +20,11 @@ export async function GET(request, { params }) {
     .select('id,job_id,lead_id,status,minimum_charge,chosen_tier,sent_at,first_viewed_at,view_count,expires_at,followups_paused')
     .eq('share_token', token)
     .maybeSingle();
-  if (!est || est.status === 'draft') return NextResponse.json({ error: 'Not found.' }, { status: 404 });
-
   const preview = new URL(request.url).searchParams.get('preview') === '1';
+  let staffPreview = false;
+  if (preview && est?.status === 'draft') { const who = await optionalStaff(request); staffPreview = !!who.staff; }
+  if (!est || (est.status === 'draft' && !staffPreview)) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
+
   if (!preview) {
     const now = new Date().toISOString();
     await admin
@@ -66,7 +70,8 @@ export async function GET(request, { params }) {
   const expired = isExpired(est);
   return NextResponse.json({
     status: est.status,
-    can_accept: est.status === 'sent' && !expired,
+    draft: est.status === 'draft',
+    can_accept: (est.status === 'sent' || staffPreview) && !expired, // a staff preview of a draft shows the options and the approve section too (the accept route still needs a sent estimate)
     expired,
     valid_through: est.status === 'sent' ? validThrough(est.expires_at, tz) : null,
     reminders_stopped: !!est.followups_paused,
