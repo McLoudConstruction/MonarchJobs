@@ -6,6 +6,7 @@ import WeekGrid from '@/components/WeekGrid';
 import DateTimeField from '@/components/DateTimeField';
 import { DURATION_CHOICES, fmtDuration, fmtDateTime, fromLocalInput, toLocalInput } from '@/lib/format';
 import { staffName } from '@/lib/userDisplay';
+import { rangeLabel } from '@/lib/timeOff';
 
 // Every appointment starts out 4 hours long. Emergency-type work (mitigation and extraction) starts at the
 // current time rounded to the nearest hour; everything else starts at the next full hour.
@@ -39,10 +40,14 @@ export default function AppointmentPicker({ value, onChange, staffList, excludeV
       .eq('tech_id', value.techId).in('status', ['scheduled', 'on_the_way', 'started'])
       .lt('starts_at', endIso).gt('ends_at', startIso);
     if (excludeVisitId) q = q.neq('id', excludeVisitId);
-    q.then(({ data }) => {
+    // Time off counts like a double-booking: the office sees it and ticks the box to book anyway.
+    const day = String(value.start).slice(0, 10);
+    const off = getSupabase().from('time_off').select('id,starts_on,ends_on').eq('staff_id', value.techId).lte('starts_on', day).gte('ends_on', day);
+    Promise.all([q, off]).then(([{ data }, { data: offRows, error: offErr }]) => {
       if (cancelled) return;
-      setConflicts(data || []);
-      onConflicts?.(data || []);
+      const all = [...(data || []), ...(offErr ? [] : (offRows || []).map((o) => ({ ...o, id: `off-${o.id}`, timeOff: true })))];
+      setConflicts(all);
+      onConflicts?.(all);
     });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -79,11 +84,13 @@ export default function AppointmentPicker({ value, onChange, staffList, excludeV
 
       {conflicts.length > 0 && (
         <div className="banner flag">
-          This tech is already booked then:
+          This tech is not free then:
           <ul style={{ margin: '6px 0' }}>
-            {conflicts.map((c) => <li key={c.id}>#{c.job?.job_number} {c.job?.customer?.display_name} ({fmtDateTime(c.starts_at)} for {fmtDuration(c.duration_minutes)})</li>)}
+            {conflicts.map((c) => (c.timeOff
+              ? <li key={c.id}>Time off ({rangeLabel(c)})</li>
+              : <li key={c.id}>Already booked: #{c.job?.job_number} {c.job?.customer?.display_name} ({fmtDateTime(c.starts_at)} for {fmtDuration(c.duration_minutes)})</li>))}
           </ul>
-          <label className="row"><input type="checkbox" checked={!!value.override} onChange={(e) => onChange({ ...value, override: e.target.checked })} /> Book anyway. Both jobs stay flagged until one is moved.</label>
+          <label className="row"><input type="checkbox" checked={!!value.override} onChange={(e) => onChange({ ...value, override: e.target.checked })} /> Book anyway.{conflicts.some((c) => !c.timeOff) ? ' Both jobs stay flagged until one is moved.' : ''}</label>
         </div>
       )}
 

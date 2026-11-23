@@ -8,7 +8,7 @@ import {
 import SaveButton from '@/components/SaveButton';
 import { useSaveStatus } from '@/lib/saveStatus';
 
-const COLUMNS = 'timezone,booking_enabled,booking_after_sign,booking_days,booking_day_start,booking_day_end,booking_slot_minutes,booking_gap_minutes,booking_crews,booking_notice_hours,booking_window_days';
+const COLUMNS = 'timezone,booking_enabled,booking_after_sign,booking_days,booking_day_start,booking_day_end,booking_slot_minutes,booking_gap_minutes,booking_crews,booking_notice_hours,booking_window_days,booking_capacity_enabled';
 const clock = (min) => new Date(Date.UTC(2000, 0, 1, Math.floor(min / 60), min % 60)).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' });
 
 // Owner: the booking link, and the rules for which appointment times are offered.
@@ -121,6 +121,7 @@ export default function BookingSection() {
           <div className="field"><label>Appointment length (minutes)</label><input type="number" min="30" max="480" step="15" value={f.booking_slot_minutes} onChange={set('booking_slot_minutes')} /></div>
           <div className="field"><label>Gap between appointments (minutes)</label><input type="number" min="0" max="240" step="15" value={f.booking_gap_minutes} onChange={set('booking_gap_minutes')} /></div>
           <div className="field"><label>Jobs at the same time</label><input type="number" min="1" max="50" value={f.booking_crews} onChange={set('booking_crews')} /><div className="note">How many crews you can send at once. Each time slot closes once this many visits overlap it, whoever booked them.</div></div>
+          <div className="field"><label className="row"><input type="checkbox" checked={!!f.booking_capacity_enabled} onChange={set('booking_capacity_enabled')} /> Count my techs instead</label><div className="note">When on, the number of jobs at the same time on a day is the number of active techs who are not on time off that day (see Schedule, Time off). "Jobs at the same time" above is ignored. Off keeps today's rule.</div></div>
           <div className="field"><label>Minimum notice (hours)</label><input type="number" min="0" max="720" value={f.booking_notice_hours} onChange={set('booking_notice_hours')} /></div>
           <div className="field"><label>How far ahead customers can book (days)</label><input type="number" min="1" max="90" value={f.booking_window_days} onChange={set('booking_window_days')} /></div>
         </div>

@@ -9,6 +9,8 @@ import WeekGrid from '@/components/WeekGrid';
 import MonthGrid from '@/components/MonthGrid';
 import { monthStart } from '@/lib/monthGrid';
 import TechSchedule from '@/components/TechSchedule';
+import TimeOffPanel from '@/components/TimeOffPanel';
+import { rangeLabel } from '@/lib/timeOff';
 import { useIsMobile, useIsTablet } from '@/lib/useIsMobile';
 import { addDays, startOfDay, fmtDay, fmtTime, fmtDuration } from '@/lib/format';
 import { weekStartMonday } from '@/lib/weekGrid';
@@ -24,6 +26,7 @@ function ScheduleInner({ staff }) {
   const [start, setStart] = useState(weekStart(new Date()));
   const [visits, setVisits] = useState([]);
   const [techs, setTechs] = useState([]);
+  const [offRows, setOffRows] = useState([]);
   const [view, setView] = useState('board'); // board | timeline | month
   const [month, setMonth] = useState(monthStart(new Date()));
   const end = useMemo(() => addDays(start, 7), [start]);
@@ -40,6 +43,9 @@ function ScheduleInner({ staff }) {
       sb.from('staff_users').select('id,full_name,email,role,color,created_at').eq('active', true).order('full_name'),
     ]);
     setVisits(v.data || []);
+    const dayStr = (d) => d.toLocaleDateString('en-CA');
+    const off = await sb.from('time_off').select('id,staff_id,starts_on,ends_on').lte('starts_on', dayStr(end)).gte('ends_on', dayStr(start));
+    setOffRows(off.error ? [] : off.data || []); // the table arrives with migration 045
     if (s.error) { // the color column is added by migration 024; until it is run, still show the people
       const plain = await sb.from('staff_users').select('id,full_name,email,role').eq('active', true).order('full_name');
       setTechs(plain.data || []);
@@ -49,6 +55,8 @@ function ScheduleInner({ staff }) {
   useEffect(() => { load(); }, [load]);
 
   const flagged = useMemo(() => doubleBookedIds(visits), [visits]);
+  const offThisWeek = offRows;
+  const nameOfId = (id) => { const t = techs.find((x) => x.id === id); return t ? staffName(t) : 'Someone'; };
 
   const rows = useMemo(() => {
     const ids = new Set(visits.map((v) => v.tech_id));
@@ -79,7 +87,10 @@ function ScheduleInner({ staff }) {
         <button className={view === 'board' ? 'on' : ''} onClick={() => setView('board')}>By tech</button>
         <button className={view === 'timeline' ? 'on' : ''} onClick={() => setView('timeline')}>Time of day</button>
         <button className={view === 'month' ? 'on' : ''} onClick={() => setView('month')}>Month</button>
+        {isOffice && <button className={view === 'timeoff' ? 'on' : ''} onClick={() => setView('timeoff')}>Time off</button>}
       </div>
+      {view === 'timeoff' && isOffice && <TimeOffPanel techs={techs} staff={staff} />}
+      {view === 'board' && offThisWeek.length > 0 && <p className="hint">Off this week: {offThisWeek.map((o) => `${nameOfId(o.staff_id)} (${rangeLabel(o)})`).join(', ')}.</p>}
       {view === 'board' && <div className="toolbar">
         <button className="secondary" onClick={() => setStart(addDays(start, -7))}>Previous week</button>
         <button className="secondary" onClick={() => setStart(weekStart(new Date()))}>This week</button>
