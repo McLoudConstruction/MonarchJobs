@@ -4,10 +4,11 @@ import { useEffect, useState } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
 import { apiFetch } from '@/lib/useAuth';
 import { parseFollowupDays } from '@/lib/estimateFollowup';
+import { STORM_EVENT_CHOICES, parseLocation } from '@/lib/weather';
 import SaveButton from '@/components/SaveButton';
 import { useSaveStatus } from '@/lib/saveStatus';
 
-const FIELDS = 'ontheway_auto,aftercare_auto,aftercare_default,rebook_enabled,rebook_months,rebook_message,plan_offer_enabled,plan_offer_days,plan_offer_message,plan_remind_enabled,plan_remind_days,plan_remind_message,estimate_followup_enabled,estimate_followup_days,estimate_followup_unopened,estimate_followup_opened,estimate_expiry_enabled,estimate_valid_days,referral_enabled,referral_reward_text,street_offers_enabled,street_offer_text,street_offer_max,street_offer_quiet_days';
+const FIELDS = 'ontheway_auto,aftercare_auto,aftercare_default,rebook_enabled,rebook_months,rebook_message,plan_offer_enabled,plan_offer_days,plan_offer_message,plan_remind_enabled,plan_remind_days,plan_remind_message,estimate_followup_enabled,estimate_followup_days,estimate_followup_unopened,estimate_followup_opened,estimate_expiry_enabled,estimate_valid_days,referral_enabled,referral_reward_text,street_offers_enabled,street_offer_text,street_offer_max,street_offer_quiet_days,reschedule_enabled,reschedule_notice_hours,reschedule_max,slowday_enabled,slowday_percent,slowday_look_ahead_days,slowday_min_notice_hours,slowday_open_share,slowday_max_dates,slowday_max_per_day,slowday_quiet_days,slowday_message,weather_location,storm_enabled,storm_events,storm_window_days,storm_max,storm_message,freeze_enabled,freeze_precautions';
 
 // Owner: after-job care instructions, and reminders to past customers (rebooking, plan offers, plan reminders).
 // A collapsed row: click the title to open its settings. The status on the right follows the checkbox inside.
@@ -32,6 +33,7 @@ export default function RemindersSection({ token }) {
   const [busy, setBusy] = useState(false);
   const [missing, setMissing] = useState(false);
   const [openSec, setOpenSec] = useState(null); // one section open at a time
+  const [wx, setWx] = useState(null); // "check the weather now" answer
   const tog = (k) => () => setOpenSec((o) => (o === k ? null : k));
 
   useEffect(() => {
@@ -51,7 +53,29 @@ export default function RemindersSection({ token }) {
     if (f.rebook_enabled && !months.length) { setMsg({ err: true, text: 'Enter the months for rebooking reminders, for example 3, 6, 12.' }); return false; }
     const followDays = parseFollowupDays(f.estimate_followup_days);
     if (f.estimate_followup_enabled && !followDays.length) { setMsg({ err: true, text: 'Enter the days for estimate follow-ups, for example 2, 5, 10.' }); return false; }
+    if ((f.storm_enabled || f.freeze_enabled) && !parseLocation(f.weather_location)) { setMsg({ err: true, text: 'Enter a 5-digit ZIP code for the weather alert area, for example 64801.' }); return false; }
+    if (f.storm_enabled && !(f.storm_events || []).length) { setMsg({ err: true, text: 'Tick at least one kind of storm warning.' }); return false; }
     const row = {
+      reschedule_enabled: !!f.reschedule_enabled,
+      reschedule_notice_hours: Math.min(336, Math.max(0, Math.round(Number(f.reschedule_notice_hours)) || 0)),
+      reschedule_max: Math.min(10, Math.max(1, Math.round(Number(f.reschedule_max)) || 2)),
+      slowday_enabled: !!f.slowday_enabled,
+      slowday_percent: Math.min(50, Math.max(1, Math.round(Number(f.slowday_percent)) || 10)),
+      slowday_look_ahead_days: Math.min(30, Math.max(1, Math.round(Number(f.slowday_look_ahead_days)) || 7)),
+      slowday_min_notice_hours: Math.min(336, Math.max(0, Math.round(Number(f.slowday_min_notice_hours)) || 0)),
+      slowday_open_share: Math.min(100, Math.max(10, Math.round(Number(f.slowday_open_share)) || 60)),
+      slowday_max_dates: Math.min(7, Math.max(1, Math.round(Number(f.slowday_max_dates)) || 3)),
+      slowday_max_per_day: Math.min(50, Math.max(1, Math.round(Number(f.slowday_max_per_day)) || 10)),
+      slowday_quiet_days: Math.min(730, Math.max(0, Math.round(Number(f.slowday_quiet_days)) || 0)),
+      slowday_message: f.slowday_message.trim().slice(0, 300),
+      weather_location: f.weather_location.trim().slice(0, 60),
+      storm_enabled: !!f.storm_enabled,
+      storm_events: (f.storm_events || []).filter((e) => STORM_EVENT_CHOICES.includes(e)),
+      storm_window_days: Math.min(14, Math.max(1, Math.round(Number(f.storm_window_days)) || 5)),
+      storm_max: Math.min(100, Math.max(1, Math.round(Number(f.storm_max)) || 25)),
+      storm_message: f.storm_message.trim().slice(0, 300),
+      freeze_enabled: !!f.freeze_enabled,
+      freeze_precautions: f.freeze_precautions.trim().slice(0, 600),
       estimate_followup_enabled: !!f.estimate_followup_enabled, estimate_followup_days: followDays.length ? followDays : [2, 5, 10],
       estimate_followup_unopened: f.estimate_followup_unopened.trim(), estimate_followup_opened: f.estimate_followup_opened.trim(),
       estimate_expiry_enabled: !!f.estimate_expiry_enabled, estimate_valid_days: Math.min(365, Math.max(1, Number(f.estimate_valid_days) || 30)),
@@ -79,6 +103,17 @@ export default function RemindersSection({ token }) {
     } catch (e) { setMsg({ err: true, text: e.message }); }
     setBusy(false);
   }
+
+  async function checkWeather() {
+    setBusy(true); setWx(null);
+    try { setWx(await apiFetch('/api/weather/check', token, { method: 'POST' })); } catch (e) { setMsg({ err: true, text: e.message }); }
+    setBusy(false);
+  }
+  const toggleEvent = (name) => (e) => {
+    const cur = new Set(f.storm_events || []);
+    if (e.target.checked) cur.add(name); else cur.delete(name);
+    setF({ ...f, storm_events: STORM_EVENT_CHOICES.filter((x) => cur.has(x)) });
+  };
 
   const wording = (k, label) => (
     <div className="field"><label>{label}</label>
@@ -176,6 +211,68 @@ export default function RemindersSection({ token }) {
       <div className="field" style={{ maxWidth: 300 }}><label>Most people in one batch</label><input type="number" min="1" max="50" value={f.street_offer_max} onChange={set('street_offer_max')} /></div>
       <div className="field" style={{ maxWidth: 300 }}><label>Skip anyone we cleaned for in the last (days)</label><input type="number" min="0" max="730" value={f.street_offer_quiet_days} onChange={set('street_offer_quiet_days')} /></div>
       <p className="hint">Nothing is sent by itself. On a finished job the office sees who lives on that street, unticks anyone they like, and taps Send. It texts and emails people who have a phone or email, never anyone who stopped reminders, never anyone with open work, and never someone who already got a message in the last day. One offer per person per job. The message never names the customer whose job was finished.</p>
+      </OutreachSection>
+      <OutreachSection title="Customer rescheduling" enabled={!!f.reschedule_enabled} open={openSec === 'resched'} onToggle={tog('resched')}>
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+        <input type="checkbox" checked={f.reschedule_enabled} onChange={set('reschedule_enabled')} />
+        Let carpet customers pick a new open time for their visit
+      </label>
+      <div className="field" style={{ maxWidth: 300 }}><label>Cannot be changed online within (hours of the visit)</label><input type="number" min="0" max="336" value={f.reschedule_notice_hours} onChange={set('reschedule_notice_hours')} /></div>
+      <div className="field" style={{ maxWidth: 300 }}><label>Most times one visit can be moved</label><input type="number" min="1" max="10" value={f.reschedule_max} onChange={set('reschedule_max')} /></div>
+      <p className="hint">The customer's estimate page links to their visit page, where they see only the open times (the same rules as online booking, so the old time opens up again). The office is told when a customer moves a visit. If the assigned tech is busy or off at the new time, the tech is taken off the visit so the office can assign someone. Restoration visits and visits already under way can never be moved by the customer. The customer gets a text and email with the new time.</p>
+      </OutreachSection>
+      <OutreachSection title="Slow-day offers" enabled={!!f.slowday_enabled} open={openSec === 'slowday'} onToggle={tog('slowday')}>
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+        <input type="checkbox" checked={f.slowday_enabled} onChange={set('slowday_enabled')} />
+        Offer a percent off for days that are mostly empty
+      </label>
+      <div className="field" style={{ maxWidth: 300 }}><label>Percent off</label><input type="number" min="1" max="50" value={f.slowday_percent} onChange={set('slowday_percent')} /></div>
+      <div className="field" style={{ maxWidth: 300 }}><label>A day is slow when this share of its times is open (%)</label><input type="number" min="10" max="100" value={f.slowday_open_share} onChange={set('slowday_open_share')} /></div>
+      <div className="field" style={{ maxWidth: 300 }}><label>Never offer a day sooner than (hours from now)</label><input type="number" min="0" max="336" value={f.slowday_min_notice_hours} onChange={set('slowday_min_notice_hours')} /></div>
+      <div className="field" style={{ maxWidth: 300 }}><label>Look this many days ahead</label><input type="number" min="1" max="30" value={f.slowday_look_ahead_days} onChange={set('slowday_look_ahead_days')} /></div>
+      <div className="field" style={{ maxWidth: 300 }}><label>Most days in one offer</label><input type="number" min="1" max="7" value={f.slowday_max_dates} onChange={set('slowday_max_dates')} /></div>
+      <div className="field" style={{ maxWidth: 300 }}><label>Most people to offer in one day</label><input type="number" min="1" max="50" value={f.slowday_max_per_day} onChange={set('slowday_max_per_day')} /></div>
+      <div className="field" style={{ maxWidth: 300 }}><label>Skip anyone we cleaned for in the last (days)</label><input type="number" min="0" max="730" value={f.slowday_quiet_days} onChange={set('slowday_quiet_days')} /></div>
+      {wording('slowday_message', 'Wording (optional)')}
+      <p className="hint">You can also use {'{percent}'} and {'{days}'} in the wording. Once a day, after the other reminders, the emptiest days in the window are found and past carpet customers get a text and email with a private link. The link shows only those days, takes the percent off the booking (never below your job minimum), and works once. Anyone who got another message today, or a slow-day offer in the last two weeks, is skipped. "Who would get a reminder today?" below lists these too.</p>
+      </OutreachSection>
+      <OutreachSection title="Weather alerts" enabled={!!(f.storm_enabled || f.freeze_enabled)} open={openSec === 'weather'} onToggle={tog('weather')}>
+      <div className="field" style={{ maxWidth: 300 }}><label>Alert area: ZIP code of your base</label><input value={f.weather_location} maxLength={60} onChange={set('weather_location')} placeholder="64801" /></div>
+      <p className="hint">Alerts come from the National Weather Service, checked every 30 minutes. You can also type coordinates like 37.21, -93.29.</p>
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '10px 0' }}>
+        <input type="checkbox" checked={f.freeze_enabled} onChange={set('freeze_enabled')} />
+        Freeze warning: tell the whole team when a freeze is expected
+      </label>
+      <div className="field"><label>Precautions shown with the warning</label>
+        <textarea className="sig-notes" rows={3} maxLength={600} value={f.freeze_precautions} onChange={set('freeze_precautions')} />
+      </div>
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '10px 0' }}>
+        <input type="checkbox" checked={f.storm_enabled} onChange={set('storm_enabled')} />
+        Storm alert: tell the office and owner, with a capacity check and a message to preview
+      </label>
+      <div className="field"><label>Warnings that count</label>
+        {STORM_EVENT_CHOICES.map((name) => (
+          <label key={name} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input type="checkbox" checked={(f.storm_events || []).includes(name)} onChange={toggleEvent(name)} /> {name}
+          </label>
+        ))}
+      </div>
+      <div className="field" style={{ maxWidth: 300 }}><label>Count open times for the next (days)</label><input type="number" min="1" max="14" value={f.storm_window_days} onChange={set('storm_window_days')} /></div>
+      <div className="field" style={{ maxWidth: 300 }}><label>Most people in one message batch</label><input type="number" min="1" max="100" value={f.storm_max} onChange={set('storm_max')} /></div>
+      {wording('storm_message', 'Message after a storm (optional)')}
+      <p className="hint">A freeze warning shows on everyone's schedule and sends a quiet notification to every team member's devices; "Got it" hides it on that device. A storm alert goes to the office and owner only: on the Schedule page they see how many open times there are in the next few days and who would get a message (past customers, most recent first). Nothing is sent until someone taps Send, and sending is blocked when there are no open times to offer. Watches and advisories are not included.</p>
+      <div className="row"><button type="button" className="secondary" disabled={busy} onClick={checkWeather}>{busy ? 'Checking...' : 'Check the weather now'}</button></div>
+      {wx && (
+        <div style={{ marginTop: 8 }}>
+          {wx.active.length === 0 ? <strong>No alerts for your area right now.</strong> : (
+            <>
+              <strong>Active for your area:</strong>
+              <ul style={{ paddingLeft: 18 }}>{wx.active.map((a, i) => <li key={i}>{a.event} ({a.kind === 'freeze' ? 'freeze' : 'storm'}){a.expires_at ? ` until ${new Date(a.expires_at).toLocaleString()}` : ''}</li>)}</ul>
+            </>
+          )}
+          <p className="hint">This is what the weather service lists right now for the kinds of warning you ticked. Nothing was saved or sent.</p>
+        </div>
+      )}
       </OutreachSection>
       <div className="row" style={{ marginTop: 14 }}>
         <SaveButton save={saveS} idle="Save" className="primary" />

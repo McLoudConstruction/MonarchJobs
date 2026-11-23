@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAdmin } from '@/lib/supabaseAdmin';
 import { isExpired, validThrough } from '@/lib/estimateExpiry';
 import { optionalStaff } from '@/lib/apiAuth';
+import { rescheduleStatus } from '@/lib/reschedule';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,7 +41,7 @@ export async function GET(request, { params }) {
   const [{ data: lines }, { data: found }, { data: settings }] = await Promise.all([
     admin.from('estimate_lines').select('id,description,unit,quantity,unit_price,tier,optional,accepted,sort_order,created_at').eq('estimate_id', est.id).order('sort_order').order('created_at'),
     subject,
-    admin.from('settings').select('business_name,phone,email,logo_path,timezone,booking_after_sign').eq('id', 1).maybeSingle(),
+    admin.from('settings').select('business_name,phone,email,logo_path,timezone,booking_after_sign,reschedule_enabled,reschedule_notice_hours,reschedule_max').eq('id', 1).maybeSingle(),
   ]);
   const job = !found ? null : est.job_id
     ? found
@@ -61,8 +62,13 @@ export async function GET(request, { params }) {
   const selfSchedule = onLead && !!String(found.street || '').trim() && (settings?.booking_after_sign !== false || !!found.intake?.booking);
   let appointment = null;
   if (est.job_id) {
-    const { data: visit } = await admin.from('job_visits').select('starts_at,ends_at').eq('job_id', est.job_id).in('status', ['scheduled', 'on_the_way', 'started']).order('starts_at').limit(1);
-    appointment = visit?.[0] || null;
+    const { data: visit } = await admin.from('job_visits').select('starts_at,ends_at,status,share_token,reschedule_count').eq('job_id', est.job_id).in('status', ['scheduled', 'on_the_way', 'started']).order('starts_at').limit(1);
+    const v = visit?.[0] || null;
+    if (v) {
+      // The secret visit link is shared only when the customer may move this visit themselves (Settings > Outreach).
+      const canMove = rescheduleStatus({ visit: v, jobType: job?.job_type, settings: settings || {} }).allowed;
+      appointment = { starts_at: v.starts_at, ends_at: v.ends_at, ...(canMove ? { change_token: v.share_token } : {}) };
+    }
   }
 
   // A restoration estimate can carry a "valid through" date (Settings > Outreach). Past it, it can no longer be approved online.

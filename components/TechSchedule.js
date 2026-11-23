@@ -8,6 +8,7 @@ import { weekStartMonday, layoutDay, fractionFromTime } from '@/lib/weekGrid';
 import { doubleBookedIds } from '@/lib/schedule';
 import { visitsOnDay, dayHourRange, focusFraction, visitMinutes, sameDay, weekDays } from '@/lib/techDay';
 import OnCallBanner from '@/components/OnCallBanner';
+import WeatherBanner from '@/components/WeatherBanner';
 import './techschedule.css';
 
 // A technician's schedule on a phone. Day is the main view: a vertical timeline with a block for each
@@ -274,6 +275,7 @@ export default function TechSchedule({ staff }) {
   return (
     <>
     <OnCallBanner staffId={staff.id} />
+    <WeatherBanner role="tech" />
     <TechScheduleView
       visits={ready ? data.visits : []}
       ready={ready}

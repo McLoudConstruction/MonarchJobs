@@ -5,7 +5,10 @@ import { siteUrl } from '@/lib/integrations';
 import { estimateSnapshot } from '@/lib/estimate';
 import { priceBooking } from '@/lib/bookingPrice';
 import { cleanBookingBody, leadFieldsFor } from '@/lib/bookingInput';
-import { findSlot } from '@/lib/booking';
+import { findSlot, localDateStr, normalizeBooking } from '@/lib/booking';
+import { estimateTotals } from '@/lib/estimate';
+import { offerStatus, slowDayDiscountLine, OFFER_PROBLEMS } from '@/lib/slowDay';
+import { loadOffer, claimOffer, releaseOffer } from '@/lib/slowDayServer';
 import { loadBookingSettings, loadOpenSlots, bookSlot, sendBookingConfirmation } from '@/lib/bookingServer';
 
 export const dynamic = 'force-dynamic';
@@ -26,6 +29,15 @@ export async function GET(request) {
   const business = { name: settings.business_name || '', phone: settings.phone || '', email: settings.email || '', logo_path: settings.logo_path || null };
   if (!staff && settings.booking_enabled === false) return NextResponse.json({ enabled: false, business });
 
+  // A slow-day offer link (?offer=...): what it is worth and which days it covers. Never says whose it is.
+  let offer = null;
+  const offerToken = new URL(request.url).searchParams.get('offer');
+  if (offerToken && !staff) {
+    const row = await loadOffer(admin, offerToken);
+    const st = offerStatus(row, { tz: settings.timezone || 'America/Chicago' });
+    offer = st.ok ? { percent: row.percent, dates: row.dates } : { invalid: true, message: OFFER_PROBLEMS[st.reason] || OFFER_PROBLEMS.not_found };
+  }
+
   let query = admin.from('price_items').select(ITEM_COLUMNS).eq('active', true).order('sort_order').order('name');
   if (!staff) query = query.eq('bookable_online', true);
   const { data: services } = await query;
@@ -36,6 +48,7 @@ export async function GET(request) {
     minimum: Number(settings.job_minimum || 0),
     timezone: settings.timezone || 'America/Chicago',
     services: services || [],
+    offer,
   });
 }
 
@@ -60,6 +73,16 @@ export async function POST(request) {
   // A robot filled in the hidden field: look like it worked, save nothing.
   if (!staff && b.honeypot) return NextResponse.json({ ok: true, scheduled: false });
 
+  // A slow-day offer: good once, for its days only, and only with a time picked.
+  const tzName = normalizeBooking(settings).tz;
+  let offerRow = null;
+  if (!staff && raw.offer) {
+    offerRow = await loadOffer(admin, raw.offer);
+    const st = offerStatus(offerRow, { tz: tzName });
+    if (!st.ok) return NextResponse.json({ error: OFFER_PROBLEMS[st.reason] || OFFER_PROBLEMS.not_found, code: 'OFFER_INVALID' }, { status: 400 });
+    if (!b.slot) return NextResponse.json({ error: 'Pick one of the offer days to use this offer.' }, { status: 400 });
+  }
+
   // Price it from the price list. The page's own prices are never trusted.
   const ids = [...new Set(b.items.map((i) => i.id))];
   let itemQuery = admin.from('price_items').select(ITEM_COLUMNS).eq('active', true).in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']);
@@ -67,6 +90,12 @@ export async function POST(request) {
   const { data: items } = await itemQuery;
   const priced = priceBooking(items || [], b.items, settings.job_minimum);
   if (priced.error) return NextResponse.json({ error: priced.error }, { status: 400 });
+  // The offer's discount is a line on the estimate, never more than takes the total down to the job minimum.
+  const discountLine = offerRow
+    ? slowDayDiscountLine({ totalCents: priced.totals.totalCents, minimumCents: Math.round(priced.minimum * 100), percent: offerRow.percent, sortOrder: priced.lines.length })
+    : null;
+  const finalLines = discountLine ? [...priced.lines, discountLine] : priced.lines;
+  const finalTotals = discountLine ? estimateTotals(finalLines, priced.minimum) : priced.totals;
 
   // The time must still be open.
   const now = new Date();
@@ -76,6 +105,9 @@ export async function POST(request) {
     chosen = findSlot(open.days, b.slot);
     if (!chosen) {
       return NextResponse.json({ error: 'That time is no longer open. Please pick another.', code: 'SLOT_TAKEN' }, { status: 409 });
+    }
+    if (offerRow && !offerRow.dates.map(String).includes(localDateStr(Date.parse(chosen.start), tzName))) {
+      return NextResponse.json({ error: 'This offer is good for the days shown. Please pick one of those days.', code: 'OFFER_DAY' }, { status: 400 });
     }
   }
 
@@ -93,13 +125,18 @@ export async function POST(request) {
     }
   }
 
+  // Claim the offer now so one link cannot book twice; it is released again if anything below fails.
+  if (offerRow && !(await claimOffer(admin, offerRow.id))) {
+    return NextResponse.json({ error: OFFER_PROBLEMS.used, code: 'OFFER_INVALID' }, { status: 409 });
+  }
+
   // An existing customer with this phone or email (and only one of them) keeps one history.
   let customerId = null;
   const { data: matches } = await admin.rpc('find_customer_matches', { p_phone: b.phone, p_email: b.email });
   if ((matches || []).length === 1) customerId = matches[0].id;
 
   const services = priced.lines.map((l) => l.description);
-  const prefix = staff ? 'Booked in person.' : 'Booked online by the customer.';
+  const prefix = staff ? 'Booked in person.' : `Booked online by the customer.${offerRow ? ` Slow-day offer, ${offerRow.percent}% off.` : ''}`;
   const { data: lead, error: lerr } = await admin.from('leads').insert({
     source: staff ? 'manual' : 'web',
     status: 'new',
@@ -124,9 +161,11 @@ export async function POST(request) {
   }).select('id,first_name,last_name,company_name,phone,email,street').single();
   if (lerr || !lead) {
     console.error('booking: lead insert failed:', lerr?.message);
+    if (offerRow) await releaseOffer(admin, offerRow.id);
     return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
   }
-  const undo = () => admin.from('leads').delete().eq('id', lead.id);
+  const undo = async () => { await admin.from('leads').delete().eq('id', lead.id); if (offerRow) await releaseOffer(admin, offerRow.id); };
+  if (offerRow) await admin.from('slowday_offers').update({ lead_id: lead.id }).eq('id', offerRow.id);
 
   // The estimate: sent, then approved, so the database moves the lead to "Ready to schedule" the usual way.
   const stamp = now.toISOString();
@@ -136,14 +175,14 @@ export async function POST(request) {
   if (eerr || !est) { console.error('booking: estimate insert failed:', eerr?.message); await undo(); return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 }); }
 
   const { error: nerr } = await admin.from('estimate_lines').insert(
-    priced.lines.map((l) => ({ estimate_id: est.id, price_item_id: l.price_item_id, description: l.description, unit: l.unit, quantity: l.quantity, unit_price: l.unit_price, is_custom: false, sort_order: l.sort_order })),
+    finalLines.map((l) => ({ estimate_id: est.id, price_item_id: l.price_item_id, description: l.description, unit: l.unit, quantity: l.quantity, unit_price: l.unit_price, is_custom: !!l.is_custom, sort_order: l.sort_order })),
   );
   if (nerr) { console.error('booking: lines insert failed:', nerr.message); await undo(); return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 }); }
 
   const { error: aerr } = await admin.from('estimates').update({ status: 'approved', approved_at: stamp }).eq('id', est.id).eq('status', 'sent');
   if (aerr) { console.error('booking: approve failed:', aerr.message); await undo(); return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 }); }
 
-  const snapshot = estimateSnapshot(priced.lines, priced.minimum);
+  const snapshot = estimateSnapshot(finalLines, priced.minimum);
   const ip = (request.headers.get('x-forwarded-for') || '').split(',')[0].trim() || null;
   const { error: serr } = await admin.from('estimate_signatures').insert({
     estimate_id: est.id,
@@ -152,7 +191,7 @@ export async function POST(request) {
     signed_at: stamp,
     ip,
     user_agent: (request.headers.get('user-agent') || '').slice(0, 300),
-    total_cents: priced.totals.totalCents,
+    total_cents: finalTotals.totalCents,
     minimum_charge: snapshot.minimum_charge,
     lines_snapshot: snapshot.lines,
     preferred_times: '',
@@ -166,7 +205,7 @@ export async function POST(request) {
     actor_id: staff?.id ?? null,
     actor_email: staff?.email ?? null,
     kind: staff ? 'booked_in_person' : 'booked_online',
-    details: { signer_name: b.signerName, total_cents: priced.totals.totalCents, services, requested: b.slot || 'later', ip },
+    details: { signer_name: b.signerName, total_cents: finalTotals.totalCents, services, requested: b.slot || 'later', ip, ...(offerRow ? { slowday_offer_percent: offerRow.percent } : {}) },
   });
 
   const out = { ok: true, estimate_token: est.share_token, tz: settings.timezone || 'America/Chicago', ...(staff ? { lead_id: lead.id } : {}) };

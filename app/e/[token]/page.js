@@ -205,7 +205,9 @@ function EstimateView() {
           {data.appointment ? (
             <p style={{ marginTop: 12, marginBottom: 0 }}>
               <strong>Your appointment:</strong> {fmtSlotFull(data.appointment.starts_at, data.appointment.ends_at, data.timezone)}
-              <span className="hint" style={{ display: 'block', margin: '6px 0 0' }}>Need to change it? {contact || 'Reply to the message we sent you.'}</span>
+              {data.appointment.change_token
+                ? <span className="hint" style={{ display: 'block', margin: '6px 0 0' }}>Need a different time? <a href={`/v/${data.appointment.change_token}`}>Pick a new time</a>.{contact ? ` Or contact us: ${contact}` : ''}</span>
+                : <span className="hint" style={{ display: 'block', margin: '6px 0 0' }}>Need to change it? {contact || 'Reply to the message we sent you.'}</span>}
             </p>
           ) : !data.can_schedule && (
             <p className="hint" style={{ marginTop: 12 }}>We will contact you shortly to confirm a time. Questions? {contact || 'Reply to the message we sent you.'}</p>

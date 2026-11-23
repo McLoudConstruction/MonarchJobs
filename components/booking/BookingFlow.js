@@ -11,6 +11,7 @@ import SlotPicker from './SlotPicker';
 import { buildLines, priceBooking, QUANTITY_LABELS } from '@/lib/bookingPrice';
 import { estimateTotals, lineCents } from '@/lib/estimate';
 import { BOOKING_KINDS, BOOKING_KIND_LABELS, fmtSlotFull } from '@/lib/booking';
+import { slowDayDiscountCents, daysPhrase } from '@/lib/slowDay';
 import { money, UNIT_LABELS } from '@/lib/format';
 import { displayPhone } from '@/lib/phone';
 import { logoUrl } from '@/lib/branding';
@@ -32,6 +33,7 @@ function splitName(full) {
 
 export default function BookingFlow() {
   const [token, setToken] = useState(null);
+  const [offerToken, setOfferToken] = useState(''); // a slow-day offer link (?offer=...)
   const [boot, setBoot] = useState(null);
   const [bootError, setBootError] = useState(null);
 
@@ -65,8 +67,10 @@ export default function BookingFlow() {
       } catch { /* no staff session available: this is a customer */ }
       if (!alive) return;
       setToken(t);
+      const offerParam = new URLSearchParams(window.location.search).get('offer') || '';
+      setOfferToken(offerParam);
       try {
-        const res = await fetch('/api/public/booking', { headers: t ? { Authorization: `Bearer ${t}` } : {} });
+        const res = await fetch(`/api/public/booking${offerParam ? `?offer=${encodeURIComponent(offerParam)}` : ''}`, { headers: t ? { Authorization: `Bearer ${t}` } : {} });
         const body = await res.json().catch(() => ({}));
         if (!alive) return;
         if (res.status === 401) { setBootError({ expired: true }); return; }
@@ -91,6 +95,9 @@ export default function BookingFlow() {
   const built = useMemo(() => buildLines(services, pickList), [services, pickList]);
   const totals = useMemo(() => estimateTotals(built.lines, minimum), [built, minimum]);
   const priced = useMemo(() => priceBooking(services, pickList, minimum), [services, pickList, minimum]);
+  // A slow-day offer: a percent off, never below the job minimum. The server works it out again from the offer itself.
+  const offer = !staff && boot?.offer && !boot.offer.invalid ? boot.offer : null;
+  const discountCents = offer && priced.totals ? slowDayDiscountCents(priced.totals.totalCents, Math.round(minimum * 100), offer.percent) : 0;
 
   function toggle(item) {
     setPicks((p) => {
@@ -104,7 +111,8 @@ export default function BookingFlow() {
   async function loadSlots() {
     setSlots(null);
     try {
-      const res = await fetch(retryToken ? `/api/public/estimate/${retryToken}/slots` : '/api/public/booking/slots', { headers: authHeaders() });
+      const slotsUrl = retryToken ? `/api/public/estimate/${retryToken}/slots` : `/api/public/booking/slots${offer ? `?offer=${encodeURIComponent(offerToken)}` : ''}`;
+      const res = await fetch(slotsUrl, { headers: authHeaders() });
       const body = await res.json().catch(() => ({}));
       setSlots(res.ok ? body : { tz, days: [] });
     } catch {
@@ -160,7 +168,7 @@ export default function BookingFlow() {
         body: JSON.stringify({
           kind, items: pickList, name: signerName, signature, customer: cust,
           address: { street: addr.street, unit: addr.unit, city: addr.city, state: addr.state, zip: addr.zip, gate_code: addr.gate_code, warnings: addr.warnings },
-          notes, slot: later ? null : slot, later, hp,
+          notes, slot: later ? null : slot, later, hp, ...(offer ? { offer: offerToken } : {}),
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -264,6 +272,8 @@ export default function BookingFlow() {
       )}
       <h1>{staff ? 'Book a job' : `Book with ${biz.name || 'us'}`}</h1>
       {contact && <p className="sub">{contact}</p>}
+      {offer && <div className="banner ok">Special offer: {offer.percent}% off a carpet cleaning booked for {daysPhrase(offer.dates)}. Pick your services, then choose one of those days.</div>}
+      {boot?.offer?.invalid && !staff && <div className="banner">{boot.offer.message} You can still book at the regular price.</div>}
     </>
   );
 
@@ -371,7 +381,8 @@ export default function BookingFlow() {
 
   // ---- price: the customer approves and signs
   if (step === 'price') {
-    const t = priced.totals || totals;
+    const base = priced.totals || totals;
+    const t = discountCents > 0 ? { ...base, totalCents: base.totalCents - discountCents } : base;
     return (
       <div className="bk-wrap">
         {staffBar}
@@ -392,6 +403,9 @@ export default function BookingFlow() {
               ))}
               {t.minimumAdjustmentCents > 0 && (
                 <tr><td colSpan="2">Minimum charge adjustment</td><td style={{ textAlign: 'right' }}>{money(t.minimumAdjustmentCents / 100)}</td></tr>
+              )}
+              {discountCents > 0 && (
+                <tr><td colSpan="2">Slow-day offer ({offer.percent}% off)</td><td style={{ textAlign: 'right' }}>-{money(discountCents / 100)}</td></tr>
               )}
               <tr className="bk-total-row"><th colSpan="2">Total</th><th style={{ textAlign: 'right' }}>{money(t.totalCents / 100)}</th></tr>
             </tbody>
@@ -488,9 +502,11 @@ export default function BookingFlow() {
         {chosen && <div className="bk-picked">{fmtSlotFull(chosen.start, chosen.end, slots.tz || tz)}</div>}
         <div className="bk-actions">
           {!noTimes && <button type="button" className="primary big" disabled={!slot || busy || !slots} onClick={() => submit(false)}>{busy ? 'Booking...' : 'Book this time'}</button>}
-          <button type="button" className={`${noTimes ? 'primary' : 'secondary'} big`} disabled={busy} onClick={() => submit(true)}>
-            {staff ? 'Schedule later' : 'Call me to schedule'}
-          </button>
+          {!offer && (
+            <button type="button" className={`${noTimes ? 'primary' : 'secondary'} big`} disabled={busy} onClick={() => submit(true)}>
+              {staff ? 'Schedule later' : 'Call me to schedule'}
+            </button>
+          )}
           {!retryToken && <button type="button" className="secondary big" disabled={busy} onClick={() => { setErr(''); setStep('details'); }}>Back</button>}
         </div>
       </div>

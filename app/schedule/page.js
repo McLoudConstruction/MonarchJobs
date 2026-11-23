@@ -12,6 +12,7 @@ import TechSchedule from '@/components/TechSchedule';
 import TimeOffPanel from '@/components/TimeOffPanel';
 import MapView from '@/components/schedule/MapView';
 import OnCallBanner from '@/components/OnCallBanner';
+import WeatherBanner from '@/components/WeatherBanner';
 import { rangeLabel } from '@/lib/timeOff';
 import { useIsMobile, useIsTablet } from '@/lib/useIsMobile';
 import { addDays, startOfDay, fmtDay, fmtTime, fmtDuration } from '@/lib/format';
@@ -87,6 +88,7 @@ function ScheduleInner({ staff, token }) {
         </div>
       </div>
       <OnCallBanner staffId={staff.id} people={techs} />
+      <WeatherBanner role={staff.role} token={token} />
       <div className="tabs">
         <button className={view === 'board' ? 'on' : ''} onClick={() => setView('board')}>By tech</button>
         <button className={view === 'timeline' ? 'on' : ''} onClick={() => setView('timeline')}>Time of day</button>
