@@ -15,3 +15,4 @@
 .clock-request{ flex: 1 1 100%; font-size: 13px; color: var(--muted); }
 .clock-edit{ border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--panel); }
 .clock-history summary{ cursor: pointer; font-size: 14px; color: var(--muted); }
+.clock-chip.done{ padding: 1px 8px; font-size: 13px; border-color: #1f7a43; color: #1f7a43; }

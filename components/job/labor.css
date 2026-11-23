@@ -36,3 +36,5 @@
 .visit-crew-chip input{ margin: 0; }
 .visit-member{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 0; }
 .visit-member .badge{ font-size: 11px; }
+/* the Labor pool heading is the same size and style as the Job clock heading above it */
+.clock-card .lp-head h3{ font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; border-left: 0; padding-left: 0; margin: 0; }

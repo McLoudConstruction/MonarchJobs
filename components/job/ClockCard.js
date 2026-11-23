@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
 import { apiFetch } from '@/lib/useAuth';
 import { fmtDateTime, fmtTime, toLocalInput, fromLocalInput } from '@/lib/format';
@@ -29,6 +29,9 @@ export default function ClockCard({ jobId, staff, staffList, token, service, job
   const [now, setNow] = useState(() => new Date());
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState(null);
+  const [justOut, setJustOut] = useState(null); // the entry just stopped from this screen: it says so on its own row for a few seconds
+  const justTimer = useRef(null);
+  useEffect(() => () => clearTimeout(justTimer.current), []);
   const [edit, setEdit] = useState(null); // { id, start, end, reason, direct }
   const [labor, setLabor] = useState({ certs: [], entries: [], err: '' }); // the labor pool entries on this job
   const [laborOpen, setLaborOpen] = useState(false);
@@ -85,8 +88,14 @@ export default function ClockCard({ jobId, staff, staffList, token, service, job
     catch (e) { setMsg({ err: true, text: e.message || 'Something went wrong.' }); return false; }
     finally { setBusy(''); }
   }
-  const clockOut = (staffId) => call('out', `/api/jobs/${jobId}/clock`, { method: 'POST', body: JSON.stringify({ action: 'out', staff_id: staffId }) }, 'Clocked out.');
-  const clockIn = () => call('in', `/api/jobs/${jobId}/clock`, { method: 'POST', body: JSON.stringify({ action: 'in' }) }, 'Clocked in.');
+  // clocking out or in is shown on the entry itself (and the Running chip), not as a separate message above the list
+  async function clockOut(staffId) {
+    const open = sessions.find((s) => s.staff_id === staffId && !s.ended_at && !s.voided_at);
+    const ok = await call('out', `/api/jobs/${jobId}/clock`, { method: 'POST', body: JSON.stringify({ action: 'out', staff_id: staffId }) });
+    if (ok && open) { setJustOut(open.id); clearTimeout(justTimer.current); justTimer.current = setTimeout(() => setJustOut(null), 5000); }
+    return ok;
+  }
+  const clockIn = () => call('in', `/api/jobs/${jobId}/clock`, { method: 'POST', body: JSON.stringify({ action: 'in' }) });
 
   function openEdit(s, direct) { setMsg(null); setEdit({ id: s.id, start: toLocalInput(s.started_at), end: toLocalInput(s.ended_at), reason: '', direct }); }
   async function submitEdit(e) {
@@ -171,6 +180,7 @@ export default function ClockCard({ jobId, staff, staffList, token, service, job
                     {durationText(sessionMinutes(s, now))}
                     {travel > 0 && ` · includes ${durationText(travel)} travel`}
                     {s.edited_at && ' · changed'}
+                    {justOut === s.id && <> · <span className="clock-chip done" role="status">Clocked out</span></>}
                     {pend && <> · <span className="badge warn">Change waiting for the owner</span></>}
                   </div>
                 </div>
