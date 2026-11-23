@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { shouldNotify, arrivalAt, timeText, buildOnTheWayMessages, landingStatus } from '../lib/onTheWay.js';
+import { shouldNotify, arrivalAt, timeText, buildOnTheWayMessages, landingStatus, etaFromSeconds } from '../lib/onTheWay.js';
 
 test('only a fresh On the way tap texts the customer, and only when the switch is on', () => {
   const now = new Date('2026-11-20T15:00:00Z');
@@ -44,4 +44,20 @@ test('the landing page words follow the visit step', () => {
   assert.match(landingStatus({ status: 'scheduled' }).detail, /update when we are on the way/);
   assert.equal(landingStatus(null).step, 'scheduled');
   assert.deepEqual(Object.keys(landingStatus(v)).sort(), ['arriveAt', 'detail', 'headline', 'step']);
+});
+
+test('live drive time rounds up to the next 5 minutes, between 5 and 120', () => {
+  assert.deepEqual(etaFromSeconds(17 * 60), { exact: 17, rounded: 20 });
+  assert.deepEqual(etaFromSeconds(20 * 60), { exact: 20, rounded: 20 });
+  assert.equal(etaFromSeconds(60).rounded, 5);
+  assert.equal(etaFromSeconds(0).rounded, 5);
+  assert.equal(etaFromSeconds(5 * 3600).rounded, 120);
+  assert.equal(etaFromSeconds('x'), null);
+  assert.equal(etaFromSeconds(-5), null);
+});
+
+test('the status page says when the time is based on traffic', () => {
+  const v = { status: 'on_the_way', minutes_out: 20, on_the_way_at: '2026-11-23T15:00:00Z' };
+  assert.doesNotMatch(landingStatus(v, { timeZone: 'America/Chicago' }).detail, /traffic/);
+  assert.match(landingStatus({ ...v, eta_live: true }, { timeZone: 'America/Chicago' }).detail, /based on current traffic/);
 });

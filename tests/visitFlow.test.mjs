@@ -5,8 +5,8 @@ import { planTransition } from '../lib/visitFlow.js';
 const now = new Date('2026-11-10T15:00:00Z');
 const visit = (status) => ({ id: 'v1', status });
 
-test('on the way requires 10-60 minutes in steps of 10 and sets the job on the way', () => {
-  assert.ok(planTransition({ visit: visit('scheduled'), action: 'on_the_way', minutes: 25, now }).error);
+test('on the way takes 5-120 minutes in steps of 5 and sets the job on the way', () => {
+  assert.ok(planTransition({ visit: visit('scheduled'), action: 'on_the_way', minutes: 27, now }).error);
   assert.ok(planTransition({ visit: visit('scheduled'), action: 'on_the_way', now }).error);
   const r = planTransition({ visit: visit('scheduled'), action: 'on_the_way', minutes: 30, now });
   assert.equal(r.visitPatch.minutes_out, 30);
@@ -39,4 +39,13 @@ test('finishing the last visit completes the job; finishing with a return visit 
 
 test('unknown action is rejected', () => {
   assert.ok(planTransition({ visit: visit('scheduled'), action: 'explode', now }).error);
+});
+
+test('a live traffic time is accepted in steps of 5 and flagged', () => {
+  const r = planTransition({ visit: visit('scheduled'), action: 'on_the_way', minutes: 25, live: true, now });
+  assert.equal(r.visitPatch.minutes_out, 25);
+  assert.equal(r.visitPatch.eta_live, true);
+  assert.equal(planTransition({ visit: visit('scheduled'), action: 'on_the_way', minutes: 30, now }).visitPatch.eta_live, false);
+  assert.ok(planTransition({ visit: visit('scheduled'), action: 'on_the_way', minutes: 125, live: true, now }).error);
+  assert.ok(planTransition({ visit: visit('scheduled'), action: 'on_the_way', minutes: 0, live: true, now }).error);
 });

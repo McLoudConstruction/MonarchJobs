@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 // For a replayed tap: the visit states that mean the step (or a later one) has already happened.
 const ALREADY_PAST = { on_the_way: ['started', 'finished'], started: ['started', 'finished'], finished: ['finished'] };
 
-// Body: { action: 'on_the_way' | 'started' | 'finished', minutes?: 10..60, at?: ISO time, op_id?: uuid, replay?: true }
+// Body: { action: 'on_the_way' | 'started' | 'finished', minutes?: 5..120 in steps of 5, live?: true when the minutes came from the live drive time, at?: ISO time, op_id?: uuid, replay?: true }
 // A tap made with no signal is sent later with `at` (when it really happened) and `op_id`, so a retry is applied once.
 // With `replay`, a step the visit has already moved past answers 409 { code: 'STALE' } instead of an error.
 // Techs may only act on their own visits. Office and owner may send On the way or Finish on any visit, but only the assigned team member can start it.
@@ -63,7 +63,7 @@ export async function POST(request, { params }) {
     .in('status', ['scheduled', 'on_the_way', 'started']);
   const othersActive = (otherRows || []).filter((r) => isReturnVisit(r, visit)).length;
 
-  const plan = planTransition({ visit, action: body.action, minutes: body.minutes, othersActive: othersActive || 0, now: when });
+  const plan = planTransition({ visit, action: body.action, minutes: body.minutes, live: body.live === true, othersActive: othersActive || 0, now: when });
   if (plan.error) {
     if (body.replay && ALREADY_PAST[body.action]?.includes(visit.status)) return NextResponse.json({ error: plan.error, code: 'STALE' }, { status: 409 });
     return NextResponse.json({ error: plan.error }, { status: 400 });

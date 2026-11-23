@@ -12,7 +12,7 @@ export async function GET(request, { params }) {
   const token = params.token;
   if (!isUuid(token)) return NextResponse.json({ error: 'Not found.' }, { status: 404, headers: NO_STORE });
   const admin = getAdmin();
-  const { data: v } = await admin.from('job_visits').select('id,job_id,status,minutes_out,on_the_way_at,starts_at').eq('share_token', token).maybeSingle();
+  const { data: v } = await admin.from('job_visits').select('id,job_id,status,minutes_out,on_the_way_at,starts_at,eta_live').eq('share_token', token).maybeSingle();
   if (!v) return NextResponse.json({ error: 'Not found.' }, { status: 404, headers: NO_STORE });
   const [{ data: job }, { data: settings }] = await Promise.all([
     admin.from('jobs').select('job_number,address:addresses(street,unit,city,state,zip)').eq('id', v.job_id).maybeSingle(),

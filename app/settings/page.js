@@ -14,6 +14,7 @@ import EquipmentSection from '@/components/settings/EquipmentSection';
 import InvoicingSection from '@/components/settings/InvoicingSection';
 import BookingSection from '@/components/settings/BookingSection';
 import CallScriptSection from '@/components/settings/CallScriptSection';
+import OnCallSection from '@/components/settings/OnCallSection';
 import '@/components/booking/booking.css';
 import { PlansDue, MailingList } from '@/components/customer/OutreachPanels';
 
@@ -86,6 +87,7 @@ export default function SettingsPage() {
             {tab === 'reminders' && (
               <>
                 <RemindersSection token={token} />
+                <OnCallSection />
                 {staff.role === 'owner' && <JobAlertsSection token={token} />}
                 <div className="card">
                   <h2>Outreach tools</h2>

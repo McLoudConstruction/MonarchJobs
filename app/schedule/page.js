@@ -11,6 +11,7 @@ import { monthStart } from '@/lib/monthGrid';
 import TechSchedule from '@/components/TechSchedule';
 import TimeOffPanel from '@/components/TimeOffPanel';
 import MapView from '@/components/schedule/MapView';
+import OnCallBanner from '@/components/OnCallBanner';
 import { rangeLabel } from '@/lib/timeOff';
 import { useIsMobile, useIsTablet } from '@/lib/useIsMobile';
 import { addDays, startOfDay, fmtDay, fmtTime, fmtDuration } from '@/lib/format';
@@ -84,6 +85,7 @@ function ScheduleInner({ staff, token }) {
           {isOffice && <Link href="/leads/new"><button className="primary">New lead</button></Link>}
         </div>
       </div>
+      <OnCallBanner staffId={staff.id} people={techs} />
       <div className="tabs">
         <button className={view === 'board' ? 'on' : ''} onClick={() => setView('board')}>By tech</button>
         <button className={view === 'timeline' ? 'on' : ''} onClick={() => setView('timeline')}>Time of day</button>

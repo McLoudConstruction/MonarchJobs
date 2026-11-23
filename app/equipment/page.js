@@ -5,6 +5,7 @@ import Link from 'next/link';
 import AuthGate from '@/components/AuthGate';
 import AssetLabelDialog from '@/components/AssetLabelDialog';
 import PopupModal from '@/components/PopupModal';
+import TruckStock from '@/components/TruckStock';
 import { getSupabase } from '@/lib/supabaseClient';
 import { ASSET_STATUS, ASSET_ORDER, ASSET_TYPES, assetTag, cleanAssetForm, typeLabel, openIssues } from '@/lib/assets';
 
@@ -141,6 +142,19 @@ function InventoryInner({ staff }) {
   );
 }
 
+function EquipmentSwitch({ staff }) {
+  const [section, setSection] = useState('machines');
+  return (
+    <>
+      <div className="tabs">
+        <button className={section === 'machines' ? 'on' : ''} onClick={() => setSection('machines')}>Machines</button>
+        <button className={section === 'trucks' ? 'on' : ''} onClick={() => setSection('trucks')}>Truck stock</button>
+      </div>
+      {section === 'machines' ? <InventoryInner staff={staff} /> : <><h1>Truck stock</h1><TruckStock staff={staff} /></>}
+    </>
+  );
+}
+
 export default function EquipmentPage() {
-  return <AuthGate>{({ staff }) => <InventoryInner staff={staff} />}</AuthGate>;
+  return <AuthGate>{({ staff }) => <EquipmentSwitch staff={staff} />}</AuthGate>;
 }

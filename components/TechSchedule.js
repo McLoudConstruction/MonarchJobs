@@ -7,6 +7,7 @@ import { addDays, startOfDay, fmtDay, fmtTime, fmtDuration, JOB_TYPES } from '@/
 import { weekStartMonday, layoutDay, fractionFromTime } from '@/lib/weekGrid';
 import { doubleBookedIds } from '@/lib/schedule';
 import { visitsOnDay, dayHourRange, focusFraction, visitMinutes, sameDay, weekDays } from '@/lib/techDay';
+import OnCallBanner from '@/components/OnCallBanner';
 import './techschedule.css';
 
 // A technician's schedule on a phone. Day is the main view: a vertical timeline with a block for each
@@ -271,6 +272,8 @@ export default function TechSchedule({ staff }) {
   const shift = (n) => setDay((d) => addDays(d, mode === 'week' ? n * 7 : n));
 
   return (
+    <>
+    <OnCallBanner staffId={staff.id} />
     <TechScheduleView
       visits={ready ? data.visits : []}
       ready={ready}
@@ -284,5 +287,6 @@ export default function TechSchedule({ staff }) {
       onToday={() => setDay(startOfDay(new Date()))}
       onRetry={load}
     />
+    </>
   );
 }

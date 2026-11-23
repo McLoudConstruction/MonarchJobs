@@ -17,6 +17,7 @@ import { displayPhone, telHref } from '@/lib/phone';
 import { serviceOf } from '@/lib/services';
 import { kindOf, finishLead, intakeHighlights, PRIORITIES, RESTORATION_TYPES } from '@/lib/leadIntake';
 import { staffName, displayNameFor } from '@/lib/userDisplay';
+import OnCallClaim from '@/components/OnCallClaim';
 import SaveButton from '@/components/SaveButton';
 import { useSaveStatus } from '@/lib/saveStatus';
 
@@ -207,6 +208,8 @@ function LeadInner({ id, staff, token }) {
       <p className="sub">Lead added {fmtDateTime(lead.created_at)}{lead.status === 'lost' && lead.lost_reason ? ` · Lost: ${lead.lost_reason}` : ''}</p>
 
       {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
+
+      <OnCallClaim leadId={lead.id} />
 
       {lead.status === 'accepted' && (
         <div className="banner ok">
