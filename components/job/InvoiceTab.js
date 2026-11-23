@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
 import { useSignedUrls } from '@/lib/useSignedUrls';
 import { fmtDateTime } from '@/lib/format';
@@ -19,6 +19,34 @@ async function call(token, method, url, body) {
   const json = await res.json().catch(() => ({}));
   if (!res.ok) { const e = new Error(json.error || 'Something went wrong.'); e.code = json.code; e.body = json; throw e; }
   return json;
+}
+
+// "More" under the action bar: the occasional actions. The menu floats over the page, so nothing around it moves.
+function MoreMenu({ items }) {
+  const [shown, setShown] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!shown) return undefined;
+    const away = (e) => { if (!ref.current?.contains(e.target)) setShown(false); };
+    const key = (e) => { if (e.key === 'Escape') setShown(false); };
+    document.addEventListener('mousedown', away);
+    document.addEventListener('touchstart', away);
+    document.addEventListener('keydown', key);
+    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('touchstart', away); document.removeEventListener('keydown', key); };
+  }, [shown]);
+  if (!items.length) return null;
+  return (
+    <div className="inv-more" ref={ref}>
+      <button type="button" className="secondary" aria-haspopup="menu" aria-expanded={shown} onClick={() => setShown((v) => !v)}>More &#9662;</button>
+      {shown && (
+        <div className="inv-more-menu" role="menu">
+          {items.map((it) => (
+            <button key={it.key} type="button" role="menuitem" className={it.danger ? 'danger-item' : ''} disabled={it.disabled} onClick={() => { setShown(false); it.onClick(); }}>{it.label}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // Job > Invoice. Office and owner build, send and collect; a technician sees the balance and can take a card on site.
@@ -248,10 +276,7 @@ export default function InvoiceTab({ jobId, job, photos, staff, token, isOffice,
               </p>
               {inv.first_viewed_at && <p className="hint" style={{ margin: 0 }}>Customer opened it {fmtDateTime(inv.first_viewed_at)}{inv.view_count > 1 ? ` (${inv.view_count} times)` : ''}.</p>}
             </div>
-            <div className="row" style={{ gap: 8 }}>
-              <button type="button" className="secondary" disabled={busy === 'pdf'} onClick={() => run('pdf', () => downloadInvoicePdf({ jobId }, { ...inv, balance_cents: inv.balance_cents }))}>{busy === 'pdf' ? 'Making PDF...' : 'Download PDF'}</button>
-              {inv.status !== 'draft' && <a className="button secondary" href={`/i/${inv.share_token}?preview=1`} target="_blank" rel="noreferrer">What the customer sees</a>}
-            </div>
+            {inv.status !== 'draft' && <a className="button secondary" href={`/i/${inv.share_token}?preview=1`} target="_blank" rel="noreferrer">What the customer sees</a>}
           </div>
 
           {inv.kind === 'difference' && <div className="inv-banner info">Return visit: this invoice lists the whole job and takes off the {centsToText(inv.credit_cents)} already paid, so only the difference is due.</div>}
@@ -345,28 +370,29 @@ export default function InvoiceTab({ jobId, job, photos, staff, token, isOffice,
             </div>
           )}
 
-          {/* ---- send / collect */}
-          {isOffice && isDraft && (
-            <div className="inv-actions">
-              <button type="button" className="primary" disabled={busy === 'send' || lines.length === 0} onClick={() => send(false)}>{busy === 'send' ? 'Sending...' : 'Send to customer'}</button>
-              <button type="button" className="secondary" disabled={busy === 'send'} onClick={() => window.confirm('Mark this as sent without texting or emailing it? Use this when you gave or sent it another way.') && markSent()}>I sent it myself</button>
-            </div>
-          )}
-          {isDraft && inv.balance_cents > 0 && (
-            <div className="inv-actions">
-              <button type="button" className="secondary" disabled={busy === 'card'} onClick={payCard}>Customer pays now (card)</button>
-              {isOffice && <button type="button" className="secondary" onClick={() => setPanel(panel === 'cash' ? '' : 'cash')}>Record cash or check</button>}
-            </div>
-          )}
-          {open && (
-            <div className="inv-actions">
-              <button type="button" className="primary" disabled={busy === 'card'} onClick={payCard}>Customer pays now (card)</button>
-              {isOffice && <button type="button" className="secondary" disabled={busy === 'square'} onClick={sendPayLink}>{busy === 'square' ? 'Sending...' : 'Send payment link (with tip)'}</button>}
-              {isOffice && <button type="button" className="secondary" onClick={() => setPanel(panel === 'cash' ? '' : 'cash')}>Record cash or check</button>}
-              {isOffice && <button type="button" className="secondary" disabled={busy === 'send'} onClick={() => send(true)}>{pastDue ? 'Send reminder' : 'Send again'}</button>}
-              {staff.role === 'owner' && pastDue && <button type="button" className="secondary" onClick={() => setPanel(panel === 'interest' ? '' : 'interest')}>Add late interest</button>}
-            </div>
-          )}
+          {/* ---- one action bar: the next step first, the rest beside it, the occasional ones under More */}
+          {(() => {
+            const canCollect = (isDraft && inv.balance_cents > 0) || open;
+            const hasCashRefund = staff.role === 'owner' && inv.status !== 'void' && payments.some((p) => ['cash', 'check', 'other'].includes(p.method) && p.amount_cents > 0);
+            const more = [
+              isOffice && isDraft && { key: 'self', label: 'I sent it myself', disabled: busy === 'send', onClick: () => window.confirm('Mark this as sent without texting or emailing it? Use this when you gave or sent it another way.') && markSent() },
+              isOffice && open && { key: 'link', label: busy === 'square' ? 'Sending...' : 'Send payment link (with tip)', disabled: busy === 'square', onClick: sendPayLink },
+              staff.role === 'owner' && open && pastDue && { key: 'interest', label: 'Add late interest', onClick: () => setPanel(panel === 'interest' ? '' : 'interest') },
+              hasCashRefund && { key: 'refund', label: 'Record a cash or check refund', onClick: () => setPanel(panel === 'refund' ? '' : 'refund') },
+              isOffice && jobDone && inv.status !== 'void' && canReopen(staff.role, settings.office_can_void) && { key: 'reopen', label: 'Reopen job for a return visit', disabled: busy === 'reopen', onClick: reopen },
+              isOffice && inv.status !== 'void' && payments.length === 0 && mayVoid && { key: 'void', label: 'Void this invoice', danger: true, onClick: () => setPanel(panel === 'void' ? '' : 'void') },
+            ].filter(Boolean);
+            return (
+              <div className="inv-actions">
+                {isOffice && isDraft && <button type="button" className="primary" disabled={busy === 'send' || lines.length === 0} onClick={() => send(false)}>{busy === 'send' ? 'Sending...' : 'Send to customer'}</button>}
+                {canCollect && <button type="button" className={open ? 'primary' : 'secondary'} disabled={busy === 'card'} onClick={payCard}>Customer pays now (card)</button>}
+                {isOffice && canCollect && <button type="button" className="secondary" onClick={() => setPanel(panel === 'cash' ? '' : 'cash')}>Record cash or check</button>}
+                {isOffice && open && <button type="button" className="secondary" disabled={busy === 'send'} onClick={() => send(true)}>{pastDue ? 'Send reminder' : 'Send again'}</button>}
+                <button type="button" className="secondary" disabled={busy === 'pdf'} onClick={() => run('pdf', () => downloadInvoicePdf({ jobId }, inv))}>{busy === 'pdf' ? 'Making PDF...' : 'Download PDF'}</button>
+                <MoreMenu items={more} />
+              </div>
+            );
+          })()}
           {panel === 'cash' && inv.balance_cents > 0 && <CashForm />}
           {panel === 'interest' && <InterestForm />}
           {panel === 'refund' && <RefundForm />}
@@ -399,18 +425,9 @@ export default function InvoiceTab({ jobId, job, photos, staff, token, isOffice,
                   <span style={{ color: p.amount_cents < 0 ? '#8a1f14' : undefined }}><strong>{centsToText(p.amount_cents)}</strong>{p.tip_cents > 0 ? ` + ${centsToText(p.tip_cents)} tip` : ''}</span>
                 </div>
               ))}
-              {staff.role === 'owner' && payments.some((p) => ['cash', 'check', 'other'].includes(p.method) && p.amount_cents > 0) && inv.status !== 'void' && (
-                <div className="inv-actions"><button type="button" className="secondary small" onClick={() => setPanel(panel === 'refund' ? '' : 'refund')}>Record a cash or check refund</button></div>
-              )}
             </div>
           )}
 
-          {isOffice && inv.status !== 'void' && payments.length === 0 && mayVoid && (
-            <div className="inv-actions"><button type="button" className="secondary small" onClick={() => setPanel(panel === 'void' ? '' : 'void')}>Void this invoice</button></div>
-          )}
-          {isOffice && jobDone && inv.status !== 'void' && canReopen(staff.role, settings.office_can_void) && (
-            <div className="inv-actions"><button type="button" className="secondary small" disabled={busy === 'reopen'} onClick={reopen}>Reopen job for a return visit</button></div>
-          )}
         </div>
       )}
 

@@ -46,3 +46,10 @@
   .inv-actions button, .inv-actions a.button{ flex: 1 1 100%; }
   .inv-scroll{ overflow-x: auto; }
 }
+
+/* the action bar: the next step, the usual ones, and a More menu that floats above the bar */
+.inv-more{ position: relative; }
+.inv-more-menu{ position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 40; min-width: 260px; display: flex; flex-direction: column; padding: 6px; background: var(--card-bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.inv-more-menu button{ width: 100%; min-height: 46px; padding: 0 12px; text-align: left; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font-size: 15px; font-weight: 600; cursor: pointer; }
+.inv-more-menu button:hover:not(:disabled){ background: var(--panel); }
+.inv-more-menu button.danger-item{ color: #8a1f14; }
