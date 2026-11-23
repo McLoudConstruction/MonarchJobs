@@ -116,15 +116,15 @@ export default function MapView({ techs, token }) {
 
   return (
     <div>
-      <div className="toolbar">
-        <input type="date" aria-label="Day" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
-        <button className="secondary" onClick={() => setDate(todayStr())}>Today</button>
-        <select aria-label="Tech" value={techId} onChange={(e) => setTechId(e.target.value)}>
+      <div className="toolbar" style={{ display: 'flex', flexWrap: 'nowrap', alignItems: 'center', gap: 8 }}>
+        <input type="date" aria-label="Day" style={{ flex: '0 1 auto', width: 'auto', minWidth: 0 }} value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
+        <button className="secondary" style={{ flex: '0 0 auto', width: 'auto', whiteSpace: 'nowrap' }} onClick={() => setDate(todayStr())}>Today</button>
+        <select aria-label="Tech" style={{ flex: '1 1 0', width: 'auto', minWidth: 0 }} value={techId} onChange={(e) => setTechId(e.target.value)}>
           <option value="">All techs</option>
           {techs.filter((t) => t.role === 'tech' || t.role === 'owner').map((t) => <option key={t.id} value={t.id}>{staffName(t)}</option>)}
         </select>
-        <span className="muted">{numbered.length} {numbered.length === 1 ? 'visit' : 'visits'}{unassigned ? ` (${unassigned} unassigned, grey)` : ''}</span>
       </div>
+      <p className="hint" style={{ margin: '6px 0' }}>{numbered.length} {numbered.length === 1 ? 'visit' : 'visits'}{unassigned ? ` (${unassigned} unassigned, grey)` : ''}</p>
       {mapError && <div className="banner flag">{mapError}</div>}
       {notice && <div className="banner flag">{notice}</div>}
       {unplaced > 0 && !loading && !notice && <p className="hint">{unplaced} {unplaced === 1 ? 'stop is' : 'stops are'} not on the map yet{failed.length ? `, ${failed.length} could not be found. Check the address on the job` : ''}.</p>}
