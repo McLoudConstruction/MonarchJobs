@@ -7,6 +7,7 @@ import { displayPhone } from '@/lib/phone';
 import { logoUrl } from '@/lib/branding';
 import CenterCard from '@/components/CenterCard';
 import { PROBLEM_KINDS, PLAN_INTERVALS } from '@/lib/customerPage';
+import { referralLink, shareMessage } from '@/lib/referral';
 
 // Customer-facing page after a cleaning: care instructions, the signed service record, report a problem,
 // ask for another visit, stop reminders. No sign-in; the secret link is the access. No staff names are shown.
@@ -71,6 +72,29 @@ function RequestForm({ token, plan, onDone }) {
       {err && <div className="msg err">{err}</div>}
       <button className="primary big" style={{ width: '100%' }} disabled={busy}>{busy ? 'Sending...' : plan ? 'Ask about a plan' : 'Request a visit'}</button>
     </form>
+  );
+}
+
+// Refer a friend: a link and code the customer can send. The friend's page never says who sent it.
+function ReferralCard({ referral, business }) {
+  const [copied, setCopied] = useState(false);
+  const link = referralLink(typeof window === 'undefined' ? '' : window.location.origin, referral.code);
+  const text = shareMessage({ business, link });
+  async function share() {
+    try {
+      if (navigator.share) { await navigator.share({ text }); return; }
+      await navigator.clipboard.writeText(text);
+      setCopied(true); setTimeout(() => setCopied(false), 3000);
+    } catch { /* closed the share sheet */ }
+  }
+  return (
+    <div className="card">
+      <h2>Know someone who needs a clean?</h2>
+      {referral.reward && <p><strong>{referral.reward}</strong></p>}
+      <p className="hint">Send your friend this link. Your code is <strong>{referral.code}</strong>.</p>
+      <p style={{ wordBreak: 'break-all' }}>{link}</p>
+      <button type="button" className="secondary" onClick={share}>{copied ? 'Copied' : 'Share with a friend'}</button>
+    </div>
   );
 }
 
@@ -178,6 +202,8 @@ export default function CustomerPage() {
             </div>
           )}
       </div>
+
+      {data.referral && <ReferralCard referral={data.referral} business={b.business_name} />}
 
       <p className="hint" style={{ textAlign: 'center' }}>
         {data.opted_out ? 'You will not get reminders from us.' : 'We may send you a reminder when your carpets are due.'}{' '}

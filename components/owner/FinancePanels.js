@@ -14,6 +14,7 @@ import { estimateCents } from '@/lib/ownerStats';
 import { toCsv } from '@/lib/csv';
 import SaveButton from '@/components/SaveButton';
 import { useSaveStatus } from '@/lib/saveStatus';
+import ReferralPanel from '@/components/owner/ReferralPanel';
 import './owner.css';
 
 const dollars = (c) => money((c || 0) / 100);
@@ -277,6 +278,7 @@ export default function FinancePanels({ bounds, rangeLabel }) {
       <CashFlowPanel />
       <ProfitByLossPanel bounds={bounds} rangeLabel={rangeLabel} money={shared} />
       <CommissionPanel bounds={bounds} rangeLabel={rangeLabel} money={shared} />
+      <ReferralPanel />
     </>
   );
 }

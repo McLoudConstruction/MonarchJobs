@@ -33,9 +33,8 @@ export default function CustomerPageCard({ jobId, token, staff, jobStatus }) {
   async function sendNow() {
     setBusy(true); setMsg(null);
     try {
-      const res = await apiFetch(`/api/jobs/${jobId}/aftercare`, token, { method: 'POST' });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || 'Could not send.');
+      // apiFetch already reads the answer and throws on an error
+      const body = await apiFetch(`/api/jobs/${jobId}/aftercare`, token, { method: 'POST' });
       setMsg({ err: !body.ok, text: body.ok ? 'Sent.' : `Nothing could be sent automatically. Text: ${body.results.sms.detail} Email: ${body.results.email.detail}` });
     } catch (e) { setMsg({ err: true, text: e.message }); }
     setBusy(false);

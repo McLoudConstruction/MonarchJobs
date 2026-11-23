@@ -7,7 +7,7 @@ import { parseFollowupDays } from '@/lib/estimateFollowup';
 import SaveButton from '@/components/SaveButton';
 import { useSaveStatus } from '@/lib/saveStatus';
 
-const FIELDS = 'ontheway_auto,aftercare_auto,aftercare_default,rebook_enabled,rebook_months,rebook_message,plan_offer_enabled,plan_offer_days,plan_offer_message,plan_remind_enabled,plan_remind_days,plan_remind_message,estimate_followup_enabled,estimate_followup_days,estimate_followup_unopened,estimate_followup_opened,estimate_expiry_enabled,estimate_valid_days';
+const FIELDS = 'ontheway_auto,aftercare_auto,aftercare_default,rebook_enabled,rebook_months,rebook_message,plan_offer_enabled,plan_offer_days,plan_offer_message,plan_remind_enabled,plan_remind_days,plan_remind_message,estimate_followup_enabled,estimate_followup_days,estimate_followup_unopened,estimate_followup_opened,estimate_expiry_enabled,estimate_valid_days,referral_enabled,referral_reward_text,street_offers_enabled,street_offer_text,street_offer_max,street_offer_quiet_days';
 
 // Owner: after-job care instructions, and reminders to past customers (rebooking, plan offers, plan reminders).
 // A collapsed row: click the title to open its settings. The status on the right follows the checkbox inside.
@@ -55,6 +55,10 @@ export default function RemindersSection({ token }) {
       estimate_followup_enabled: !!f.estimate_followup_enabled, estimate_followup_days: followDays.length ? followDays : [2, 5, 10],
       estimate_followup_unopened: f.estimate_followup_unopened.trim(), estimate_followup_opened: f.estimate_followup_opened.trim(),
       estimate_expiry_enabled: !!f.estimate_expiry_enabled, estimate_valid_days: Math.min(365, Math.max(1, Number(f.estimate_valid_days) || 30)),
+      referral_enabled: !!f.referral_enabled, referral_reward_text: f.referral_reward_text.trim().slice(0, 160),
+      street_offers_enabled: !!f.street_offers_enabled, street_offer_text: f.street_offer_text.trim().slice(0, 300),
+      street_offer_max: Math.min(50, Math.max(1, Math.round(Number(f.street_offer_max)) || 10)),
+      street_offer_quiet_days: Math.min(730, Math.max(0, Math.round(Number(f.street_offer_quiet_days) || 0))),
       ontheway_auto: !!f.ontheway_auto, aftercare_auto: !!f.aftercare_auto, aftercare_default: f.aftercare_default.trim(),
       rebook_enabled: !!f.rebook_enabled, rebook_months: months, rebook_message: f.rebook_message.trim(),
       plan_offer_enabled: !!f.plan_offer_enabled, plan_offer_days: Math.min(365, Math.max(7, Number(f.plan_offer_days) || 75)), plan_offer_message: f.plan_offer_message.trim(),
@@ -150,6 +154,28 @@ export default function RemindersSection({ token }) {
       </label>
       <div className="field" style={{ maxWidth: 300 }}><label>Valid for (days)</label><input type="number" min="1" max="365" value={f.estimate_valid_days} onChange={set('estimate_valid_days')} /></div>
       <p className="hint">The count starts when the estimate is sent, and the estimate is good through the whole last day. The customer's page shows the date; after it, the page says the estimate expired and cannot be approved online. Only estimates sent after you turn this on get a date. The owner can extend a sent estimate from the estimate on the lead or job. Carpet estimates never expire.</p>
+      </OutreachSection>
+      <OutreachSection title="Referral program" enabled={!!f.referral_enabled} open={openSec === 'referral'} onToggle={tog('referral')}>
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+        <input type="checkbox" checked={f.referral_enabled} onChange={set('referral_enabled')} />
+        Show customers a share link and code on their page
+      </label>
+      <div className="field"><label>What the customer gets (optional)</label>
+        <input maxLength={160} value={f.referral_reward_text} onChange={set('referral_reward_text')} placeholder="$25 off your next cleaning when a friend books" />
+      </div>
+      <p className="hint">A friend who opens the link asks for a quote and becomes a lead marked Referral. The friend never sees who sent them. When that friend's job is finished the reward shows as owed under Financials, Referrals, where you mark it paid. A friend who is already a customer, or who is the same person, is still a lead but earns no reward.</p>
+      </OutreachSection>
+      <OutreachSection title="On your street offers" enabled={!!f.street_offers_enabled} open={openSec === 'street'} onToggle={tog('street')}>
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+        <input type="checkbox" checked={f.street_offers_enabled} onChange={set('street_offers_enabled')} />
+        After a finished job, let me offer a visit to past customers on the same street
+      </label>
+      <div className="field"><label>The offer (optional)</label>
+        <textarea className="sig-notes" rows={2} maxLength={300} value={f.street_offer_text} onChange={set('street_offer_text')} placeholder="This week only: 10% off a cleaning for neighbors." />
+      </div>
+      <div className="field" style={{ maxWidth: 300 }}><label>Most people in one batch</label><input type="number" min="1" max="50" value={f.street_offer_max} onChange={set('street_offer_max')} /></div>
+      <div className="field" style={{ maxWidth: 300 }}><label>Skip anyone we cleaned for in the last (days)</label><input type="number" min="0" max="730" value={f.street_offer_quiet_days} onChange={set('street_offer_quiet_days')} /></div>
+      <p className="hint">Nothing is sent by itself. On a finished job the office sees who lives on that street, unticks anyone they like, and taps Send. It texts and emails people who have a phone or email, never anyone who stopped reminders, never anyone with open work, and never someone who already got a message in the last day. One offer per person per job. The message never names the customer whose job was finished.</p>
       </OutreachSection>
       <div className="row" style={{ marginTop: 14 }}>
         <SaveButton save={saveS} idle="Save" className="primary" />
