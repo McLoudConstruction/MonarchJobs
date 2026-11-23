@@ -32,7 +32,7 @@ const NAV = [
   { href: '/leads', label: 'Leads', icon: SalesIcon, roles: OFFICE, primary: true },
   { href: '/schedule', label: 'Schedule', icon: ScheduleIcon, roles: ALL, primary: true },
   { href: '/jobs', label: 'Jobs', icon: JobDashboardIcon, roles: ALL, primary: true },
-  { href: '/timeclock', label: 'Time clock', icon: TimeClockIcon, roles: ['tech'], primary: true },
+  { href: '/timeclock', label: 'Time', icon: TimeClockIcon, roles: ['tech'], primary: true },
   { href: '/customers', label: 'Customers', icon: UserIcon, roles: OFFICE },
   { href: '/equipment', label: 'Equipment', icon: EquipmentIcon, roles: ALL },
   // Activity, Invoices and Owner are tabs on the Dashboard now; their alerts roll up into its badge.

@@ -34,6 +34,7 @@ function ScheduleInner({ staff, token }) {
   const end = useMemo(() => addDays(start, 7), [start]);
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(start, i)), [start]);
   const isOffice = staff.role !== 'tech';
+  useEffect(() => { if (isOffice && window.location.hash === '#timeoff') setView('timeoff'); }, [isOffice]);
 
   const load = useCallback(async () => {
     const sb = getSupabase();

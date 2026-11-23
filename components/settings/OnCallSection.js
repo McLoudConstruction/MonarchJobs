@@ -6,6 +6,7 @@ import { staffName } from '@/lib/userDisplay';
 import { fromLocalInput, fmtDateTime } from '@/lib/format';
 import { validateOnCall, handoffLabel, bestOrder, rotationConflicts } from '@/lib/onCall';
 import OnCallCalendar from '@/components/settings/OnCallCalendar';
+import SwapRequests from '@/components/settings/SwapRequests';
 import SaveButton from '@/components/SaveButton';
 import { useSaveStatus } from '@/lib/saveStatus';
 
@@ -29,11 +30,15 @@ export default function OnCallSection() {
   const [swap, setSwap] = useState({ staff_id: '', from: '', to: '' });
   const [msg, setMsg] = useState(null);
   const [suggest, setSuggest] = useState(null);
+  const [sub, setSub] = useState('setup'); // setup | calendar
+  const [waiting, setWaiting] = useState(0);
   const saveS = useSaveStatus();
 
   const load = useCallback(async () => {
     const sb = getSupabase();
     const since = new Date(Date.now() - 45 * 86400000).toLocaleDateString('en-CA');
+    const w = await sb.from('oncall_swap_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending');
+    setWaiting((cur) => { const n = w.error ? 0 : w.count || 0; if (cur === 0 && n > 0) setSub('calendar'); return n; });
     const [s, p, t, o] = await Promise.all([
       sb.from('settings').select(COLUMNS).eq('id', 1).maybeSingle(),
       sb.from('staff_users').select('id,full_name,email,role,color,created_at').eq('active', true).order('full_name'),
@@ -105,8 +110,12 @@ export default function OnCallSection() {
     <div className="card">
       <h2>On call</h2>
       <p className="hint">One person is on call each week. When an emergency lead comes in, they get their own alert. If nobody claims it within the wait time, the next person in the rotation and the office and owner are told. Anyone on time off is skipped.</p>
+      <div className="tabs">
+        <button type="button" className={sub === 'setup' ? 'on' : ''} onClick={() => setSub('setup')}>Set up</button>
+        <button type="button" className={sub === 'calendar' ? 'on' : ''} onClick={() => setSub('calendar')}>{waiting ? `Calendar and swaps (${waiting})` : 'Calendar and swaps'}</button>
+      </div>
       {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
-      <form onSubmit={saveS.track(save)}>
+      {sub === 'setup' && <form onSubmit={saveS.track(save)}>
         <div className="field"><label className="row"><input type="checkbox" checked={!!f.oncall_enabled} onChange={set('oncall_enabled')} /> Turn on the on-call alerts</label></div>
         <div className="grid2" style={{ gap: 12 }}>
           <div className="field" style={{ margin: 0 }}><label>Rotation starts the week of (a Monday)</label><input type="date" value={f.oncall_start} onChange={set('oncall_start')} /></div>
@@ -152,11 +161,16 @@ export default function OnCallSection() {
             )}
           </div>
         )}
-        <p className="hint" style={{ margin: '12px 0' }}>Times use {f.timezone || 'America/Chicago'}. Save to apply changes. The calendar below shows your unsaved changes.</p>
-        <div style={{ marginBottom: 8 }}><SaveButton save={saveS} idle="Save on-call settings" className="primary" /></div>
-      </form>
+        <p className="hint" style={{ margin: '12px 0' }}>Times use {f.timezone || 'America/Chicago'}. Save to apply changes. The Calendar tab shows your unsaved changes.</p>
+        <div className="row" style={{ marginBottom: 8, gap: 8 }}>
+          <SaveButton save={saveS} idle="Save on-call settings" className="primary" />
+          <button type="button" className="secondary" onClick={() => setSub('calendar')}>See the calendar</button>
+        </div>
+      </form>}
 
-      <h3 style={h3}>Calendar</h3>
+      {sub === 'calendar' && <>
+      <SwapRequests people={people} onChanged={load} />
+      <p className="hint" style={{ marginTop: 0 }}>Shows your changes from Set up even before you save them.</p>
       <OnCallCalendar cfg={cfg} people={people} />
 
       <h3 style={h3}>Swaps</h3>
@@ -179,6 +193,7 @@ export default function OnCallSection() {
         <input style={{ flex: '1 1 220px', minWidth: 0 }} type="datetime-local" aria-label="To" value={swap.to} onChange={(e) => setSwap({ ...swap, to: e.target.value })} />
         <button type="submit" className="secondary">Add swap</button>
       </form>
+      </>}
     </div>
   );
 }

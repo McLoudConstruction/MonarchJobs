@@ -13,6 +13,8 @@ export default function TimeOffPanel({ techs, staff }) {
   const [form, setForm] = useState({ staff_id: '', starts_on: '', ends_on: '', note: '' });
   const [msg, setMsg] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [pending, setPending] = useState([]);
+  const [reply, setReply] = useState({});
 
   const load = useCallback(async () => {
     const today = new Date().toLocaleDateString('en-CA');
@@ -20,6 +22,8 @@ export default function TimeOffPanel({ techs, staff }) {
     if (error) { setMissing(true); return; }
     setMissing(false);
     setRows(data || []);
+    const q = await getSupabase().from('time_off_requests').select('id,staff_id,starts_on,ends_on,note,created_at').eq('status', 'pending').order('created_at');
+    setPending(q.error ? [] : q.data || []);
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -40,6 +44,13 @@ export default function TimeOffPanel({ techs, staff }) {
     setMsg({ err: false, text: 'Saved.' });
     load();
   }
+  async function decide(r, approve) {
+    setMsg(null);
+    const { error } = await getSupabase().rpc('time_off_decide', { p_id: r.id, p_approve: approve, p_note: (reply[r.id] || '').trim() });
+    if (error) { setMsg({ err: true, text: error.message.includes('ALREADY_DECIDED') ? 'Someone already answered that request.' : error.message }); }
+    else setMsg({ err: false, text: approve ? 'Approved. It is on the time off list.' : 'Declined. They have been told.' });
+    load();
+  }
   async function remove(r) {
     if (!window.confirm(`Remove time off for ${nameOf(r.staff_id)} (${rangeLabel(r)})?`)) return;
     const { error } = await getSupabase().from('time_off').delete().eq('id', r.id);
@@ -49,6 +60,24 @@ export default function TimeOffPanel({ techs, staff }) {
   if (missing) return <div className="card"><p className="hint">Time off needs the latest database update (045). Run it in Supabase, then reload.</p></div>;
 
   return (
+    <>
+    {pending.length > 0 && (
+      <div className="card">
+        <h2>Requests waiting ({pending.length})</h2>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {pending.map((r) => (
+            <li key={r.id} style={{ borderTop: '1px solid var(--border)', padding: '8px 0' }}>
+              <div><strong>{nameOf(r.staff_id)}</strong> · {rangeLabel(r)}{r.note ? ` · ${r.note}` : ''}</div>
+              <div className="row" style={{ gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                <input style={{ flex: '1 1 220px', minWidth: 0 }} aria-label="Reply (optional)" placeholder="Reply (optional)" maxLength={200} value={reply[r.id] || ''} onChange={(e) => setReply({ ...reply, [r.id]: e.target.value })} />
+                <button type="button" className="primary" onClick={() => decide(r, true)}>Approve</button>
+                <button type="button" className="secondary" onClick={() => decide(r, false)}>Decline</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
     <div className="card">
       <h2>Time off</h2>
       <p className="hint">Whole days. The scheduler warns before booking someone on a day off, and you can still book over it on purpose.</p>
@@ -76,5 +105,6 @@ export default function TimeOffPanel({ techs, staff }) {
         </ul>
       )}
     </div>
+    </>
   );
 }
