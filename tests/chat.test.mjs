@@ -152,6 +152,7 @@ test('previews, quick replies and photo paths', () => {
   assert.equal(previewText({ kind: 'photo', body: 'Wet wall' }), 'Wet wall');
   assert.equal(previewText({ kind: 'text', body: 'hello', deleted_at: 'x' }), 'Message deleted');
   assert.ok(quickRepliesFor('tech').includes('Customer not home'));
+  assert.ok(quickRepliesFor('tech').includes('Okay'));
   assert.ok(quickRepliesFor('office').includes('Got it'));
   assert.equal(photoPathFor('t', 'u'), 't/u.jpg');
 });

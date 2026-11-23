@@ -36,7 +36,7 @@ export default function TimeClockTab() {
       sb.from('shift_edit_requests').select('*').eq('status', 'pending').order('created_at'),
     ]);
     const bad = [sh, rq].find((r) => r.error);
-    if (bad) { setData({ loading: false, error: /does not exist|schema cache/i.test(bad.error.message) ? 'The day clock is not set up yet. Run migration 025, then reload.' : bad.error.message }); return; }
+    if (bad) { setData({ loading: false, error: /does not exist|schema cache/i.test(bad.error.message) ? 'The shift clock is not set up yet. Run migration 025, then reload.' : bad.error.message }); return; }
     setData({ loading: false, staff: st.data || [], shifts: sh.data || [], breaks: br.data || [], sessions: se.data || [] });
     setRequests(rq.data || []);
   }, [sb, week]);

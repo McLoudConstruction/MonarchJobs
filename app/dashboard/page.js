@@ -57,7 +57,7 @@ function TodayPanel({ staff, activityCount, invoiceFlags }) {
 
   return (
     <div className="dash-today">
-      {/* the owner does not use the day clock; office and techs do */}
+      {/* the owner does not use the shift clock; office and techs do */}
       {staff.role !== 'owner' && <ShiftClock staff={staff} />}
       <div className="row dash-book" style={{ justifyContent: 'flex-end', marginBottom: 10 }}>
         <Link href="/book"><button type="button" className="primary">Book a job</button></Link>
@@ -173,7 +173,7 @@ function DashboardInner({ staff, token }) {
   const badgeFor = (key) => {
     if (key === 'activity' && activityCount > 0) return { count: activityCount, tone: 'accent', title: 'Unread alerts, chats and changes waiting for your OK' };
     if (key === 'invoices') return invBadge;
-    if (key === 'timeclock' && clockPending > 0) return { count: clockPending, tone: 'warn', title: `${clockPending} day clock change${clockPending === 1 ? '' : 's'} to approve` };
+    if (key === 'timeclock' && clockPending > 0) return { count: clockPending, tone: 'warn', title: `${clockPending} shift clock change${clockPending === 1 ? '' : 's'} to approve` };
     return null;
   };
 

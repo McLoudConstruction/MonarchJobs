@@ -17,7 +17,7 @@ function download(name, text) {
   a.download = name; a.click(); URL.revokeObjectURL(a.href);
 }
 
-// Owner only. Hours by person for a pay period, as a CSV for the payroll service. Day clock hours when a person clocked a shift,
+// Owner only. Hours by person for a pay period, as a CSV for the payroll service. Shift clock hours when a person clocked a shift,
 // otherwise their job clock hours. The period setting (weekly, every two weeks, twice a month, monthly) is saved with the business.
 export default function PayrollPanel() {
   const sb = getSupabase();
@@ -51,7 +51,7 @@ export default function PayrollPanel() {
     ]);
     const bad = [st, se].find((r) => r.error);
     if (bad) { setData({ loading: false, error: bad.error.message }); return; }
-    // The day clock tables only exist after migration 025; without them the export still works from the job clock.
+    // The shift clock tables only exist after migration 025; without them the export still works from the job clock.
     setData({ loading: false, people: st.data || [], shifts: sh.error ? [] : sh.data || [], breaks: br.error ? [] : br.data || [], sessions: se.data || [] });
   }, [sb, period]);
   useEffect(() => { if (open) load(); }, [open, load]);

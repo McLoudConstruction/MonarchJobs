@@ -69,7 +69,7 @@ export default function WeekTimeClock({ staff, refreshKey = 0 }) {
     setBusy(false);
   }
 
-  if (state.setup) return null; // the day clock is not set up yet (migration 025)
+  if (state.setup) return null; // the shift clock is not set up yet (migration 025)
   const formEl = form && (
     <form className="wtc-form" onSubmit={send}>
       <strong>{form.label}</strong>

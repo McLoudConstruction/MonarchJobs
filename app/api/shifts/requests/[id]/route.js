@@ -6,7 +6,7 @@ import { UUID } from '@/lib/invoiceServer';
 export const dynamic = 'force-dynamic';
 const same = (a, b) => (a ? new Date(a).getTime() : null) === (b ? new Date(b).getTime() : null);
 
-// The owner approves or turns down a day clock change. Body: { decision: 'approve' | 'reject', note? }.
+// The owner approves or turns down a shift clock change. Body: { decision: 'approve' | 'reject', note? }.
 export async function POST(request, { params }) {
   const auth = await requireStaff(request, ['owner']);
   if (auth.error) return auth.error;

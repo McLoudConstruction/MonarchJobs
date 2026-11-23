@@ -21,7 +21,7 @@
   .dash-today > .dash-section:not(.dash-visits){ order: 4; }
   .dash-today > .dash-book{ display: none; } /* Book Job is in the header and the bottom bar */
 
-  /* day clock: a status line and big buttons, with the week folded away */
+  /* shift clock: a status line and big buttons, with the week folded away */
   .shiftclock{ padding: 12px; margin-bottom: 12px; }
   .shiftclock .sc-head{ flex-direction: column; align-items: stretch; gap: 10px; }
   .shiftclock h2{ font-size: 16px; }

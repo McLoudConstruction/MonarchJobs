@@ -13,7 +13,7 @@ import '@/components/dashboard/dashboardmobile.css';
 const when = (key) => new Date(`${key}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 const STATUS = { pending: 'Waiting for the owner', approved: 'Approved', rejected: 'Not approved' };
 
-// The day clock on a person's own dashboard: clock in, start/end a break, clock out, see this week's shifts, and ask for a change
+// The shift clock on a person's own dashboard: clock in, start/end a break, clock out, see this week's shifts, and ask for a change
 // the owner has to approve. Separate from the job clock, which times work on one job.
 export default function ShiftClock({ staff, hideWeek = false, onChanged }) {
   const sb = getSupabase();
@@ -73,13 +73,13 @@ export default function ShiftClock({ staff, hideWeek = false, onChanged }) {
     setBusy(false);
   }
 
-  if (setup) return null; // the day clock is not set up yet (migration 025); say nothing rather than show a broken card
+  if (setup) return null; // the shift clock is not set up yet (migration 025); say nothing rather than show a broken card
   const running = open ? Math.max(0, Math.round((now - new Date(open.started_at)) / 60000)) : 0;
   return (
-    <section className={`card shiftclock${open ? ' running' : ''}${onBreak ? ' on-break' : ''}${showWeek ? ' week-open' : ''}`} aria-label="Day clock">
+    <section className={`card shiftclock${open ? ' running' : ''}${onBreak ? ' on-break' : ''}${showWeek ? ' week-open' : ''}`} aria-label="Shift clock">
       <div className="sc-head">
         <div>
-          <h2 style={{ margin: 0 }}>Day clock</h2>
+          <h2 style={{ margin: 0 }}>Shift clock</h2>
           <div className="muted sc-status">
             {!open && 'Not clocked in.'}
             {open && !onBreak && `Clocked in at ${fmtTime(open.started_at)} (${hmWords(running)} so far).`}

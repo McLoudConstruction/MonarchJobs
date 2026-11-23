@@ -7,7 +7,7 @@ import { validateShiftEdit } from '@/lib/shiftClock';
 
 export const dynamic = 'force-dynamic';
 
-// Day clock buttons for the signed-in person. Body: { action: 'in' | 'out' | 'break_start' | 'break_end' }.
+// Shift clock buttons for the signed-in person. Body: { action: 'in' | 'out' | 'break_start' | 'break_end' }.
 // Owner only: { action: 'add', staff_id, started_at, ended_at, reason } adds a shift directly.
 export async function POST(request) {
   const auth = await requireStaff(request);

@@ -43,7 +43,7 @@ test('stepping to the earlier or later period lines up with no gap or overlap', 
   assert.equal(periodLabel({ start: '2026-11-09', end: '2026-11-22' }), 'Nov 9 to Nov 22, 2026');
 });
 
-test('hours come from the day clock when there is a shift, else from the job clock, never both', () => {
+test('hours come from the shift clock when there is a shift, else from the job clock, never both', () => {
   const period = { start: '2026-11-09', end: '2026-11-22' };
   const s1 = shift('a', '2026-11-10', 8, 17);                 // 9 h shift
   const sessions = [job('a', '2026-11-10', 9, 15), job('a', '2026-11-11', 8, 12), job('b', '2026-11-12', 8, 12), job('b', '2026-11-13', 8, 10)];
@@ -92,13 +92,13 @@ test('the CSV has one line per person (summary) and one per day (detail), with d
   const period = { start: '2026-11-09', end: '2026-11-22' };
   const out = payrollSummary({ people, shifts: [shift('a', '2026-11-10', 8, 16, { id: 'q' })], breaks: [], sessions: [job('b', '2026-11-11', 8, 10)], period, now: NOW });
   const summary = payrollSummaryCsv(out, period).split('\r\n');
-  assert.equal(summary[0], 'Employee,Email,Pay period start,Pay period end,Total hours,Day clock hours,Job clock hours,Days worked,Hours from,Needs a check');
+  assert.equal(summary[0], 'Employee,Email,Pay period start,Pay period end,Total hours,Shift clock hours,Job clock hours,Days worked,Hours from,Needs a check');
   assert.equal(summary.length, 3);
-  assert.equal(summary[1], 'Alex Rivera,a@x.com,2026-11-09,2026-11-22,8.00,8.00,0.00,1,day clock,');
+  assert.equal(summary[1], 'Alex Rivera,a@x.com,2026-11-09,2026-11-22,8.00,8.00,0.00,1,shift clock,');
   assert.equal(summary[2], 'Sam Chen,s@x.com,2026-11-09,2026-11-22,2.00,0.00,2.00,1,job clock,');
   const detail = payrollDetailCsv(out, period).split('\r\n');
   assert.equal(detail.length, 3);
-  assert.match(detail[1], /^Alex Rivera,2026-11-10,8\.00,day clock/);
+  assert.match(detail[1], /^Alex Rivera,2026-11-10,8\.00,shift clock/);
 });
 
 test('payroll files carry no pay rates and no job or customer names', () => {
