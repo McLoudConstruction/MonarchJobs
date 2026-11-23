@@ -2,12 +2,15 @@
 
 import { useState } from 'react';
 import { apiFetch } from '@/lib/useAuth';
+import SaveButton from '@/components/SaveButton';
+import { useSaveStatus } from '@/lib/saveStatus';
 
 // Generic credential panel driven by a field list. Secrets are write-only: after saving, only
 // the last 4 characters are shown and a blank input keeps the stored value.
 export default function IntegrationPanel({ provider, title, status, fields, token, onChanged, help, plainBadge = false }) {
   const [values, setValues] = useState({});
   const [msg, setMsg] = useState(null);
+  const saveS = useSaveStatus();
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false); // collapsed by default; click the header to add or edit details
 
@@ -21,15 +24,18 @@ export default function IntegrationPanel({ provider, title, status, fields, toke
     e.preventDefault();
     setBusy(true);
     setMsg(null);
+    let ok = false;
     try {
       await apiFetch('/api/integrations/credentials', token, { method: 'PUT', body: JSON.stringify({ provider, values }) });
       setValues({});
       setMsg({ text: 'Saved.' });
       onChanged();
+      ok = true;
     } catch (err) {
       setMsg({ err: true, text: err.message });
     }
     setBusy(false);
+    return ok;
   }
 
   async function test() {
@@ -63,7 +69,7 @@ export default function IntegrationPanel({ provider, title, status, fields, toke
   }
 
   return (
-    <form className="card" onSubmit={save}>
+    <form className="card" onSubmit={saveS.track(save)}>
       <button
         type="button"
         className="row"
@@ -115,7 +121,7 @@ export default function IntegrationPanel({ provider, title, status, fields, toke
 
       {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
       <div className="row">
-        <button className="primary" disabled={busy}>{busy ? 'Working...' : 'Save'}</button>
+        <SaveButton save={saveS} idle="Save" className="primary" disabled={busy} />
         <button type="button" className="secondary" disabled={busy || !status?.configured} onClick={test}>Test connection</button>
         <button type="button" className="danger" disabled={busy || !status?.updatedAt} onClick={remove}>Remove keys</button>
       </div>

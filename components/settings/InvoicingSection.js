@@ -2,11 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
+import SaveButton from '@/components/SaveButton';
+import { useSaveStatus } from '@/lib/saveStatus';
 
 // Owner choices for invoices: payment terms, the note at the bottom, late interest, and who may void.
 export default function InvoicingSection() {
   const [f, setF] = useState(null);
   const [msg, setMsg] = useState(null);
+  const saveS = useSaveStatus();
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -25,8 +28,8 @@ export default function InvoicingSection() {
     setMsg(null);
     const terms = Math.round(Number(f.invoice_terms_days));
     const rate = Number(f.late_interest_rate);
-    if (!(terms >= 0 && terms <= 120)) { setMsg({ err: true, text: 'Payment terms must be 0 to 120 days.' }); return; }
-    if (!(rate >= 0 && rate <= 100)) { setMsg({ err: true, text: 'The late interest rate must be 0 to 100.' }); return; }
+    if (!(terms >= 0 && terms <= 120)) { setMsg({ err: true, text: 'Payment terms must be 0 to 120 days.' }); return false; }
+    if (!(rate >= 0 && rate <= 100)) { setMsg({ err: true, text: 'The late interest rate must be 0 to 100.' }); return false; }
     setBusy(true);
     const { error } = await getSupabase().from('settings').update({
       invoice_terms_days: terms, invoice_footer: f.invoice_footer || '', late_interest_rate: rate,
@@ -34,10 +37,11 @@ export default function InvoicingSection() {
     }).eq('id', 1);
     setBusy(false);
     setMsg(error ? { err: true, text: error.message } : { text: 'Saved.' });
+    return !error;
   }
 
   return (
-    <form className="card" onSubmit={save}>
+    <form className="card" onSubmit={saveS.track(save)}>
       <h2>Invoicing</h2>
       <p className="hint">Invoices are made from the approved estimate. Card payments on site use Stripe, and the payment link with a tip uses Square. Both are connected under Integrations.</p>
       <div className="field">
@@ -54,7 +58,7 @@ export default function InvoicingSection() {
       <label className="row" style={{ gap: 8, alignItems: 'center', marginBottom: 12 }}><input type="checkbox" checked={!!f.late_interest_commercial_only} onChange={set('late_interest_commercial_only')} /><span>Warn me before adding late interest to a household (not business) customer</span></label>
       <label className="row" style={{ gap: 8, alignItems: 'center', marginBottom: 12 }}><input type="checkbox" checked={!!f.office_can_void} onChange={set('office_can_void')} /><span>Let office staff void invoices and reopen finished jobs (otherwise only you can)</span></label>
       {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
-      <button className="primary" disabled={busy}>{busy ? 'Saving...' : 'Save'}</button>
+      <SaveButton save={saveS} idle="Save" className="primary" disabled={busy} />
     </form>
   );
 }

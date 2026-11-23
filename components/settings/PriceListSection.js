@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
 import { money, UNIT_LABELS } from '@/lib/format';
+import SaveButton from '@/components/SaveButton';
+import { useSaveStatus } from '@/lib/saveStatus';
 
 const BLANK = { name: '', description: '', unit: 'sqft', price: '', is_addon: false, bookable_online: false, aftercare: '', dry_hours: '', minutes: '' };
 
@@ -12,6 +14,8 @@ export default function PriceListSection() {
   const [form, setForm] = useState(BLANK);
   const [editId, setEditId] = useState(null);
   const [msg, setMsg] = useState(null);
+  const minSave = useSaveStatus();
+  const itemSave = useSaveStatus();
 
   const load = useCallback(async () => {
     const sb = getSupabase();
@@ -31,23 +35,25 @@ export default function PriceListSection() {
     e.preventDefault();
     const { error } = await getSupabase().from('settings').update({ job_minimum: Number(minimum) || 0 }).eq('id', 1);
     setMsg(error ? { err: true, text: error.message } : { text: 'Minimum saved.' });
+    return !error;
   }
 
   async function saveItem(e) {
     e.preventDefault();
     const dry = form.dry_hours === '' ? null : Math.round(Number(form.dry_hours));
-    if (dry !== null && !(dry >= 1 && dry <= 72)) { setMsg({ err: true, text: 'Drying time is 1 to 72 hours, or leave it blank.' }); return; }
+    if (dry !== null && !(dry >= 1 && dry <= 72)) { setMsg({ err: true, text: 'Drying time is 1 to 72 hours, or leave it blank.' }); return false; }
     const mins = form.minutes === '' ? null : Number(form.minutes);
-    if (mins !== null && !(mins >= 0 && mins <= 100000)) { setMsg({ err: true, text: 'Time per unit is a number of minutes (0 or more), or leave it blank.' }); return; }
+    if (mins !== null && !(mins >= 0 && mins <= 100000)) { setMsg({ err: true, text: 'Time per unit is a number of minutes (0 or more), or leave it blank.' }); return false; }
     const row = { minutes_per_unit: mins, name: form.name.trim(), description: form.description, unit: form.unit, price: Number(form.price), is_addon: !!form.is_addon, bookable_online: !!form.bookable_online, aftercare: form.aftercare.trim(), dry_hours: dry };
-    if (!row.name || Number.isNaN(row.price) || row.price < 0) { setMsg({ err: true, text: 'Enter a name and a price of zero or more.' }); return; }
+    if (!row.name || Number.isNaN(row.price) || row.price < 0) { setMsg({ err: true, text: 'Enter a name and a price of zero or more.' }); return false; }
     const sb = getSupabase();
     const { error } = editId ? await sb.from('price_items').update(row).eq('id', editId) : await sb.from('price_items').insert(row);
-    if (error) { setMsg({ err: true, text: error.message }); return; }
+    if (error) { setMsg({ err: true, text: error.message }); return false; }
     setForm(BLANK);
     setEditId(null);
     setMsg({ text: 'Saved.' });
     load();
+    return true;
   }
 
   async function toggleActive(it) {
@@ -68,7 +74,7 @@ export default function PriceListSection() {
         <p className="hint">Quotes are built from these items. Prices and fees can still be adjusted on each job.</p>
         {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
 
-        <form onSubmit={saveItem}>
+        <form onSubmit={itemSave.track(saveItem)}>
           <div className="grid2">
             <div className="field"><label>Name</label><input value={form.name} onChange={set('name')} required /></div>
             <div className="field"><label>Description</label><input value={form.description} onChange={set('description')} /></div>
@@ -97,17 +103,17 @@ export default function PriceListSection() {
           </div>
           <div className="field" style={{ maxWidth: 220 }}><label>Dries in about (hours, optional)</label><input type="number" min="1" max="72" value={form.dry_hours} onChange={set('dry_hours')} /></div>
           <div className="row">
-            <button className="primary">{editId ? 'Save item' : 'Add item'}</button>
+            <SaveButton save={itemSave} idle={editId ? 'Save item' : 'Add item'} className="primary" />
             {editId && <button type="button" className="secondary" onClick={() => { setEditId(null); setForm(BLANK); }}>Cancel</button>}
           </div>
         </form>
 
-        <form onSubmit={saveMinimum} className="row price-min" style={{ alignItems: 'flex-end' }}>
+        <form onSubmit={minSave.track(saveMinimum)} className="row price-min" style={{ alignItems: 'flex-end' }}>
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Minimum charge per job</label>
             <input type="number" min="0" step="0.01" value={minimum} onChange={(e) => setMinimum(e.target.value)} />
           </div>
-          <button className="secondary">Save minimum</button>
+          <SaveButton save={minSave} idle="Save minimum" className="secondary" />
         </form>
       </div>
 

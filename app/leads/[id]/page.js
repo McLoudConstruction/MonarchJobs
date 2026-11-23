@@ -17,6 +17,8 @@ import { displayPhone, telHref } from '@/lib/phone';
 import { serviceOf } from '@/lib/services';
 import { kindOf, finishLead, intakeHighlights, PRIORITIES, RESTORATION_TYPES } from '@/lib/leadIntake';
 import { staffName, displayNameFor } from '@/lib/userDisplay';
+import SaveButton from '@/components/SaveButton';
+import { useSaveStatus } from '@/lib/saveStatus';
 
 const WORK_ORDER_ERRORS = {
   TECH_DOUBLE_BOOKED: 'That tech is already booked then. Tick the box to book anyway, or pick another time or tech.',
@@ -54,6 +56,7 @@ function LeadInner({ id, staff, token }) {
   const [appt, setAppt] = useState(defaultAppointment);
   const [conflicts, setConflicts] = useState([]);
   const [msg, setMsg] = useState(null);
+  const leadSave = useSaveStatus();
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState('overview');
   const [woOpen, setWoOpen] = useState(false);
@@ -123,7 +126,9 @@ function LeadInner({ id, staff, token }) {
 
   async function onSave(e) {
     e.preventDefault();
-    if (await save()) { setMsg({ text: 'Saved.' }); load(); }
+    const ok = await save();
+    if (ok) { setMsg({ text: 'Saved.' }); load(); }
+    return ok;
   }
 
   async function setStatus(status, extra = {}) {
@@ -294,12 +299,12 @@ function LeadInner({ id, staff, token }) {
 
       {tab === 'details' && (
         <div className="lead-tab">
-          <form onSubmit={onSave}>
+          <form onSubmit={leadSave.track(onSave)}>
             <fieldset disabled={!open} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
               <LeadForm value={form} onChange={change} kind={kind} />
             </fieldset>
             {open && <div className="row" style={{ marginBottom: 20 }}>
-              <button className="primary">Save changes</button>
+              <SaveButton save={leadSave} idle="Save changes" className="primary" />
               {dirty && <span className="muted">Unsaved changes</span>}
             </div>}
           </form>

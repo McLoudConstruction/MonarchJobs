@@ -5,6 +5,8 @@ import { getSupabase } from '@/lib/supabaseClient';
 import {
   DAY_NAMES, DEFAULT_BOOKING, normalizeBooking, validateBookingSettings, fmtHm, countSlots, fmtSlotDayShort, fmtSlotTime,
 } from '@/lib/booking';
+import SaveButton from '@/components/SaveButton';
+import { useSaveStatus } from '@/lib/saveStatus';
 
 const COLUMNS = 'timezone,booking_enabled,booking_after_sign,booking_days,booking_day_start,booking_day_end,booking_slot_minutes,booking_gap_minutes,booking_crews,booking_notice_hours,booking_window_days';
 const clock = (min) => new Date(Date.UTC(2000, 0, 1, Math.floor(min / 60), min % 60)).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' });
@@ -14,6 +16,7 @@ export default function BookingSection() {
   const [f, setF] = useState(null);
   const [missing, setMissing] = useState(false);
   const [msg, setMsg] = useState(null);
+  const saveS = useSaveStatus();
   const [link, setLink] = useState('');
   const [copied, setCopied] = useState(false);
   const [preview, setPreview] = useState(null);
@@ -56,12 +59,13 @@ export default function BookingSection() {
   async function save(e) {
     e.preventDefault();
     const checked = validateBookingSettings(f);
-    if (checked.error) { setMsg({ err: true, text: checked.error }); return; }
+    if (checked.error) { setMsg({ err: true, text: checked.error }); return false; }
     const { error } = await getSupabase().from('settings').update(checked.value).eq('id', 1);
-    if (error) { setMsg({ err: true, text: error.message }); return; }
+    if (error) { setMsg({ err: true, text: error.message }); return false; }
     setF({ ...f, ...checked.value });
     setMsg({ text: 'Saved.' });
     loadPreview();
+    return true;
   }
 
   async function copy() {
@@ -92,7 +96,7 @@ export default function BookingSection() {
         </p>
       </div>
 
-      <form className="card" onSubmit={save}>
+      <form className="card" onSubmit={saveS.track(save)}>
         <h2>Open times</h2>
         {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
         <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
@@ -126,7 +130,7 @@ export default function BookingSection() {
             ? `Each day offers ${grid.length} appointment${grid.length === 1 ? '' : 's'}: ${grid.map(clock).join(', ')} (${slot} minutes each, ${gap} minutes apart). Times are in ${f.timezone || 'America/Chicago'}.`
             : 'With these hours no appointment fits. Widen the hours or shorten the appointment.'}
         </p>
-        <button className="primary">Save booking settings</button>
+        <SaveButton save={saveS} idle="Save booking settings" className="primary" />
       </form>
 
       <div className="card">

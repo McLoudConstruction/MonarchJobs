@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
 import { apiFetch } from '@/lib/useAuth';
 import { parseFollowupDays } from '@/lib/estimateFollowup';
+import SaveButton from '@/components/SaveButton';
+import { useSaveStatus } from '@/lib/saveStatus';
 
 const FIELDS = 'ontheway_auto,aftercare_auto,aftercare_default,rebook_enabled,rebook_months,rebook_message,plan_offer_enabled,plan_offer_days,plan_offer_message,plan_remind_enabled,plan_remind_days,plan_remind_message,estimate_followup_enabled,estimate_followup_days,estimate_followup_unopened,estimate_followup_opened,estimate_expiry_enabled,estimate_valid_days';
 
@@ -25,6 +27,7 @@ function OutreachSection({ title, enabled, open, onToggle, children }) {
 export default function RemindersSection({ token }) {
   const [f, setF] = useState(null);
   const [msg, setMsg] = useState(null);
+  const saveS = useSaveStatus();
   const [preview, setPreview] = useState(null);
   const [busy, setBusy] = useState(false);
   const [missing, setMissing] = useState(false);
@@ -45,9 +48,9 @@ export default function RemindersSection({ token }) {
   async function save(e) {
     e.preventDefault();
     const months = [...new Set(String(f.rebook_months).split(/[,\s]+/).map(Number).filter((m) => Number.isInteger(m) && m >= 1 && m <= 60))].sort((a, b) => a - b);
-    if (f.rebook_enabled && !months.length) { setMsg({ err: true, text: 'Enter the months for rebooking reminders, for example 3, 6, 12.' }); return; }
+    if (f.rebook_enabled && !months.length) { setMsg({ err: true, text: 'Enter the months for rebooking reminders, for example 3, 6, 12.' }); return false; }
     const followDays = parseFollowupDays(f.estimate_followup_days);
-    if (f.estimate_followup_enabled && !followDays.length) { setMsg({ err: true, text: 'Enter the days for estimate follow-ups, for example 2, 5, 10.' }); return; }
+    if (f.estimate_followup_enabled && !followDays.length) { setMsg({ err: true, text: 'Enter the days for estimate follow-ups, for example 2, 5, 10.' }); return false; }
     const row = {
       estimate_followup_enabled: !!f.estimate_followup_enabled, estimate_followup_days: followDays.length ? followDays : [2, 5, 10],
       estimate_followup_unopened: f.estimate_followup_unopened.trim(), estimate_followup_opened: f.estimate_followup_opened.trim(),
@@ -58,9 +61,10 @@ export default function RemindersSection({ token }) {
       plan_remind_enabled: !!f.plan_remind_enabled, plan_remind_days: Math.min(60, Math.max(1, Number(f.plan_remind_days) || 14)), plan_remind_message: f.plan_remind_message.trim(),
     };
     const { error } = await getSupabase().from('settings').update(row).eq('id', 1);
-    if (error) { setMsg({ err: true, text: error.message }); return; }
+    if (error) { setMsg({ err: true, text: error.message }); return false; }
     setF({ ...f, ...row, rebook_months: months.join(', '), estimate_followup_days: row.estimate_followup_days.join(', ') });
     setMsg({ text: 'Saved.' });
+    return true;
   }
 
   async function runPreview() {
@@ -81,7 +85,7 @@ export default function RemindersSection({ token }) {
   );
 
   return (
-    <form className="card" onSubmit={save}>
+    <form className="card" onSubmit={saveS.track(save)}>
       <h2>Outreach</h2>
       <p className="hint">Messages go by text and email to customers who have a phone or email on file. Every message has a way to stop reminders, and customers who stop are never contacted or mailed. Texting must be set up in Integrations.</p>
       {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
@@ -150,7 +154,7 @@ export default function RemindersSection({ token }) {
       <p className="hint">The count starts when the estimate is sent, and the estimate is good through the whole last day. The customer's page shows the date; after it, the page says the estimate expired and cannot be approved online. Only estimates sent after you turn this on get a date. The owner can extend a sent estimate from the estimate on the lead or job. Carpet estimates never expire.</p>
       </OutreachSection>
       <div className="row" style={{ marginTop: 14 }}>
-        <button className="primary">Save</button>
+        <SaveButton save={saveS} idle="Save" className="primary" />
         <button type="button" className="secondary" disabled={busy} onClick={runPreview}>{busy ? 'Checking...' : 'Who would get a reminder today?'}</button>
       </div>
       <p className="hint">Reminders go out once a day. Save first, then check; the check sends nothing. After running update 015, the database needs your site address once (instructions at the bottom of that file).</p>

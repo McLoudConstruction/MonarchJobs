@@ -10,6 +10,8 @@ import PhoneInput from '@/components/PhoneInput';
 import AddressFields from '@/components/AddressFields';
 import { displayPhone } from '@/lib/phone';
 import PlansCard from '@/components/customer/PlansCard';
+import SaveButton from '@/components/SaveButton';
+import { useSaveStatus } from '@/lib/saveStatus';
 
 const BLANK_ADDR = { label: '', street: '', unit: '', city: '', state: 'MO', zip: '', gate_code: '', warnings: '', access_notes: '' };
 const BLANK_CONTACT = { name: '', phone: '', email: '', role: '', receives_notifications: true };
@@ -20,6 +22,7 @@ function Detail({ id }) {
   const [contacts, setContacts] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [msg, setMsg] = useState(null);
+  const detailsSave = useSaveStatus();
   const [editAddr, setEditAddr] = useState(null); // address object (id may be undefined for new)
   const [newContact, setNewContact] = useState(null);
 
@@ -53,6 +56,7 @@ function Detail({ id }) {
     }).eq('id', id);
     setMsg(error ? { err: true, text: error.message.includes('customers_has_name') ? 'Enter a name or a company name.' : error.message } : { text: 'Saved.' });
     if (!error) load();
+    return !error;
   }
 
   async function saveAddress(e) {
@@ -100,7 +104,7 @@ function Detail({ id }) {
       <p className="sub">{c.customer_type}{c.last_visit_at ? ` · last visit ${fmtDateTime(c.last_visit_at)}` : ''}</p>
       {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
 
-      <form className="card" onSubmit={saveCustomer}>
+      <form className="card" onSubmit={detailsSave.track(saveCustomer)}>
         <h2>Details</h2>
         <div className="grid2">
           <div className="field"><label>Type</label>
@@ -115,7 +119,7 @@ function Detail({ id }) {
           <div className="field"><label>Email</label><input type="email" value={c.email} onChange={set('email')} /></div>
         </div>
         <div className="field"><label>Notes</label><textarea value={c.notes} onChange={set('notes')} /></div>
-        <button className="primary">Save details</button>
+        <SaveButton save={detailsSave} idle="Save details" className="primary" />
       </form>
 
       <div className="card">

@@ -3,10 +3,13 @@
 import { useEffect, useState } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
 import PhoneInput from '@/components/PhoneInput';
+import SaveButton from '@/components/SaveButton';
+import { useSaveStatus } from '@/lib/saveStatus';
 
 export default function BusinessSection() {
   const [form, setForm] = useState({ business_name: '', phone: '', email: '', timezone: 'America/Chicago' });
   const [msg, setMsg] = useState(null);
+  const saveS = useSaveStatus();
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -27,10 +30,11 @@ export default function BusinessSection() {
     const { error } = await getSupabase().from('settings').update(form).eq('id', 1);
     setBusy(false);
     setMsg(error ? { err: true, text: error.message } : { text: 'Saved.' });
+    return !error;
   }
 
   return (
-    <form className="card" onSubmit={save}>
+    <form className="card" onSubmit={saveS.track(save)}>
       <h2>Business</h2>
       <p className="hint">Shown on estimates, invoices and customer messages.</p>
       <div className="field"><label>Business name</label><input value={form.business_name} onChange={set('business_name')} /></div>
@@ -38,7 +42,7 @@ export default function BusinessSection() {
       <div className="field"><label>Email</label><input type="email" value={form.email} onChange={set('email')} /></div>
       <div className="field"><label>Time zone</label><input value={form.timezone} onChange={set('timezone')} /><div className="note">IANA name, for example America/Chicago.</div></div>
       {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
-      <button className="primary" disabled={busy}>{busy ? 'Saving...' : 'Save'}</button>
+      <SaveButton save={saveS} idle="Save" className="primary" disabled={busy} />
     </form>
   );
 }

@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { getSupabase } from '@/lib/supabaseClient';
 import { cleanRate, rateMap } from '@/lib/propertyRates';
 import { money, UNIT_LABELS } from '@/lib/format';
+import SaveButton from '@/components/SaveButton';
+import { useSaveStatus } from '@/lib/saveStatus';
 
 // Saved prices for one property (an apartment complex or management company). An estimate tied to this property uses
 // these instead of the price list; anything left blank uses the standard price. Office and owner.
@@ -12,6 +14,7 @@ export default function PropertyRates({ propertyId }) {
   const [saved, setSaved] = useState(() => new Map());
   const [vals, setVals] = useState({});
   const [msg, setMsg] = useState(null);
+  const saveS = useSaveStatus();
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -34,7 +37,7 @@ export default function PropertyRates({ propertyId }) {
     const removals = [];
     for (const it of items) {
       const c = cleanRate(vals[it.id]);
-      if (c.error) { setMsg({ err: true, text: `${it.name}: ${c.error}` }); return; }
+      if (c.error) { setMsg({ err: true, text: `${it.name}: ${c.error}` }); return false; }
       // blank, or the same as the standard price, means "no special rate"
       if (c.value === null || c.value === Number(it.price)) { if (saved.has(it.id)) removals.push(it.id); continue; }
       if (saved.get(it.id) !== c.value) upserts.push({ property_id: propertyId, price_item_id: it.id, unit_price: c.value, updated_at: new Date().toISOString() });
@@ -43,11 +46,11 @@ export default function PropertyRates({ propertyId }) {
     const sb = getSupabase();
     if (upserts.length) {
       const { error } = await sb.from('property_rates').upsert(upserts, { onConflict: 'property_id,price_item_id' });
-      if (error) { setBusy(false); setMsg({ err: true, text: error.message }); return; }
+      if (error) { setBusy(false); setMsg({ err: true, text: error.message }); return false; }
     }
     if (removals.length) {
       const { error } = await sb.from('property_rates').delete().eq('property_id', propertyId).in('price_item_id', removals);
-      if (error) { setBusy(false); setMsg({ err: true, text: error.message }); return; }
+      if (error) { setBusy(false); setMsg({ err: true, text: error.message }); return false; }
     }
     const { data } = await sb.from('property_rates').select('price_item_id,unit_price').eq('property_id', propertyId);
     const m = rateMap(data || []);
@@ -55,6 +58,7 @@ export default function PropertyRates({ propertyId }) {
     setVals(Object.fromEntries([...m].map(([k, v]) => [k, String(v)])));
     setBusy(false);
     setMsg({ text: upserts.length || removals.length ? 'Rates saved. They apply to estimates tied to this property from now on.' : 'No changes.' });
+    return true;
   }
 
   if (!items) return <p className="muted">Loading rates...</p>;
@@ -73,7 +77,7 @@ export default function PropertyRates({ propertyId }) {
         ))}
       </div>
       {msg && <div className={`msg ${msg.err ? 'err' : 'ok'}`}>{msg.text}</div>}
-      <div className="row" style={{ justifyContent: 'flex-end' }}><button type="button" className="secondary" disabled={busy} onClick={save}>{busy ? 'Saving...' : 'Save rates'}</button></div>
+      <div className="row" style={{ justifyContent: 'flex-end' }}><SaveButton save={saveS} idle="Save rates" type="button" className="secondary" disabled={busy} onClick={saveS.track(save)} /></div>
     </fieldset>
   );
 }

@@ -12,7 +12,6 @@ import { expiryNote } from '@/lib/estimateExpiry';
 import { LINE_KINDS, lineKind, kindFields, lineKindLabel, hasTiers, tiersPresent, tierTotals, currentTotals, effectiveLines, choiceFromEstimate, TIER_LABELS } from '@/lib/estimateOptions';
 import SaveButton from '@/components/SaveButton';
 import { useSaveStatus } from '@/lib/saveStatus';
-import { downloadEstimatePdf } from '@/lib/documentPdfClient';
 
 const BLANK_CUSTOM = { description: '', quantity: '1', unit: 'flat', unit_price: '', kind: 'included' };
 
@@ -38,7 +37,6 @@ export default function EstimateCard({ service = '', scope, open, staff, token, 
   const [minimum, setMinimum] = useState('');
   const [msg, setMsg] = useState(null);
   const minSave = useSaveStatus();
-  const [pdfBusy, setPdfBusy] = useState(false);
   const [signature, setSignature] = useState(null);
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState(null);
@@ -147,12 +145,6 @@ export default function EstimateCard({ service = '', scope, open, staff, token, 
     if (error) return fail(error);
     setEditId(null);
     changed();
-  }
-
-  async function downloadPdf() {
-    setPdfBusy(true); setMsg(null);
-    try { await downloadEstimatePdf(scope, est, lines); } catch (e) { setMsg({ err: true, text: e?.message || 'The PDF could not be made.' }); }
-    setPdfBusy(false);
   }
 
   async function removeLine(l) {
@@ -388,7 +380,6 @@ export default function EstimateCard({ service = '', scope, open, staff, token, 
             {est.status === 'draft' && <button className="secondary" onClick={() => updateEstimate({ status: 'sent', sent_at: new Date().toISOString() })}>Mark as sent (without messaging)</button>}
             {est.status !== 'draft' && <button className="secondary" onClick={async () => { await getSupabase().from('estimate_lines').update({ accepted: false }).eq('estimate_id', est.id); updateEstimate({ status: 'draft', chosen_tier: null }); }}>Back to draft</button>}
             <a href={`/e/${est.share_token}?preview=1`} target="_blank" rel="noreferrer"><button type="button" className="secondary">Preview customer view</button></a>
-            <button type="button" className="secondary" disabled={pdfBusy || lines.length === 0} onClick={downloadPdf}>{pdfBusy ? 'Making PDF...' : 'Download PDF'}</button>
           </div>
           {est.status !== 'approved' && (
             <p className="hint" style={{ marginTop: 8 }}>

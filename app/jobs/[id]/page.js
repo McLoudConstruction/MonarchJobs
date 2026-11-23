@@ -60,6 +60,8 @@ import { getOps, onOpsFinished, onQueueChange } from '@/lib/offlineClient';
 import { overlayVisits } from '@/lib/offlineOps';
 import { cacheRead } from '@/lib/offlineClient';
 import { savePackLocally } from '@/lib/warmJobs';
+import SaveButton from '@/components/SaveButton';
+import { useSaveStatus } from '@/lib/saveStatus';
 
 // The Updates tab is shelved for now (job chat takes its place). Its code and data stay; flip this to bring the tab back.
 const UPDATES_SHELVED = true;
@@ -129,6 +131,7 @@ function JobInner({ id, staff, token }) {
   const [events, setEvents] = useState([]);
   const [staffList, setStaffList] = useState([]);
   const [msg, setMsg] = useState(null);
+  const jobSave = useSaveStatus();
   const [form, setForm] = useState(null);
   const [visitEdit, setVisitEdit] = useState(null); // visit object, or {} for new
   const [tabState, setTab] = useState('overview');
@@ -366,7 +369,7 @@ function JobInner({ id, staff, token }) {
     const patch = { ...form, service: form.service || null, billing_contact_id: form.billing_contact_id || null };
     if (patch.status === 'completed' && job.status !== 'completed') patch.completed_at = new Date().toISOString();
     const { error } = await getSupabase().from('jobs').update(patch).eq('id', id);
-    if (error) { setMsg({ err: true, text: error.message }); return; }
+    if (error) { setMsg({ err: true, text: error.message }); return false; }
     const changed = {};
     for (const k of Object.keys(form)) {
       const before = k === 'billing_contact_id' || k === 'service' ? job[k] || '' : job[k];
@@ -375,6 +378,7 @@ function JobInner({ id, staff, token }) {
     if (Object.keys(changed).length) await logEvent(changed.status ? 'status' : 'edited', changed);
     setMsg({ text: 'Saved.' });
     load();
+    return true;
   }
 
   async function toggleContact(cid) {
@@ -663,7 +667,7 @@ function JobInner({ id, staff, token }) {
       {tab === 'details' && (
         <>
       {isOffice ? (
-        <form className="card" onSubmit={saveJob}>
+        <form className="card" onSubmit={jobSave.track(saveJob)}>
           <h2>Job details</h2>
           <div className="grid2">
             <div className="field"><label>Status</label>
@@ -690,7 +694,7 @@ function JobInner({ id, staff, token }) {
           <div className="field"><label>Job warning (banner)</label><input value={form.warning} onChange={set('warning')} /></div>
           <div className="field"><label>Customer-facing notes</label><textarea value={form.customer_notes} onChange={set('customer_notes')} /><div className="note">May appear on estimates and invoices.</div></div>
           <div className="field"><label>Internal notes</label><textarea value={form.internal_notes} onChange={set('internal_notes')} /><div className="note">Never shown to the customer. For dated notes with photos, use the Updates tab.</div></div>
-          <button className="primary">Save job</button>
+          <SaveButton save={jobSave} idle="Save job" className="primary" />
         </form>
       ) : (
         <div className="card">
