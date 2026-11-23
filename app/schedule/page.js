@@ -10,6 +10,7 @@ import MonthGrid from '@/components/MonthGrid';
 import { monthStart } from '@/lib/monthGrid';
 import TechSchedule from '@/components/TechSchedule';
 import TimeOffPanel from '@/components/TimeOffPanel';
+import MapView from '@/components/schedule/MapView';
 import { rangeLabel } from '@/lib/timeOff';
 import { useIsMobile, useIsTablet } from '@/lib/useIsMobile';
 import { addDays, startOfDay, fmtDay, fmtTime, fmtDuration } from '@/lib/format';
@@ -22,12 +23,12 @@ function weekStart(d) {
   return addDays(x, -dow);
 }
 
-function ScheduleInner({ staff }) {
+function ScheduleInner({ staff, token }) {
   const [start, setStart] = useState(weekStart(new Date()));
   const [visits, setVisits] = useState([]);
   const [techs, setTechs] = useState([]);
   const [offRows, setOffRows] = useState([]);
-  const [view, setView] = useState('board'); // board | timeline | month
+  const [view, setView] = useState('board'); // board | timeline | month | map | timeoff
   const [month, setMonth] = useState(monthStart(new Date()));
   const end = useMemo(() => addDays(start, 7), [start]);
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(start, i)), [start]);
@@ -87,8 +88,10 @@ function ScheduleInner({ staff }) {
         <button className={view === 'board' ? 'on' : ''} onClick={() => setView('board')}>By tech</button>
         <button className={view === 'timeline' ? 'on' : ''} onClick={() => setView('timeline')}>Time of day</button>
         <button className={view === 'month' ? 'on' : ''} onClick={() => setView('month')}>Month</button>
+        {isOffice && <button className={view === 'map' ? 'on' : ''} onClick={() => setView('map')}>Map</button>}
         {isOffice && <button className={view === 'timeoff' ? 'on' : ''} onClick={() => setView('timeoff')}>Time off</button>}
       </div>
+      {view === 'map' && isOffice && <MapView techs={techs} token={token} />}
       {view === 'timeoff' && isOffice && <TimeOffPanel techs={techs} staff={staff} />}
       {view === 'board' && offThisWeek.length > 0 && <p className="hint">Off this week: {offThisWeek.map((o) => `${nameOfId(o.staff_id)} (${rangeLabel(o)})`).join(', ')}.</p>}
       {view === 'board' && <div className="toolbar">
@@ -153,13 +156,13 @@ function ScheduleInner({ staff }) {
 
 // Technicians on a phone or an iPad get their own day timeline (only their visits, no tech filter);
 // everyone else, and desktops, keep the board and week timeline above.
-function ScheduleRouter({ staff }) {
+function ScheduleRouter({ staff, token }) {
   const isMobile = useIsMobile();
   const isTablet = useIsTablet();
   if ((isMobile || isTablet) && staff.role === 'tech') return <TechSchedule staff={staff} />;
-  return <ScheduleInner staff={staff} />;
+  return <ScheduleInner staff={staff} token={token} />;
 }
 
 export default function SchedulePage() {
-  return <AuthGate>{({ staff }) => <ScheduleRouter staff={staff} />}</AuthGate>;
+  return <AuthGate>{({ staff, token }) => <ScheduleRouter staff={staff} token={token} />}</AuthGate>;
 }
