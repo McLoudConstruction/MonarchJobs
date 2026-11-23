@@ -77,7 +77,7 @@ export default function MapView({ techs, token }) {
       markers.current.forEach((m) => m.setMap(null));
       markers.current = [];
       const bounds = new maps.LatLngBounds();
-      const info = new maps.InfoWindow();
+      const info = new maps.InfoWindow({ maxWidth: 280 });
       for (const v of numbered) {
         const c = v.job?.address && coords[v.job.address.id];
         if (!c) continue;
@@ -90,11 +90,18 @@ export default function MapView({ techs, token }) {
         });
         m.addListener('click', () => {
           const box = document.createElement('div');
-          box.style.fontSize = '14px';
-          const t1 = document.createElement('strong'); t1.textContent = `#${v.job?.job_number ?? ''} ${v.job?.customer?.display_name || ''}`;
-          const t2 = document.createElement('div'); t2.textContent = `${fmtTime(v.starts_at)} for ${fmtDuration(v.duration_minutes)} · ${tech ? staffName(tech) : 'Unassigned'}`;
-          const t3 = document.createElement('div'); t3.textContent = `${v.job?.address?.street || ''}, ${v.job?.address?.city || ''}`;
-          box.append(t1, t2, t3);
+          box.style.cssText = 'font-size:14px;line-height:1.4;max-width:240px;overflow:visible;white-space:normal;padding:2px 14px 2px 2px;color:#1b2430';
+          const line = (text, bold) => { const d = document.createElement('div'); if (bold) d.style.fontWeight = '700'; d.textContent = text; return d; };
+          const when = `${fmtTime(v.starts_at)} for ${fmtDuration(v.duration_minutes)}`;
+          const a = document.createElement('a');
+          a.href = `/jobs/${v.job?.id}`; a.textContent = 'Open job'; a.style.cssText = 'display:inline-block;margin-top:6px;color:#0b7a75;font-weight:600';
+          box.append(
+            line(`#${v.job?.job_number ?? ''} ${v.job?.customer?.display_name || ''}`, true),
+            line(when),
+            line(tech ? staffName(tech) : 'Unassigned'),
+            line(`${v.job?.address?.street || ''}, ${v.job?.address?.city || ''}`),
+            a,
+          );
           info.setContent(box); info.open({ map: mapRef.current, anchor: m });
         });
         markers.current.push(m);
