@@ -77,7 +77,12 @@ export default function MapView({ techs, token }) {
       markers.current.forEach((m) => m.setMap(null));
       markers.current = [];
       const bounds = new maps.LatLngBounds();
-      const info = new maps.InfoWindow({ maxWidth: 280 });
+      if (!document.getElementById('monarch-iw-style')) {
+        const st = document.createElement('style'); st.id = 'monarch-iw-style';
+        st.textContent = '.gm-style-iw-d{overflow:visible !important;max-height:none !important}.gm-style-iw-c{padding:10px 12px !important}.gm-style-iw-chr{display:none !important}';
+        document.head.appendChild(st);
+      }
+      const info = new maps.InfoWindow({ maxWidth: 280, headerDisabled: true });
       for (const v of numbered) {
         const c = v.job?.address && coords[v.job.address.id];
         if (!c) continue;
@@ -90,12 +95,17 @@ export default function MapView({ techs, token }) {
         });
         m.addListener('click', () => {
           const box = document.createElement('div');
-          box.style.cssText = 'font-size:14px;line-height:1.4;max-width:240px;overflow:visible;white-space:normal;padding:2px 14px 2px 2px;color:#1b2430';
+          box.style.cssText = 'font-size:14px;line-height:1.4;max-width:240px;overflow:visible;position:relative;padding-right:18px;white-space:normal;color:#1b2430';
           const line = (text, bold) => { const d = document.createElement('div'); if (bold) d.style.fontWeight = '700'; d.textContent = text; return d; };
           const when = `${fmtTime(v.starts_at)} for ${fmtDuration(v.duration_minutes)}`;
           const a = document.createElement('a');
           a.href = `/jobs/${v.job?.id}`; a.textContent = 'Open job'; a.style.cssText = 'display:inline-block;margin-top:6px;color:#0b7a75;font-weight:600';
+          const x = document.createElement('button');
+          x.type = 'button'; x.textContent = '\u00d7'; x.setAttribute('aria-label', 'Close');
+          x.style.cssText = 'position:absolute;top:2px;right:4px;border:0;background:none;font-size:20px;line-height:1;cursor:pointer;color:#555';
+          x.onclick = () => info.close();
           box.append(
+            x,
             line(`#${v.job?.job_number ?? ''} ${v.job?.customer?.display_name || ''}`, true),
             line(when),
             line(tech ? staffName(tech) : 'Unassigned'),
