@@ -9,6 +9,7 @@ import { applyClockForVisit } from '@/lib/clockServer';
 import { isReturnVisit } from '@/lib/visitCrew';
 import { sendSms, sendEmail } from '@/lib/notify';
 import { shouldNotify, buildOnTheWayMessages, arrivalAt, timeText } from '@/lib/onTheWay';
+import { usesDayOneSteps } from '@/lib/waterDayOne';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,7 +49,7 @@ export async function POST(request, { params }) {
     if (seen) return NextResponse.json({ ok: true, duplicate: true });
   }
 
-  const { data: job } = await admin.from('jobs').select('id,status,customer_id').eq('id', visit.job_id).maybeSingle();
+  const { data: job } = await admin.from('jobs').select('id,status,customer_id,service,job_type').eq('id', visit.job_id).maybeSingle();
   if (!job) return NextResponse.json({ error: 'Job not found.' }, { status: 404 });
   if (['closed', 'cancelled'].includes(job.status)) {
     return NextResponse.json({ error: `This job is ${job.status}.`, code: 'JOB_CLOSED' }, { status: 409 });
@@ -63,7 +64,7 @@ export async function POST(request, { params }) {
     .in('status', ['scheduled', 'on_the_way', 'started']);
   const othersActive = (otherRows || []).filter((r) => isReturnVisit(r, visit)).length;
 
-  const plan = planTransition({ visit, action: body.action, minutes: body.minutes, live: body.live === true, othersActive: othersActive || 0, now: when });
+  const plan = planTransition({ visit, action: body.action, minutes: body.minutes, live: body.live === true, othersActive: othersActive || 0, restoration: usesDayOneSteps(job.service, job.job_type), now: when });
   if (plan.error) {
     if (body.replay && ALREADY_PAST[body.action]?.includes(visit.status)) return NextResponse.json({ error: plan.error, code: 'STALE' }, { status: 409 });
     return NextResponse.json({ error: plan.error }, { status: 400 });
@@ -110,7 +111,7 @@ export async function POST(request, { params }) {
   } catch (e) { console.error('on the way message:', e.message); }
 
   // The job is complete: crew mates who never started are not coming, so their waiting visit is cancelled rather than left on their schedule.
-  if (plan.jobPatch.status === 'completed' && visit.crew_id) {
+  if ((plan.jobPatch.status === 'completed' || plan.keepOpen) && visit.crew_id) {
     try {
       const { data: gone } = await admin.from('job_visits').update({ status: 'cancelled' }).eq('crew_id', visit.crew_id).eq('status', 'scheduled').neq('id', visit.id).select('id,tech_id');
       if (gone?.length) await admin.from('job_events').insert({ job_id: job.id, actor_id: auth.staff.id, actor_email: auth.staff.email, kind: 'visit_cancelled', details: { crew: gone.map((g) => g.tech_id), note: 'Team member never started; the visit finished without them.' } });

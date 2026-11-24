@@ -6,7 +6,7 @@ import { sendVisitAction } from '@/lib/offlineActions';
 // Compact Start / Finish buttons on a visit row, for desktop. Phones use the action bar at the bottom of
 // the screen instead (VisitDock). "On the way" is the popup on the job header. Start job shows only for the team member the
 // visit is assigned to (staffId); the server checks it too.
-export default function VisitActions({ visit, token, onDone, onAction, staffId }) {
+export default function VisitActions({ visit, token, onDone, onAction, staffId, restoration = false }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
 
@@ -32,7 +32,7 @@ export default function VisitActions({ visit, token, onDone, onAction, staffId }
         <button type="button" className="primary small" disabled={busy} onClick={() => act('started')}>Start job</button>
       )}
       {visit.status === 'started' && (
-        <button type="button" className="primary small" disabled={busy} onClick={() => { if (window.confirm('Finish this job?')) act('finished'); }}>Finish job</button>
+        <button type="button" className="primary small" disabled={busy} onClick={() => { if (window.confirm(restoration ? 'Finish this visit?' : 'Finish this job?')) act('finished'); }}>{restoration ? 'Finish visit' : 'Finish job'}</button>
       )}
     </span>
   );

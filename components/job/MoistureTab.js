@@ -16,7 +16,7 @@ const SAVE_DELAY_MS = 1200;
 
 // Moisture tab: the sketch as a plain floorplan with a layer per affected area. Tap to place a reading point,
 // tap a pin to log a recheck. Points live in the sketch's plan, so they save the same way the sketch does.
-export default function MoistureTab({ sketches, startId = null, onActive, staff = null, staffList = [], onOpenSketch, command = null, onCommandDone = null, photos = [], onAddPhoto = null, onViewPhotos = null, jobInfo = null, jobId = null, isOffice = false, jobStandards = null, onJobStandards = null }) {
+export default function MoistureTab({ sketches, startId = null, onActive, staff = null, staffList = [], onOpenSketch, command = null, onCommandDone = null, photos = [], onAddPhoto = null, onViewPhotos = null, jobInfo = null, jobId = null, isOffice = false, jobStandards = null, onJobStandards = null , equipGate = null, onEquipBlocked = null }) {
   const [linkOpen, setLinkOpen] = useState(false);
   const [biz, setBiz] = useState(null); // the company's name and contact line for the report header
   const [activeId, setActiveId] = useState(startId);
@@ -254,6 +254,8 @@ export default function MoistureTab({ sketches, startId = null, onActive, staff 
           onViewReadingPhotos={onViewPhotos ? (key) => onViewPhotos(photos.filter((x) => !x.archived_at && x.sketch_id === loaded.id && x.room_key === key)) : undefined}
           command={command}
           onCommandDone={onCommandDone}
+          equipGate={equipGate}
+          onEquipBlocked={onEquipBlocked}
           assets={inv ? { list: inv.map((a) => ({ ...a, tag: assetTag(prefixRef.current, a.asset_no) })) } : null}
         />
       )}

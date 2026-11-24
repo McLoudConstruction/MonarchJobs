@@ -16,6 +16,8 @@ import EstimateCard from '@/components/EstimateCard';
 import PhotosTab from '@/components/job/PhotosTab';
 import SketchTab from '@/components/job/SketchTab';
 import MoistureTab from '@/components/job/MoistureTab';
+import WaterDayOne, { DayOneCard } from '@/components/job/WaterDayOne';
+import { usesDayOneSteps, gateFor, canCompleteJob, nextDayOneStep } from '@/lib/waterDayOne';
 import InspectionTab from '@/components/job/InspectionTab';
 import EvalSheetTab from '@/components/job/EvalSheetTab';
 import ReportsTab from '@/components/job/ReportsTab';
@@ -175,6 +177,12 @@ function JobInner({ id, staff, token }) {
   const qaFromRef = useRef(false);
   const backToQaRef = useRef(null);
   const [qaFrom, setQaFrom] = useState(false);
+  const [waterRows, setWaterRows] = useState([]);       // Day 1 steps recorded on this job (water losses)
+  const [waterOk, setWaterOk] = useState(false);        // false until the table exists and was read: no gating before migration 051 is run
+  const [dayOneStep, setDayOneStep] = useState(null);   // which Day 1 dialog is open
+  const [dayOneMsg, setDayOneMsg] = useState('');
+  const [completeBusy, setCompleteBusy] = useState(false);
+  const [completeMsg, setCompleteMsg] = useState('');
   // a screen opened from Quick Actions hides the phone's top bar and bottom navigation (see quickactions.css)
   useEffect(() => {
     document.body.classList.toggle('qa-page', mobile && qaFrom && !qaOpen);
@@ -212,6 +220,14 @@ function JobInner({ id, staff, token }) {
     if (tabState !== 'moisture') setMoistCmd(null);
     if (tabState !== 'updates') setUpdCmd(null);
   }, [tabState]);
+
+  const loadWater = useCallback(async () => {
+    const { data, error } = await getSupabase().from('job_water_steps').select('*').eq('job_id', id).order('created_at');
+    if (error) { setWaterOk(false); return; }
+    setWaterRows(data || []);
+    setWaterOk(true);
+  }, [id]);
+  useEffect(() => { loadWater(); }, [loadWater]);
 
   // Shows a job pack (fresh from the server, or the copy kept on this phone).
   const applyPack = useCallback((pack, fromPhone) => {
@@ -338,6 +354,20 @@ function JobInner({ id, staff, token }) {
   const service = serviceOf(job);
   const shownTabs = tabsFor(JOB_TABS, service, { customerType: job.customer?.customer_type }).filter(([k]) => k !== 'costs' || staff.role === 'owner').filter(([k]) => !(UPDATES_SHELVED && k === 'updates')); // job costs are for the owner alone
   const tab = shownTabs.some(([k]) => k === tabState) ? tabState : 'overview';
+  // Water losses: Day 1 steps, and Finish visit is not Complete job
+  const restoration = usesDayOneSteps(service, job.job_type);
+  const dayOneOn = restoration && waterOk;
+  const activeVisitCount = visits.filter((v) => ['scheduled', 'on_the_way', 'started'].includes(v.status)).length;
+  const canCompleteNow = restoration && visits.some((v) => v.status === 'finished') && canCompleteJob({ jobStatus: job.status, activeVisits: activeVisitCount }).ok && (isOffice || visits.some((v) => v.tech_id === staff.id));
+  const equipGate = dayOneOn ? gateFor('equipment', waterRows) : null;
+  const openDayOne = (step, msg = '') => { setDayOneMsg(msg); setDayOneStep(step === 'next' ? (nextDayOneStep(waterRows)?.step || 'safety') : step); };
+  async function completeJob() {
+    if (!window.confirm('Complete this job? This makes the invoice draft.')) return;
+    setCompleteBusy(true); setCompleteMsg('');
+    try { await apiFetch(`/api/jobs/${id}/complete`, token, { method: 'POST', body: JSON.stringify({}) }); await load(); }
+    catch (e) { setCompleteMsg(e.message); }
+    setCompleteBusy(false);
+  }
   // a finished job should have all its equipment picked up
   const shortCount = ['completed', 'closed'].includes(job.status) ? sketches.flatMap((sk) => unitsStillOnSite(normalizePlan(sk.plan))) : [];
 
@@ -456,11 +486,13 @@ function JobInner({ id, staff, token }) {
     clock_out: async () => { await apiFetch(`/api/jobs/${id}/clock`, token, { method: 'POST', body: JSON.stringify({ action: 'out' }) }); setClockTick((n) => n + 1); },
     clock_in: async () => { await apiFetch(`/api/jobs/${id}/clock`, token, { method: 'POST', body: JSON.stringify({ action: 'in' }) }); setClockTick((n) => n + 1); },
     finish: async () => {
-      if (!window.confirm('Finish this job?')) return;
+      if (!window.confirm(restoration ? 'Finish this visit?' : 'Finish this job?')) return;
       const r = await sendVisitAction({ visit: dockVisit, action: 'finished', jobId: id });
       await load();
       if (!r?.queued) onVisitAction('finished');
     },
+    dayone: () => openDayOne('next'),
+    complete_job: () => completeJob(),
     complete: () => { openTab('updates'); setUpdCmd({ kind: 'internal', category: 'Completed Job', n: Date.now() }); },
     internal: () => { openTab('updates'); setUpdCmd({ kind: 'internal', category: INTERNAL_CATEGORIES[0], n: Date.now() }); },
   };
@@ -548,10 +580,13 @@ function JobInner({ id, staff, token }) {
       {mobile && <QuickActionScreen
         open={qaOpen} landing={qaLanding} onClose={() => { setQaOpen(false); setQaLanding(false); }} onExit={exitQa} job={job} customerName={job.customer.display_name}
         visitStatus={dockVisit?.status || null} canStart={canStart} clock={clockMode} service={service} tabs={shownTabs.map(([k]) => k)}
-        hasSketch={sketches.length > 0} run={qaRun} badges={{ chat: jobChatUnread }}
+        hasSketch={sketches.length > 0} run={qaRun} badges={{ chat: jobChatUnread }} dayOne={dayOneOn} restoration={restoration} canComplete={canCompleteNow}
       />}
 
-      {tab === 'overview' && dockVisit && <VisitDock inline visit={dockVisit} staffId={staff.id} token={token} onOtw={() => setOtwOpen(true)} onDone={load} onAction={onVisitAction} />}
+      {tab === 'overview' && dockVisit && <VisitDock inline visit={dockVisit} staffId={staff.id} token={token} onOtw={() => setOtwOpen(true)} onDone={load} onAction={onVisitAction} restoration={restoration} />}
+
+      {tab === 'overview' && dayOneOn && <DayOneCard rows={waterRows} onOpen={openDayOne} canComplete={canCompleteNow} onComplete={completeJob} completeBusy={completeBusy} completeMsg={completeMsg} />}
+      {dayOneOn && dayOneStep && <WaterDayOne step={dayOneStep} message={dayOneMsg} onClose={() => setDayOneStep(null)} jobId={id} staff={staff} customerName={contactName || job.customer.display_name} rows={waterRows} photoCount={photos.filter((x) => !x.archived_at).length} onReload={loadWater} />}
 
       {tab === 'overview' && (
         <div className="job-overview">
@@ -640,13 +675,13 @@ function JobInner({ id, staff, token }) {
                         <div key={m.id} className="visit-member">
                           <span>{name(m.tech_id)}{m.minutes_out ? ` · ${m.minutes_out} min out` : ''}</span>
                           <span className="badge off">{VISIT_STATUS[m.status]}</span>
-                          {(isOffice || m.tech_id === staff.id) && <VisitActions visit={m} staffId={staff.id} token={token} onDone={load} onAction={onVisitAction} />}
+                          {(isOffice || m.tech_id === staff.id) && <VisitActions visit={m} staffId={staff.id} token={token} onDone={load} onAction={onVisitAction} restoration={restoration} />}
                         </div>
                       ))}
                     {reasonText(v) && <div className="meta">Reason: {reasonText(v)}{isOffice && gobacks[v.id] && <> <span className="badge warn">Go-back: {name(gobacks[v.id])}</span></>}</div>}
                   </div>
                   <div className="visit-buttons">
-                    {g.solo && (isOffice || v.tech_id === staff.id) && <VisitActions visit={v} staffId={staff.id} token={token} onDone={load} onAction={onVisitAction} />}
+                    {g.solo && (isOffice || v.tech_id === staff.id) && <VisitActions visit={v} staffId={staff.id} token={token} onDone={load} onAction={onVisitAction} restoration={restoration} />}
                     {canEditGroup && (
                       <>
                         <button className="secondary small" onClick={() => setVisitEdit(editRow)}>Reschedule</button>
@@ -769,6 +804,8 @@ function JobInner({ id, staff, token }) {
           onViewPhotos={(list) => list.length && openViewer(list, list[0].id)}
           command={moistCmd}
           onCommandDone={() => setMoistCmd(null)}
+          equipGate={equipGate}
+          onEquipBlocked={(g) => openDayOne(g.step, g.reason)}
         />
         </>
       )}

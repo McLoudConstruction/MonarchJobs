@@ -7,7 +7,7 @@ import { fmtTime } from '@/lib/format';
 // The phone's action bar: one big button for the next step of the visit, pinned above the bottom
 // navigation where a thumb reaches it (inline: sits in the page, under the tab bar). On the way opens the minutes popup (onOtw); Start and Finish
 // go straight to the server. Shown on phones only; desktops use the buttons in the page.
-export default function VisitDock({ visit, token, onOtw, onDone, onAction, staffId, inline = false }) {
+export default function VisitDock({ visit, token, onOtw, onDone, onAction, staffId, inline = false, restoration = false }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
 
@@ -29,7 +29,7 @@ export default function VisitDock({ visit, token, onOtw, onDone, onAction, staff
   const status = {
     scheduled: `Scheduled for ${fmtTime(visit.starts_at)}`,
     on_the_way: `On the way, ${visit.minutes_out} min out`,
-    started: 'Job in progress',
+    started: restoration ? 'Visit in progress' : 'Job in progress',
   }[visit.status];
   if (!status) return null;
 
@@ -51,7 +51,7 @@ export default function VisitDock({ visit, token, onOtw, onDone, onAction, staff
           </>
         )}
         {visit.status === 'started' && (
-          <button type="button" className="primary big" disabled={busy} onClick={() => { if (window.confirm('Finish this job?')) act('finished'); }}>Finish job</button>
+          <button type="button" className="primary big" disabled={busy} onClick={() => { if (window.confirm(restoration ? 'Finish this visit?' : 'Finish this job?')) act('finished'); }}>{restoration ? 'Finish visit' : 'Finish job'}</button>
         )}
       </div>
     </div>

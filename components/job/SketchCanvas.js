@@ -192,7 +192,7 @@ const MOVE_STEP = 0.5; // feet: the Move arrows slide a room 6 inches at a time
 // a finger is the pointer: phones, and tablets that report a coarse pointer
 const coarse = () => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(pointer: coarse)').matches : false);
 
-export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, onChange, photoCounts = {}, onAddRoomPhoto, onViewRoomPhotos, onAddReadingPhoto = null, onViewReadingPhotos = null, reportInfo = null, onQuoteRoom = null, exportName = 'sketch', headSlot = null, staff = null, staffList = [], onComment = null, command = null, onCommandDone = null, assets = null, service = '' }) {
+export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, onChange, photoCounts = {}, onAddRoomPhoto, onViewRoomPhotos, onAddReadingPhoto = null, onViewReadingPhotos = null, reportInfo = null, onQuoteRoom = null, exportName = 'sketch', headSlot = null, staff = null, staffList = [], onComment = null, command = null, onCommandDone = null, assets = null, service = '', equipGate = null, onEquipBlocked = null }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const rootRef = useRef(null);
@@ -1517,6 +1517,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
   }
   function switchWork(w) {
     if (w === workRef.current) return;
+    if (w === 'equipment' && equipGate?.blocked) { onEquipBlocked?.(equipGate); return; } // Day 1 steps first
     setWork(w);
     setSel(null); setPopup(null); setMoveId(null); setMoveEqId(null);
     setDayOpen(false); setLayersOpen(false); setEqListOpen(false);

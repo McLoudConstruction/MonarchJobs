@@ -7,19 +7,19 @@ import { quickActions } from '@/lib/quickActions';
 import { CarIcon, StopwatchIcon, FinishFlagIcon, ChatBubbleIcon, ClockInIcon, ClockOutIcon } from '@/components/job/QuickIcons';
 import './quickactions.css';
 
-const ICONS = { otw: CarIcon, eta: CarIcon, start: StopwatchIcon, finish: FinishFlagIcon, chat: ChatBubbleIcon };
+const ICONS = { otw: CarIcon, eta: CarIcon, start: StopwatchIcon, finish: FinishFlagIcon, finish_visit: FinishFlagIcon, chat: ChatBubbleIcon };
 const GRID_ICONS = { clock_in: ClockInIcon, clock_out: ClockOutIcon }; // icons on the buttons below the row
-const MAIN = ['otw', 'eta', 'start', 'finish', 'chat']; // the icon row; the rest are the buttons below it
+const MAIN = ['otw', 'eta', 'start', 'finish', 'finish_visit', 'chat']; // the icon row; the rest are the buttons below it
 
 // Full-screen list of big buttons for everything the tech can do on this job right now (like Drive Mode in McLoudJobs).
 // Shows the customer, a tappable address (opens the maps app) and phone, then the actions for this kind of job and where the job is.
 // `run(key)` does the action (it may throw; the message shows here). The screen closes after an action that moves to another screen.
-export default function QuickActionScreen({ open, onClose, onExit, landing = false, job, customerName, visitStatus, canStart = true, clock, service, tabs, hasSketch, run, badges = {} }) {
+export default function QuickActionScreen({ open, onClose, onExit, landing = false, job, customerName, visitStatus, canStart = true, clock, service, tabs, hasSketch, run, badges = {}, dayOne = false, restoration = false, canComplete = false }) {
   const [busy, setBusy] = useState('');
   const [err, setErr] = useState('');
   if (!open) return null;
 
-  const actions = quickActions({ service, visitStatus, jobStatus: job.status, clock, tabs, hasSketch, canStart });
+  const actions = quickActions({ service, visitStatus, jobStatus: job.status, clock, tabs, hasSketch, canStart, dayOne, restoration, canComplete });
   const main = actions.filter((a) => MAIN.includes(a.key));
   const rest = actions.filter((a) => !MAIN.includes(a.key));
   const groups = [['now', 'Next'], ['work', 'On the job'], ['job', 'Job']];
@@ -30,7 +30,7 @@ export default function QuickActionScreen({ open, onClose, onExit, landing = fal
     setBusy(a.key);
     try {
       await run(a.key);
-      if (!(landing && ['otw', 'eta', 'start', 'finish', 'clock_in', 'clock_out', 'photos', 'chat'].includes(a.key))) onClose(); // on the landing page these stay put (camera and chat open on top of it, the buttons update in place)
+      if (!(landing && ['otw', 'eta', 'start', 'finish', 'finish_visit', 'complete_job', 'dayone', 'clock_in', 'clock_out', 'photos', 'chat'].includes(a.key))) onClose(); // on the landing page these stay put (camera and chat open on top of it, the buttons update in place)
     } catch (e) {
       setErr(e?.message || 'That did not work. Try again.');
     }
