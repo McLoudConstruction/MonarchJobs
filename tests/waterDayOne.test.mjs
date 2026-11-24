@@ -66,3 +66,17 @@ test('a later walkthrough raises the category; unsigned authorization is flagged
   assert.ok(missingDayOne([row('safety'), row('authorization', { customer_absent: true }), row('walkthrough')]).some((m) => /e-sign/.test(m)));
   assert.equal(missingDayOne([row('safety'), row('authorization'), row('walkthrough')]).length, 0);
 });
+
+test('the certificate of completion comes after the three Day 1 steps, once the visits are done, and gates Complete job', () => {
+  const three = [row('safety'), row('authorization'), row('walkthrough')];
+  assert.equal(nextDayOneStep(three), null, 'not asked for while work is still under way');
+  assert.equal(nextDayOneStep(three, { finished: true }).step, 'certificate');
+  assert.equal(nextDayOneStep([...three, row('certificate')], { finished: true }), null);
+  assert.equal(canCompleteJob({ jobStatus: 'in_progress', activeVisits: 0, certificate: 'todo' }).ok, false);
+  assert.equal(canCompleteJob({ jobStatus: 'in_progress', activeVisits: 0, certificate: 'todo' }).step, 'certificate');
+  assert.equal(canCompleteJob({ jobStatus: 'in_progress', activeVisits: 0, certificate: 'done' }).ok, true);
+  assert.equal(canCompleteJob({ jobStatus: 'in_progress', activeVisits: 0, certificate: 'absent' }).ok, true, 'customer not present is the escape; the e-sign link follows');
+  assert.equal(canCompleteJob({ jobStatus: 'in_progress', activeVisits: 0 }).ok, true, 'no check when the steps table is not there');
+  assert.equal(stepStatus([row('certificate', { customer_absent: true })]).certificate, 'absent');
+  assert.ok(missingDayOne([...three, row('certificate', { customer_absent: true })]).some((m) => /Certificate/.test(m)));
+});

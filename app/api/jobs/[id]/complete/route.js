@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireStaff } from '@/lib/apiAuth';
 import { getAdmin } from '@/lib/supabaseAdmin';
-import { canCompleteJob } from '@/lib/waterDayOne';
+import { canCompleteJob, usesDayOneSteps, stepStatus } from '@/lib/waterDayOne';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,14 +15,20 @@ export async function POST(request, { params }) {
   if (auth.error) return auth.error;
   if (!UUID.test(params.id)) return NextResponse.json({ error: 'Job not found.' }, { status: 404 });
   const admin = getAdmin();
-  const { data: job } = await admin.from('jobs').select('id,status').eq('id', params.id).maybeSingle();
+  const { data: job } = await admin.from('jobs').select('id,status,service,job_type').eq('id', params.id).maybeSingle();
   if (!job) return NextResponse.json({ error: 'Job not found.' }, { status: 404 });
   const { data: visits } = await admin.from('job_visits').select('id,tech_id,status').eq('job_id', job.id);
   if (auth.staff.role === 'tech' && !(visits || []).some((v) => v.tech_id === auth.staff.id)) {
     return NextResponse.json({ error: 'This job is not assigned to you.' }, { status: 403 });
   }
   const active = (visits || []).filter((v) => ['scheduled', 'on_the_way', 'started'].includes(v.status)).length;
-  const can = canCompleteJob({ jobStatus: job.status, activeVisits: active });
+  // restoration jobs also need the certificate of completion (signed, or customer not present). If the steps table is not there yet, no check.
+  let certificate = null;
+  if (usesDayOneSteps(job.service, job.job_type)) {
+    const { data: steps, error: serr } = await admin.from('job_water_steps').select('kind,customer_absent,created_at').eq('job_id', job.id).eq('kind', 'certificate');
+    if (!serr) certificate = stepStatus(steps || []).certificate;
+  }
+  const can = canCompleteJob({ jobStatus: job.status, activeVisits: active, certificate });
   if (!can.ok) return NextResponse.json({ error: can.reason }, { status: 409 });
   const ts = new Date().toISOString();
   const { error } = await admin.from('jobs').update({ status: 'completed', completed_at: ts }).eq('id', job.id).eq('status', job.status);

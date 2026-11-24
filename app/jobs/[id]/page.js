@@ -17,7 +17,7 @@ import PhotosTab from '@/components/job/PhotosTab';
 import SketchTab from '@/components/job/SketchTab';
 import MoistureTab from '@/components/job/MoistureTab';
 import WaterDayOne, { DayOneCard } from '@/components/job/WaterDayOne';
-import { usesDayOneSteps, gateFor, canCompleteJob, nextDayOneStep } from '@/lib/waterDayOne';
+import { usesDayOneSteps, gateFor, canCompleteJob, nextDayOneStep, stepStatus } from '@/lib/waterDayOne';
 import InspectionTab from '@/components/job/InspectionTab';
 import EvalSheetTab from '@/components/job/EvalSheetTab';
 import ReportsTab from '@/components/job/ReportsTab';
@@ -358,9 +358,10 @@ function JobInner({ id, staff, token }) {
   const restoration = usesDayOneSteps(service, job.job_type);
   const dayOneOn = restoration && waterOk;
   const activeVisitCount = visits.filter((v) => ['scheduled', 'on_the_way', 'started'].includes(v.status)).length;
-  const canCompleteNow = restoration && visits.some((v) => v.status === 'finished') && canCompleteJob({ jobStatus: job.status, activeVisits: activeVisitCount }).ok && (isOffice || visits.some((v) => v.tech_id === staff.id));
+  const canCompleteNow = restoration && visits.some((v) => v.status === 'finished') && canCompleteJob({ jobStatus: job.status, activeVisits: activeVisitCount, certificate: waterOk ? stepStatus(waterRows).certificate : null }).ok && (isOffice || visits.some((v) => v.tech_id === staff.id));
+  const allVisitsDone = restoration && visits.some((v) => v.status === 'finished') && activeVisitCount === 0 && !['completed', 'closed', 'cancelled'].includes(job.status);
   const equipGate = dayOneOn ? gateFor('equipment', waterRows) : null;
-  const openDayOne = (step, msg = '') => { setDayOneMsg(msg); setDayOneStep(step === 'next' ? (nextDayOneStep(waterRows)?.step || 'safety') : step); };
+  const openDayOne = (step, msg = '') => { setDayOneMsg(msg); setDayOneStep(step === 'next' ? (nextDayOneStep(waterRows, { finished: allVisitsDone })?.step || 'safety') : step); };
   async function completeJob() {
     if (!window.confirm('Complete this job? This makes the invoice draft.')) return;
     setCompleteBusy(true); setCompleteMsg('');
@@ -585,8 +586,8 @@ function JobInner({ id, staff, token }) {
 
       {tab === 'overview' && dockVisit && <VisitDock inline visit={dockVisit} staffId={staff.id} token={token} onOtw={() => setOtwOpen(true)} onDone={load} onAction={onVisitAction} restoration={restoration} />}
 
-      {tab === 'overview' && dayOneOn && <DayOneCard rows={waterRows} onOpen={openDayOne} canComplete={canCompleteNow} onComplete={completeJob} completeBusy={completeBusy} completeMsg={completeMsg} />}
-      {dayOneOn && dayOneStep && <WaterDayOne step={dayOneStep} message={dayOneMsg} onClose={() => setDayOneStep(null)} jobId={id} staff={staff} customerName={contactName || job.customer.display_name} rows={waterRows} photoCount={photos.filter((x) => !x.archived_at).length} onReload={loadWater} />}
+      {tab === 'overview' && dayOneOn && <DayOneCard rows={waterRows} onOpen={openDayOne} finished={allVisitsDone} canComplete={canCompleteNow} onComplete={completeJob} completeBusy={completeBusy} completeMsg={completeMsg} />}
+      {dayOneOn && dayOneStep && <WaterDayOne step={dayOneStep} message={dayOneMsg} onClose={() => setDayOneStep(null)} jobId={id} staff={staff} token={token} customerName={contactName || job.customer.display_name} rows={waterRows} photoCount={photos.filter((x) => !x.archived_at).length} onReload={loadWater} />}
 
       {tab === 'overview' && (
         <div className="job-overview">

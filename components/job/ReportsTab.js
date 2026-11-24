@@ -15,6 +15,7 @@ import { reportGroups, sketchContents, defaultSketch, dryingReady, DRYING_REPORT
 import { buildJobPacket } from '@/lib/jobPacketClient';
 import { packetFileName } from '@/lib/jobPacket';
 import { dailyBurn } from '@/lib/dailyBurn';
+import { packetCheck } from '@/lib/packetCheck';
 import { renderDailyBurn, dailyBurnFileName } from '@/lib/dailyBurnReport';
 import { logoAsJpeg } from '@/lib/logoJpeg';
 import { logoUrl } from '@/lib/branding';
@@ -47,6 +48,7 @@ function Row({ title, text, ready = true, hint, children, button, note = null })
 // None of them names staff. info = { business, phone, email, customer, address, jobNumber, jobType }.
 export default function ReportsTab({ jobId, service, photos, rooms, sketches: pageSketches, info, isOffice, isOwner = false, jobStandards = null }) {
   const [biz, setBiz] = useState(null);
+  const [steps, setSteps] = useState([]); // Day 1 steps and the certificate (water losses); stays empty if migration 051 is not run
   const [fresh, setFresh] = useState(null); // sketches read just now (the Moisture tab saves on its own, so the page's copy can be old)
   const [sketchId, setSketchId] = useState(null);
   const [busy, setBusy] = useState('');
@@ -69,6 +71,7 @@ export default function ReportsTab({ jobId, service, photos, rooms, sketches: pa
     sb.from('job_sketches').select('id,name,plan').eq('job_id', jobId).order('sort_order').order('created_at').then(({ data, error }) => {
       if (live && !error && data) setFresh(data);
     });
+    sb.from('job_water_steps').select('kind,customer_absent,created_at,data').eq('job_id', jobId).then(({ data, error }) => { if (live && !error && data) setSteps(data); });
     return () => { live = false; };
   }, [jobId]);
 
@@ -151,6 +154,8 @@ export default function ReportsTab({ jobId, service, photos, rooms, sketches: pa
 
   const photoItem = groups.find((g) => g.key === 'photos')?.items || [];
   const drying = groups.find((g) => g.key === 'drying');
+  // is the carrier packet ready? advice only, for water losses
+  const check = useMemo(() => (drying && isOffice ? packetCheck({ steps, photos, plans: sketches.map((s) => withJobStandards(normalizePlan(s.plan), jobStandards)) }) : null), [steps, photos, sketches, jobStandards, isOffice]); // eslint-disable-line react-hooks/exhaustive-deps
   const pdfBtn = (key, onClick, ready = true, label = 'Download PDF', cls = 'primary') => (
     <button type="button" className={cls} disabled={!ready} aria-busy={busy.startsWith(key)} onClick={onClick}>{busy.startsWith(key) ? `Making…${progress(key)}` : label}</button>
   );
@@ -176,6 +181,22 @@ export default function ReportsTab({ jobId, service, photos, rooms, sketches: pa
         </Row>
       )}
       {photoItem[1] && <Row title="Before & after" note={noteFor('beforeafter')} text={photoItem[1].text} ready={photoItem[1].ready} hint={photoItem[1].hint} button={pdfBtn('beforeafter', () => makePhotoPdf('beforeafter'), photoItem[1].ready)} />}
+
+      {drying && check && (
+        <div className="rep-item" style={{ marginTop: 12 }}>
+          <div className="rep-title">Packet check</div>
+          <div className="hint" style={{ margin: '0 0 8px' }}>{check.gaps === 0 ? 'Everything the carrier packet needs is in.' : `${check.total - check.gaps} of ${check.total} ready. Nothing is blocked; these are the gaps to fix or explain.`}</div>
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 6 }}>
+            {check.items.map((i) => (
+              <li key={i.id} style={{ display: 'flex', gap: 8 }}>
+                <span aria-hidden="true" style={{ width: 18 }}>{i.ok ? '✓' : '!'}</span>
+                <span><strong style={{ fontWeight: i.ok ? 400 : 600 }}>{i.label}</strong>{!i.ok && <span className="muted" style={{ display: 'block' }}>{i.detail}</span>}</span>
+              </li>
+            ))}
+          </ul>
+          {check.early > 0 && <p className="hint" style={{ margin: '8px 0 0' }}>{check.early} unit{check.early === 1 ? ' was' : 's were'} picked up early with the owner's reason in the equipment log.</p>}
+        </div>
+      )}
 
       {drying && (
         <>

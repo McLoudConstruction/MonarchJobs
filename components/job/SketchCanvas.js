@@ -22,6 +22,7 @@ import MeterScan from '@/components/job/MeterScan';
 import AssetScan from '@/components/job/AssetScan';
 import { checkScannedAsset } from '@/lib/assetScan';
 import PullPrompt from '@/components/job/PullPrompt';
+import { pickupCheck } from '@/lib/chamberDry';
 import DayOneList, { useDayOne } from '@/components/job/DayOneList';
 import { drawPlan, areaStyle, WATER_LINE } from '@/lib/sketchDraw';
 import {
@@ -1566,13 +1567,26 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
       if (!d.hadPopup && rm && pl.equipment.length < MAX_EQUIPMENT && pointInPoly(rm.pts, d.wx, d.wy)) placeEquipment(pl, d.wx, d.wy, rm); // the tap that only closed the sheet does not also place a unit
     }
   }
+  // Drying goals are per chamber: equipment leaves a chamber that has not reached its goal only with the owner's reason.
+  // '' = fine to go, null = stop, otherwise the reason to record.
+  function holdCheck(pl, units) {
+    const chk = pickupCheck(pl, units);
+    if (chk.ok) return '';
+    const lines = chk.held.map((h) => `${h.chamber.name}: ${h.units.join(', ')} (${h.why})`).join('\n');
+    if (staff?.role !== 'owner') { window.alert(`Not at the drying goal yet:\n${lines}\n\nThe owner can pick these up early with a reason.`); return null; }
+    const why = window.prompt(`Not at the drying goal yet:\n${lines}\n\nPick up anyway? Type the reason. It goes in the packet.`);
+    if (!why || why.trim().length < 3) return null;
+    return why.trim();
+  }
   function equipChangeState(kind) { // 'pickup' | 'putback' for the unit in the sheet, on the day on screen
     const s = selRef.current;
     const pl = planRef.current;
     const u = s && s.kind === 'equipment' ? pl.equipment.find((x) => x.id === s.id) : null;
     if (!u) return;
     const st = eqStamp(pl);
-    const next = kind === 'pickup' ? pickUpUnit(pl, u, st) : putBackUnit(pl, u, st);
+    let why = '';
+    if (kind === 'pickup') { why = holdCheck(pl, [u]); if (why === null) return; }
+    const next = kind === 'pickup' ? pickUpUnit(pl, u, { ...st, why }) : putBackUnit(pl, u, st);
     if (next !== u) commit({ ...pl, equipment: pl.equipment.map((x) => (x.id === u.id ? next : x)) });
     closePopup();
     setSel(null);
@@ -1582,8 +1596,10 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     const d = pl.days.find((x) => x.id === dayRef.current);
     if (!window.confirm(`Pick up ${s.units.length} unit${s.units.length === 1 ? '' : 's'} in ${s.roomName}${d ? ` on ${dayName(pl.days, d.id)} (${dateText(d.date)})` : ''}? Each stays in the log with this pick-up date.`)) return;
     const st = eqStamp(pl);
+    const why = holdCheck(pl, s.units);
+    if (why === null) return;
     const ids = new Set(s.units.map((u) => u.id));
-    commit({ ...pl, equipment: pl.equipment.map((u) => (ids.has(u.id) ? pickUpUnit(pl, u, st) : u)) });
+    commit({ ...pl, equipment: pl.equipment.map((u) => (ids.has(u.id) ? pickUpUnit(pl, u, { ...st, why }) : u)) });
   }
   function pickUpAll() {
     const pl = planRef.current;
@@ -1592,8 +1608,10 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
     const d = pl.days.find((x) => x.id === dayRef.current);
     if (!window.confirm(`Pick up all ${on.length} unit${on.length === 1 ? '' : 's'} of equipment${d ? ` on ${dayName(pl.days, d.id)} (${dateText(d.date)})` : ''}? Each stays in the log with this pick-up date.`)) return;
     const st = eqStamp(pl);
+    const why = holdCheck(pl, on.map((r) => r.u));
+    if (why === null) return;
     const ids = new Set(on.map((r) => r.u.id));
-    commit({ ...pl, equipment: pl.equipment.map((u) => (ids.has(u.id) ? pickUpUnit(pl, u, st) : u)) });
+    commit({ ...pl, equipment: pl.equipment.map((u) => (ids.has(u.id) ? pickUpUnit(pl, u, { ...st, why }) : u)) });
     setEqListOpen(false);
   }
   function gotoUnit(id) {
@@ -1983,7 +2001,7 @@ export default function SketchCanvas({ variant = 'sketch', plan: initialPlan, on
                   </button>
                   {eqListOpen && (
                     <div className="sk-moist-opts sk-layers sk-eq-list" role="group" aria-label="Equipment on site">
-                      <PullPrompt plan={plan} onPickUp={pickUpRoomUnits} />
+                      <PullPrompt plan={plan} onPickUp={pickUpRoomUnits} isOwner={staff?.role === 'owner'} />
                       <EquipmentSizing plan={plan} onClass={setSizingClass} onChambers={(list) => commit({ ...planRef.current, chambers: list })} />
                       {(() => {
                         const rows = equipmentOnPlan(plan, dayRef.current);

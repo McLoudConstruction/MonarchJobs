@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import PopupModal from '@/components/PopupModal';
 import { SignOverlay } from '@/components/SignaturePad';
 import { getSupabase } from '@/lib/supabaseClient';
+import { apiFetch } from '@/lib/useAuth';
 import { fmtDateTime } from '@/lib/format';
 import {
   SAFETY_CHECKS, CATEGORIES, STEP_KINDS, STEP_LABELS, latestByKind, stepStatus, nextDayOneStep,
@@ -16,16 +17,16 @@ import {
 
 const STATUS_TEXT = { done: 'Done', absent: 'Not signed, customer not present', todo: 'To do' };
 
-export function DayOneCard({ rows, onOpen, canComplete = false, onComplete, completeBusy = false, completeMsg = '' }) {
+export function DayOneCard({ rows, onOpen, canComplete = false, onComplete, completeBusy = false, completeMsg = '', finished = false }) {
   const st = stepStatus(rows);
   const l = latestByKind(rows);
-  const next = nextDayOneStep(rows);
+  const next = nextDayOneStep(rows, { finished });
   const cat = categoryOf(rows);
   return (
     <div className="card day-one-card">
       <div className="card-head"><h2>Day 1 steps</h2>{cat && <span className="badge">{`Category ${cat}`}</span>}</div>
       <ul className="dayone-steps" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 8 }}>
-        {STEP_KINDS.map((k) => (
+        {[...STEP_KINDS, ...(finished ? ['certificate'] : [])].map((k) => (
           <li key={k} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span aria-hidden="true" style={{ width: 22, textAlign: 'center' }}>{st[k] === 'done' ? '✓' : st[k] === 'absent' ? '!' : '○'}</span>
             <button type="button" className="link-btn" style={{ flex: 1, textAlign: 'left', background: 'none', border: 0, padding: 0, font: 'inherit', cursor: 'pointer' }} onClick={() => onOpen(k)}>
@@ -47,21 +48,23 @@ export function DayOneCard({ rows, onOpen, canComplete = false, onComplete, comp
   );
 }
 
-export default function WaterDayOne({ step, message = '', onClose, jobId, staff, customerName, rows, photoCount = 0, onReload }) {
+export default function WaterDayOne({ step, message = '', onClose, jobId, staff, token, customerName, rows, photoCount = 0, onReload }) {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [safety, setSafety] = useState({ checks: {}, source_stopped: null, source_note: '', older_home: false });
   const [walk, setWalk] = useState({ category: 0, reason: '' });
   const [name, setName] = useState('');
   const [signing, setSigning] = useState(false);
+  const [link, setLink] = useState(null); // the e-sign link just made: { url, note }
   const latest = latestByKind(rows);
 
   useEffect(() => {
     setErr('');
     setSigning(false);
+    setLink(null);
     if (step === 'safety') setSafety(latest.safety?.data ? { source_note: '', older_home: false, ...latest.safety.data } : { checks: {}, source_stopped: null, source_note: '', older_home: false });
     if (step === 'walkthrough') setWalk({ category: Number(latest.walkthrough?.data?.category) || 0, reason: latest.walkthrough?.data?.reason || '' });
-    if (step === 'authorization') setName(customerName || '');
+    if (step === 'authorization' || step === 'certificate') setName(customerName || '');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
@@ -72,7 +75,7 @@ export default function WaterDayOne({ step, message = '', onClose, jobId, staff,
     const { error } = await sb.from('job_water_steps').insert({ job_id: jobId, kind, created_by: staff.id, ...fields });
     if (error) {
       setBusy(false);
-      setErr(error.message.includes('row-level') ? 'Not allowed. The job may be closed.' : /does not exist|schema cache/i.test(error.message) ? 'Run migration 051 in Supabase first.' : error.message);
+      setErr(error.message.includes('row-level') ? 'Not allowed. The job may be closed.' : /does not exist|schema cache/i.test(error.message) ? 'Run migration 051 in Supabase first.' : /check constraint/i.test(error.message) ? 'Run migration 052 in Supabase first.' : error.message);
       return false;
     }
     await sb.from('job_events').insert({ job_id: jobId, actor_id: staff.id, actor_email: staff.email, kind: event.kind, details: event.details || {} });
@@ -96,19 +99,31 @@ export default function WaterDayOne({ step, message = '', onClose, jobId, staff,
     return record('walkthrough', { data: cleanWalkthrough({ ...walk, photos_taken: true }) }, { kind: 'water_category_set', details: { category: Number(walk.category), ...(prev && prev !== Number(walk.category) ? { from: prev } : {}) } });
   };
 
+  const isCert = step === 'certificate';
   const markAbsent = () => {
-    if (!window.confirm('Customer not present? The authorization stays unsigned and the office gets a task to send an e-sign link.')) return;
-    return record('authorization', { customer_absent: true, data: {} }, { kind: 'water_authorization_absent' });
+    if (!window.confirm(`Customer not present? The ${isCert ? 'certificate' : 'authorization'} stays unsigned until the customer signs the e-sign link.`)) return;
+    return record(step, { customer_absent: true, data: {} }, { kind: isCert ? 'water_certificate_absent' : 'water_authorization_absent' });
   };
+
+  async function sendLink() {
+    setBusy(true); setErr('');
+    try {
+      const r = await apiFetch(`/api/jobs/${jobId}/sign-request`, token, { method: 'POST', body: JSON.stringify({ kind: step }) });
+      const sent = [r.sms?.status === 'sent' ? 'texted' : '', r.email?.status === 'sent' ? 'emailed' : ''].filter(Boolean).join(' and ');
+      setLink({ url: r.link, note: sent ? `Link ${sent} to the customer.` : `Not sent (${r.sms?.detail || r.email?.detail || 'no phone or email on file'}). Copy the link and send it yourself.` });
+      onReload();
+    } catch (e) { setErr(e.message); }
+    setBusy(false);
+  }
 
   const sign = (url) => {
     if (name.trim().length < 2) { setErr('Type the customer’s full name.'); setSigning(false); return; }
-    return record('authorization', { signer_name: name.trim(), signature_png: url, data: {} }, { kind: 'water_authorization_signed', details: { signer_name: name.trim() } });
+    return record(step, { signer_name: name.trim(), signature_png: url, data: {} }, { kind: isCert ? 'water_certificate_signed' : 'water_authorization_signed', details: { signer_name: name.trim() } });
   };
 
   if (!step) return null;
 
-  if (step === 'authorization' && signing) {
+  if ((step === 'authorization' || step === 'certificate') && signing) {
     return <SignOverlay title={`${name.trim()}, sign below`} doneLabel="Sign" error={err} onCancel={() => setSigning(false)} onDone={sign} />;
   }
 
@@ -163,11 +178,11 @@ export default function WaterDayOne({ step, message = '', onClose, jobId, staff,
         </div>
       )}
 
-      {step === 'authorization' && (
+      {(step === 'authorization' || step === 'certificate') && (
         <div>
-          {latest.authorization && !latest.authorization.customer_absent && <p className="hint">Signed by {latest.authorization.signer_name} on {fmtDateTime(latest.authorization.done_at)}. A new signature replaces it in the packet; the old one stays in the history.</p>}
-          {latest.authorization?.customer_absent && <p className="hint">Customer was not present. Sign now if they are here, or the office sends an e-sign link.</p>}
-          <p className="hint">Hand the phone to the customer. The work authorization covers the drying work and the prices on the estimate.</p>
+          {latest[step] && !latest[step].customer_absent && <p className="hint">Signed by {latest[step].signer_name} on {fmtDateTime(latest[step].done_at)}. A new signature replaces it in the packet; the old one stays in the history.</p>}
+          {latest[step]?.customer_absent && <p className="hint">Customer was not present. Sign now if they are here, or send the e-sign link.</p>}
+          <p className="hint">{isCert ? 'The work is finished and the equipment is picked up. Hand the phone to the customer to confirm.' : 'Hand the phone to the customer. The work authorization covers the drying work and the prices on the estimate.'}</p>
           <div className="field">
             <label htmlFor="auth-signer">Who is signing?</label>
             <input id="auth-signer" value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" placeholder="Full name" />
@@ -175,6 +190,13 @@ export default function WaterDayOne({ step, message = '', onClose, jobId, staff,
           </div>
           <button type="button" className="primary big" style={{ width: '100%' }} disabled={busy || name.trim().length < 2} onClick={() => { setErr(''); setSigning(true); }}>Continue to signature</button>
           <button type="button" className="secondary big" style={{ width: '100%', marginTop: 10 }} disabled={busy} onClick={markAbsent}>Customer not present</button>
+          <button type="button" className="secondary big" style={{ width: '100%', marginTop: 10 }} disabled={busy} onClick={sendLink}>{busy ? 'Working...' : 'Send an e-sign link'}</button>
+          {link && (
+            <div className="msg ok" style={{ marginTop: 10 }}>
+              {link.note}
+              <input readOnly value={link.url} onFocus={(e) => e.target.select()} style={{ width: '100%', marginTop: 6 }} aria-label="E-sign link" />
+            </div>
+          )}
         </div>
       )}
     </PopupModal>
